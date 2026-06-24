@@ -248,6 +248,9 @@
       <button data-tool="wand" title="近い色を自動で選択">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 4V2m0 16v2M9 6L7.5 4.5M22.5 9.5L21 8M4 13l9 9 7-7-9-9-7 7z"/></svg>自動選択
       </button>
+      <button data-tool="sam" title="AIで物体をクリック選択">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 3v6M21 3h-6M3 21v-6M3 21h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
+      </button>
       <button data-tool="unmask" title="選択を消す">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>選択消し
       </button>
@@ -292,12 +295,23 @@
               <button data-tool="wand">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 4V2M4 13l9 9 7-7-9-9-7 7z"/></svg>自動
               </button>
+              <button data-tool="sam">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 3v6M21 3h-6M3 21v-6M3 21h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
+              </button>
               <button data-tool="unmask">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8"/></svg>消す
               </button>
             </div>
             <div class="slider" id="brushSizeRow"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
             <div class="slider" id="wandTolRow" style="display:none"><label>色の許容</label><input type="range" id="wandTol" min="6" max="90" value="34"><span class="val" id="wandTolV">34</span></div>
+            <div id="samBox" style="display:none">
+              <div class="engine" id="samStatus">物体をクリックすると AI が範囲を推定します（初回はモデル読み込みに少し時間がかかります）</div>
+              <p class="hint" style="margin:0 0 8px">壁・床・家具などを<b>クリック</b>すると自動で範囲を選択。追加クリックで精度向上、<b>Alt/右クリック</b>で除外。良ければ「選択に追加」。</p>
+              <div class="row" style="margin-top:0">
+                <button class="btn primary" id="samCommit" style="flex:1;justify-content:center">選択に追加</button>
+                <button class="btn" id="samReset" style="flex:1;justify-content:center">やり直す</button>
+              </div>
+            </div>
             <div class="row" style="margin-top:4px">
               <button class="btn" id="clearMask" style="flex:1; justify-content:center">この表面の選択をクリア</button>
             </div>
@@ -453,6 +467,9 @@ const State = {
   eraseMask:null,                     // Uint8 over room
   undo:[],                            // room snapshots (ImageData)
   nextId:1,
+  sam:{ ready:false, loading:false, busy:false, model:null, processor:null,
+        RawImage:null, Tensor:null, device:'',
+        imageInputs:null, embeddings:null, points:[], preview:null },
 };
 const stage = $('stage'), sctx = stage.getContext('2d');
 const overlay = $('overlay'), octx = overlay.getContext('2d');
@@ -719,7 +736,7 @@ async function runEraseNow(){
   for(let i=0;i<rw*rh;i++){ const a=fmb[i]/255; if(a<=0) continue; const p=i*4; rd[p]=rd[p]*(1-a)+fd[p]*a; rd[p+1]=rd[p+1]*(1-a)+fd[p+1]*a; rd[p+2]=rd[p+2]*(1-a)+fd[p+2]*a; }
   pushUndo();
   State.roomCtx.putImageData(region,minx,miny);
-  invalidateRoomData();
+  invalidateRoomData(); invalidateSam();
   State.eraseMask=newMask(); erasePreviewClear();
   State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); });
   render(); $('runErase').disabled=true;
@@ -808,10 +825,106 @@ function patchMatchComplete(img0,hole0,w,h){
 }
 
 /* =========================================================================
+   SAM — click-to-select (SlimSAM via transformers.js, WebGPU→WASM)
+   Images never leave the device; only model weights are fetched (first use).
+   ========================================================================= */
+const SAM_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
+const SAM_MODEL = 'Xenova/slimsam-77-uniform';
+const samPreviewCanvas = document.createElement('canvas');
+
+function setSamStatus(msg, kind){ const el=$('samStatus'); if(!el) return; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
+
+async function ensureSamLoaded(){
+  if(State.sam.ready) return true;
+  if(State.sam.loading) return false;
+  State.sam.loading=true; setSamStatus('AIモデルを読み込み中…（初回のみ・数十秒かかる場合があります）');
+  try{
+    const mod = await import(/* @vite-ignore */ SAM_CDN);
+    const { SamModel, AutoProcessor, RawImage, Tensor } = mod;
+    let device='wasm';
+    try{ if(navigator.gpu && await navigator.gpu.requestAdapter()) device='webgpu'; }catch(e){}
+    const model = await SamModel.from_pretrained(SAM_MODEL, { device });
+    const processor = await AutoProcessor.from_pretrained(SAM_MODEL);
+    Object.assign(State.sam,{ model, processor, RawImage, Tensor, device, ready:true, loading:false });
+    setSamStatus('準備完了（'+(device==='webgpu'?'WebGPU':'CPU')+'）— 物体をクリックして選択','ok');
+    return true;
+  }catch(err){ console.error('SAM load failed:',err); State.sam.loading=false;
+    setSamStatus('AIモデルを読み込めませんでした（ネット接続を確認）。ブラシ/自動選択は使えます');
+    toast('SAMモデルを読み込めませんでした'); return false; }
+}
+
+async function ensureSamEmbeddings(){
+  if(State.sam.embeddings) return true;
+  setSamStatus('画像を解析中…');
+  const image = await State.sam.RawImage.read(State.roomCanvas.toDataURL('image/png'));
+  const imageInputs = await State.sam.processor(image);
+  State.sam.imageInputs = imageInputs;
+  State.sam.embeddings = await State.sam.model.get_image_embeddings(imageInputs);
+  setSamStatus('物体をクリックして選択','ok');
+  return true;
+}
+
+/* convert the best (highest-IoU) mask tensor → Uint8 W×H */
+function samTensorToMask(maskTensor, iouScores){
+  const H=State.H, W=State.W, plane=H*W, data=maskTensor.data;
+  const iou=iouScores.data, nm=iou.length;
+  let best=0,bv=-Infinity; for(let k=0;k<nm;k++){ const v=Number(iou[k]); if(v>bv){bv=v;best=k;} }
+  const out=newMask();
+  if(data.length===nm*plane){ const off=best*plane; for(let i=0;i<plane;i++) out[i]=data[off+i]?255:0; }
+  else { for(let i=0;i<plane;i++) out[i]=data[nm*i+best]?255:0; } // interleaved fallback
+  return out;
+}
+
+async function samDecode(){
+  const pts=State.sam.points;
+  if(!pts.length){ State.sam.preview=null; rebuildSamPreview(); renderOverlay(); return; }
+  const ii=State.sam.imageInputs, T=State.sam.Tensor;
+  const reshaped=ii.reshaped_input_sizes[0]; // [h, w]
+  const coords=[]; const labels=[];
+  for(const p of pts){ coords.push((p.x/State.W)*reshaped[1], (p.y/State.H)*reshaped[0]); labels.push(BigInt(p.label)); }
+  const input_points=new T('float32', coords, [1,1,pts.length,2]);
+  const input_labels=new T('int64', labels, [1,1,pts.length]);
+  const out=await State.sam.model({ ...State.sam.embeddings, input_points, input_labels });
+  const masks=await State.sam.processor.post_process_masks(out.pred_masks, ii.original_sizes, ii.reshaped_input_sizes);
+  State.sam.preview=samTensorToMask(masks[0], out.iou_scores);
+  rebuildSamPreview(); renderOverlay();
+}
+
+async function handleSamClick(p, label){
+  if(State.sam.busy) return;
+  if(!activeSurface()){ toast('表面を選択してください'); return; }
+  State.sam.busy=true; busy(true, State.sam.ready?'AIで解析中…':'AIモデルを準備中…');
+  try{
+    if(!(await ensureSamLoaded())){ return; }
+    await ensureSamEmbeddings();
+    State.sam.points.push({x:p.x, y:p.y, label});
+    await samDecode();
+  }catch(err){ console.error(err); toast('解析に失敗しました'); setSamStatus('解析に失敗しました。やり直してください'); }
+  finally{ busy(false); State.sam.busy=false; }
+}
+
+function samCommit(){
+  const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
+  if(!State.sam.preview){ toast('先に物体をクリックしてください'); return; }
+  const pv=State.sam.preview; for(let i=0;i<pv.length;i++){ if(pv[i]>a.mask[i]) a.mask[i]=pv[i]; }
+  a.dirty=true; rebuildSurface(a); rebuildMaskPreview();
+  samResetPoints(); render(); toast('選択に追加しました');
+}
+function samResetPoints(){ State.sam.points=[]; State.sam.preview=null; rebuildSamPreview(); renderOverlay(); }
+function invalidateSam(){ State.sam.embeddings=null; State.sam.imageInputs=null; State.sam.points=[]; State.sam.preview=null; }
+
+function rebuildSamPreview(){ const c=samPreviewCanvas, x=c.getContext('2d'); x.clearRect(0,0,State.W,State.H);
+  const pv=State.sam.preview; if(!pv) return;
+  const img=x.createImageData(State.W,State.H), d=img.data;
+  for(let i=0;i<pv.length;i++){ if(pv[i]>0){ const p=i*4; d[p]=233; d[p+1]=163; d[p+2]=25; d[p+3]=120; } }
+  x.putImageData(img,0,0);
+}
+
+/* =========================================================================
    UNDO (room snapshots)
    ========================================================================= */
 function pushUndo(){ const snap=State.roomCtx.getImageData(0,0,State.W,State.H); State.undo.push(snap); if(State.undo.length>8) State.undo.shift(); $('btnUndo').disabled=false; }
-function doUndo(){ if(!State.undo.length) return; const snap=State.undo.pop(); State.roomCtx.putImageData(snap,0,0); invalidateRoomData(); State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); }); render(); if(!State.undo.length) $('btnUndo').disabled=true; }
+function doUndo(){ if(!State.undo.length) return; const snap=State.undo.pop(); State.roomCtx.putImageData(snap,0,0); invalidateRoomData(); invalidateSam(); State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); }); render(); if(!State.undo.length) $('btnUndo').disabled=true; }
 
 /* =========================================================================
    RENDER
@@ -830,12 +943,17 @@ let lastMouse=null;
 function renderOverlay(){
   octx.clearRect(0,0,State.W,State.H);
   // active surface mask outline (subtle), only in surface mode
-  if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); } }
+  if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); }
+    if(State.surfTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0);
+      for(const pt of State.sam.points){ octx.beginPath(); octx.arc(pt.x,pt.y,6,0,7);
+        octx.fillStyle= pt.label? 'rgba(44,110,107,.95)':'rgba(187,82,57,.95)'; octx.fill();
+        octx.lineWidth=2; octx.strokeStyle='#fff'; octx.stroke(); } } }
   if(State.mode==='erase'){ octx.drawImage(erasePreviewCanvas,0,0); }
   // selected furniture handles
   if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); } }
-  // brush cursor
-  if(lastMouse && (State.mode!=='furniture')){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
+  // brush cursor (not for SAM, which uses a click pointer)
+  const samActive = State.mode==='surface' && State.surfTool==='sam';
+  if(lastMouse && State.mode!=='furniture' && !samActive){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle=(State.mode==='erase')?'rgba(187,82,57,.9)':'rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.stroke();
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke();
   }
@@ -851,7 +969,7 @@ function drawFurnitureHandles(f){
 
 /* preview canvases (so painting feels instant without rebuilding masks each move) */
 const maskPreviewCanvas=document.createElement('canvas'); const erasePreviewCanvas=document.createElement('canvas');
-function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas]){ c.width=State.W; c.height=State.H; } }
+function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas,samPreviewCanvas]){ c.width=State.W; c.height=State.H; } }
 function rebuildMaskPreview(){ const a=activeSurface(); const c=maskPreviewCanvas, x=c.getContext('2d'); x.clearRect(0,0,State.W,State.H); if(!a) return;
   const img=x.createImageData(State.W,State.H), d=img.data; for(let i=0;i<a.mask.length;i++){ if(a.mask[i]>0){ const p=i*4; d[p]=44;d[p+1]=110;d[p+2]=107;d[p+3]=70; } } x.putImageData(img,0,0); }
 function erasePreviewClear(){ erasePreviewCanvas.getContext('2d').clearRect(0,0,State.W,State.H); }
@@ -864,6 +982,7 @@ let drag=null;
 function canvasPos(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left, cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top; return {x:cx*sx, y:cy*sy}; }
 on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.pointerId); const p=canvasPos(e); lastMouse=p;
   if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
+    if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; handleSamClick(p,label); return; }
     if(State.surfTool==='wand'){ floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
     drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){ drag={type:'erasepaint'}; eraseAt(p);
@@ -886,6 +1005,7 @@ function endDrag(e){ if(drag && (drag.type==='paint'||drag.type==='erasemask')){
   drag=null; render(); }
 on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
 on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
+on(overlay,'contextmenu',e=>{ if(State.mode==='surface'&&State.surfTool==='sam') e.preventDefault(); });
 
 function paintAt(p){ const a=activeSurface(); if(!a) return; const r=+$('brushSize').value/2;
   if(drag.type==='erasemask'){ stampDisc(a.mask,p.x,p.y,r,0); const x=maskPreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); }
@@ -952,7 +1072,7 @@ function setMode(m){ State.mode=m;
   $('panelFurniture').style.display=m==='furniture'?'block':'none';
   $('panelErase').style.display=m==='erase'?'block':'none';
   // dock tools relevance
-  document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
+  document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask','sam'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
   if(State.W) $('dock').style.display=(m==='erase')?'none':'flex';
   renderOverlay();
 }
@@ -989,7 +1109,7 @@ function setupRoomFromCanvas(srcCanvas){
   State.roomCanvas=document.createElement('canvas'); State.roomCanvas.width=w; State.roomCanvas.height=h; State.roomCtx=State.roomCanvas.getContext('2d',{willReadFrequently:true});
   State.roomCtx.drawImage(srcCanvas,0,0,w,h);
   State.roomOriginal=State.roomCtx.getImageData(0,0,w,h);
-  invalidateRoomData(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true;
+  invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true;
   resizePreviews(); erasePreviewClear();
   $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomNote').style.display='block';
   $('zoomNote').textContent=`${w} × ${h}px`;
@@ -1037,7 +1157,7 @@ on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
 on($('btnExport'),'click',()=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} render(); const url=stage.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='room-studio.png'; a.click(); toast('PNGを書き出しました'); });
-on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true; erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
+on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true; erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
 
 // tabs
 document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
@@ -1046,8 +1166,9 @@ document.querySelectorAll('#dock [data-tool]').forEach(b=>on(b,'click',()=>{ con
   if(t==='move'){ setMode('furniture'); return; }
   setMode('surface'); setSurfTool(t);
 }));
-function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
-  $('brushSizeRow').style.display=(t==='wand')?'none':'flex'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; }
+function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask','sam'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
+  $('brushSizeRow').style.display=(t==='brush'||t==='unmask')?'flex':'none'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none';
+  if(t!=='sam') samResetPoints(); renderOverlay(); }
 
 // surface panel
 on($('addSurface'),'click',addSurfaceLayer);
@@ -1055,6 +1176,8 @@ document.querySelectorAll('#surfTools button').forEach(b=>on(b,'click',()=>setSu
 on($('brushSize'),'input',e=>{ $('brushSizeV').textContent=e.target.value; renderOverlay(); });
 on($('wandTol'),'input',e=>$('wandTolV').textContent=e.target.value);
 on($('clearMask'),'click',()=>{ const a=activeSurface(); if(!a) return; a.mask=newMask(); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); });
+on($('samCommit'),'click',samCommit);
+on($('samReset'),'click',samResetPoints);
 buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; a.color=hex; a.material=null; $('surfColor').value=hex; $('surfHex').textContent=hex.toUpperCase(); markChips('colorChips',hex); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
 on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; a.color=e.target.value; a.material=null; $('surfHex').textContent=e.target.value.toUpperCase(); markChips('colorChips',e.target.value); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
 on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });

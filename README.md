@@ -37,7 +37,10 @@ python server.py
 ## 機能の使い方
 
 1. **部屋を読み込む** … 「画像を開く」or「デモの部屋」。長辺1100pxに自動縮小。
-2. **表面（壁/床/天井）** … 「表面を追加」→ *選択ブラシ*（縁が柔らかいソフトブラシ）か *自動選択*（近い色をまとめて）で範囲を塗る → **色** / **素材** を変更。質感・陰影は保ったまま色だけ置換。
+2. **表面（壁/床/天井）** … 「表面を追加」→ 範囲を指定 → **色** / **素材** を変更。質感・陰影は保ったまま色だけ置換。範囲指定は3通り:
+   - *選択ブラシ*（縁が柔らかいソフトブラシ）
+   - *自動選択*（近い色をまとめて）
+   - **AI選択（SlimSAM）** … 壁・床・家具などを**クリック**すると物体の範囲を自動推定。追加クリックで精度を上げ、**Alt/右クリック**で不要部分を除外。「選択に追加」で確定。初回はモデルのダウンロード（数十MB・ネット接続が必要）に少し時間がかかります（2回目以降はブラウザキャッシュ）。**画像は端末内のみで処理され外部送信されません**（取得するのはモデルの重みファイルのみ）。WebGPU対応ブラウザでは高速、未対応時はCPU(WASM)で動作。
 3. **家具** … 画像を追加 → ドラッグ移動・角ハンドルで拡縮。*背景を自動で消す*（白/単色背景向け。エロード＋フェザー＋地色逆合成でハロー低減）・色・素材・回転・不透明度・反転・複製・前面/背面。
 4. **消しゴム** … 消したい物を赤ブラシで塗る →「この範囲を消す」。LaMa接続時はAIで、未接続時はPatchMatchで補完。
 5. **書き出す（PNG）** / **取り消す**（消しゴム操作の巻き戻し）。
@@ -57,6 +60,7 @@ python server.py
 | 色変換/輝度 | `rgb2hsl/hsl2rgb/lpOf` |
 | 素材生成 | `MATERIALS`, `woodTile/tileTile/...`, `buildMaterialBuffer` |
 | 選択 | `stampDisc`, `stampDiscSoft`(ソフト), `floodFill`, `boxBlurMask` |
+| AI選択(SAM) | `ensureSamLoaded`/`ensureSamEmbeddings`(モデル&埋め込み), `samDecode`(クリック→マスク), `samTensorToMask`, `handleSamClick`, `samCommit`/`samResetPoints`, `invalidateSam` |
 | 表面の色・素材 | `applyRecolorToImageData`, `rebuildSurface` |
 | 家具 | `removeBg`(改良マット), `rebuildFurniture`, `furnitureHit` ほか |
 | 消しゴム統括 | `runEraseNow`（LaMa→PatchMatchの切替）, `probeServer`, `updateEraseBadge` |
@@ -68,9 +72,13 @@ python server.py
 
 ## まだ弱いところ → Claude Code での次の一手
 
-### 1. 選択を「賢く」する（最優先・効果大）
-今は手動ブラシ＋色フラッド。**SAM (Segment Anything)** をブラウザ実行（`onnxruntime-web` + MobileSAM、WebGPU優先）し、クリック1つで「壁だけ」「ソファだけ」を選択→既存の `mask`(Uint8) に流し込む。室内特化なら ADE20K 学習済みで壁/床/家具を**自動レイヤー化**。
-> 依頼例: 「ステージのクリック座標をプロンプトに MobileSAM(onnxruntime-web) で物体マスクを取得し、現在の選択マスクに書き込む選択ツールを追加して」
+### 1. 選択を「賢く」する ✅ 実装済み（2026-06）
+**SAM (Segment Anything)** をブラウザ実行。`@huggingface/transformers`（transformers.js）をCDNから動的import し、**SlimSAM**（`Xenova/slimsam-77-uniform`）を **WebGPU優先・WASMフォールバック**で実行。クリック1つで「壁だけ」「ソファだけ」を選択→`samDecode` が得たマスクを既存の `mask`(Uint8) に流し込む。
+- 表面ツールに「AI選択」を追加（ステージ下のドックにも）。クリックで物体推定、追加クリック（正例）/Alt・右クリック（負例）で精度調整、「選択に追加」で確定。
+- 画像の埋め込みは初回クリック時に1度だけ計算してキャッシュ（消しゴム/取り消し/リセット/画像読込で自動失効）。
+- 画像は端末内のみで処理。取得するのはモデル重みのみ（初回はネット接続必要、以降キャッシュ）。
+
+> 次の発展候補: 室内特化の ADE20K セグメンテーションで壁/床/家具を**自動レイヤー化**（クリック不要の一括分割）。
 
 ### 2. 家具の任意背景の切り抜き
 単色背景以外は **@imgly/background-removal**（U²-Net系・ブラウザ完結）に置換。`removeBg` を差し替え。
