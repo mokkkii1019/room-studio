@@ -216,9 +216,13 @@
       画像を開く
     </button>
     <input type="file" id="fileRoom" accept="image/*" hidden />
-    <button class="btn" id="btnUndo" disabled>
+    <button class="btn" id="btnUndo" disabled title="取り消す (Ctrl+Z)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-3"/></svg>
       取り消す
+    </button>
+    <button class="btn" id="btnRedo" disabled title="やり直す (Ctrl+Shift+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 14l4-4-4-4M19 10H10a5 5 0 0 0 0 10h3"/></svg>
+      やり直す
     </button>
     <button class="btn" id="btnCompare" title="編集前と編集後を比べる">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18M5 7l-3 3 3 3M19 7l3 3-3 3"/></svg>
@@ -484,7 +488,7 @@ const State = {
   mode:'surface',                     // surface | furniture | erase
   surfTool:'brush',                   // brush | wand | unmask
   eraseMask:null,                     // Uint8 over room
-  undo:[],                            // room snapshots (ImageData)
+  undo:[], redo:[], _hcKey:null, _hcTime:0,   // general history (full snapshots) + coalescing
   nextId:1,
   sam:{ ready:false, loading:false, busy:false, model:null, processor:null,
         RawImage:null, Tensor:null, device:'',
@@ -703,6 +707,7 @@ async function aiCutFurniture(layer){
     const url=URL.createObjectURL(outBlob);
     const cut=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=layer.srcCanvas.width; c.height=layer.srcCanvas.height; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c); }; im.onerror=rej; im.src=url; });
     URL.revokeObjectURL(url);
+    pushHistory();
     layer.aiCutCanvas=cut; layer.bgRemove=false; layer.dirty=true;
     rebuildFurniture(layer); syncFurnitureUI(layer); renderLayers(); render();
     toast('背景を切り抜きました');
@@ -774,7 +779,7 @@ async function runEraseNow(){
   // composite filled into roomCanvas (only the feathered mask area changes)
   const region=State.roomCtx.getImageData(minx,miny,rw,rh), rd=region.data, fd=filled.data;
   for(let i=0;i<rw*rh;i++){ const a=fmb[i]/255; if(a<=0) continue; const p=i*4; rd[p]=rd[p]*(1-a)+fd[p]*a; rd[p+1]=rd[p+1]*(1-a)+fd[p+1]*a; rd[p+2]=rd[p+2]*(1-a)+fd[p+2]*a; }
-  pushUndo();
+  pushHistory();
   State.roomCtx.putImageData(region,minx,miny);
   invalidateRoomData(); invalidateSam();
   State.eraseMask=newMask(); erasePreviewClear();
@@ -946,6 +951,7 @@ async function handleSamClick(p, label){
 function samCommit(){
   const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
   if(!State.sam.preview){ toast('先に物体をクリックしてください'); return; }
+  pushHistory();
   const pv=State.sam.preview; for(let i=0;i<pv.length;i++){ if(pv[i]>a.mask[i]) a.mask[i]=pv[i]; }
   a.dirty=true; rebuildSurface(a); rebuildMaskPreview();
   samResetPoints(); render(); toast('選択に追加しました');
@@ -961,10 +967,58 @@ function rebuildSamPreview(){ const c=samPreviewCanvas, x=c.getContext('2d'); x.
 }
 
 /* =========================================================================
-   UNDO (room snapshots)
+   UNDO / REDO — general history (full snapshots: room pixels + all layers)
    ========================================================================= */
-function pushUndo(){ const snap=State.roomCtx.getImageData(0,0,State.W,State.H); State.undo.push(snap); if(State.undo.length>8) State.undo.shift(); $('btnUndo').disabled=false; }
-function doUndo(){ if(!State.undo.length) return; const snap=State.undo.pop(); State.roomCtx.putImageData(snap,0,0); invalidateRoomData(); invalidateSam(); State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); }); render(); if(!State.undo.length) $('btnUndo').disabled=true; }
+const HISTORY_MAX = 20;
+function captureState(){
+  return {
+    room: State.roomCtx.getImageData(0,0,State.W,State.H),
+    selectedId: State.selectedId, nextId: State.nextId,
+    layers: State.layers.map(l=> l.type==='surface' ? {
+      type:'surface', id:l.id, name:l.name, mask:l.mask.slice(), color:l.color,
+      strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture,
+      material:l.material, matStrength:l.matStrength, matScale:l.matScale, visible:l.visible
+    } : {
+      type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
+      x:l.x, y:l.y, scale:l.scale, rot:l.rot, flip:l.flip, opacity:l.opacity,
+      bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
+      material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH
+    })
+  };
+}
+function restoreState(s){
+  State.roomCtx.putImageData(s.room,0,0); invalidateRoomData(); invalidateSam();
+  State.selectedId=s.selectedId; State.nextId=s.nextId;
+  State.layers = s.layers.map(d=> d.type==='surface' ? {
+      id:d.id, type:'surface', name:d.name, mask:d.mask.slice(), color:d.color, strength:d.strength,
+      lightShift:d.lightShift, keepTexture:d.keepTexture, material:d.material, matStrength:d.matStrength,
+      matScale:d.matScale, visible:d.visible, dirty:true, cache:null
+    } : {
+      id:d.id, type:'furniture', name:d.name, srcCanvas:d.srcCanvas, aiCutCanvas:d.aiCutCanvas,
+      x:d.x, y:d.y, scale:d.scale, rot:d.rot, flip:d.flip, opacity:d.opacity,
+      bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
+      material:d.material, matStrength:d.matStrength, visible:d.visible, dirty:true, proc:null,
+      natW:d.natW, natH:d.natH
+    });
+  State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); });
+  renderLayers(); syncPanels(); rebuildMaskPreview(); render();
+}
+/* capture the state BEFORE a mutation. `key` (optional) coalesces a burst of the
+   same continuous edit (e.g. dragging a slider) into one undo step. */
+function pushHistory(key){
+  const now=Date.now();
+  if(key && key===State._hcKey && (now-State._hcTime)<900){ State._hcTime=now; return; }
+  State.redo.length=0;
+  State.undo.push(captureState());
+  if(State.undo.length>HISTORY_MAX) State.undo.shift();
+  State._hcKey=key||null; State._hcTime=now;
+  updateHistoryButtons();
+}
+function endCoalesce(){ State._hcKey=null; }
+function clearHistory(){ State.undo=[]; State.redo=[]; State._hcKey=null; updateHistoryButtons(); }
+function updateHistoryButtons(){ $('btnUndo').disabled=!State.undo.length; const r=$('btnRedo'); if(r) r.disabled=!State.redo.length; }
+function doUndo(){ if(!State.undo.length) return; State.redo.push(captureState()); if(State.redo.length>HISTORY_MAX) State.redo.shift(); restoreState(State.undo.pop()); endCoalesce(); updateHistoryButtons(); }
+function doRedo(){ if(!State.redo.length) return; State.undo.push(captureState()); if(State.undo.length>HISTORY_MAX) State.undo.shift(); restoreState(State.redo.pop()); endCoalesce(); updateHistoryButtons(); }
 
 /* =========================================================================
    RENDER
@@ -1039,14 +1093,14 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
   if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
     if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; handleSamClick(p,label); return; }
-    if(State.surfTool==='wand'){ floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
-    drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
+    if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
+    pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){ drag={type:'erasepaint'}; eraseAt(p);
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
-    if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
+    if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit
     let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
-    if(pick){ selectLayer(pick.id); drag={type:'move',offx:p.x-pick.x,offy:p.y-pick.y,layer:pick}; }
+    if(pick){ selectLayer(pick.id); pushHistory('fmove'+pick.id); drag={type:'move',offx:p.x-pick.x,offy:p.y-pick.y,layer:pick}; }
     render();
   }
 });
@@ -1059,7 +1113,7 @@ on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMou
 });
 function endDrag(e){ if(drag && (drag.type==='paint'||drag.type==='erasemask')){ const a=activeSurface(); if(a){ a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); } }
   if(drag && drag.type==='erasepaint'){ $('runErase').disabled=false; }
-  drag=null; render(); }
+  drag=null; endCoalesce(); render(); }
 on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
 on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
 on(overlay,'contextmenu',e=>{ if(State.mode==='surface'&&State.surfTool==='sam') e.preventDefault(); });
@@ -1075,6 +1129,7 @@ function eraseAt(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,
    LAYER management
    ========================================================================= */
 function addSurfaceLayer(){
+  pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'surface', name:`表面 ${State.layers.filter(l=>l.type==='surface').length+1}`,
     mask:newMask(), color:'#cfd8d4', strength:0.85, lightShift:0, keepTexture:true,
@@ -1082,6 +1137,7 @@ function addSurfaceLayer(){
   State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
 }
 function addFurnitureLayer(srcCanvas, name){
+  pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
     srcCanvas, x:State.W/2, y:State.H/2, scale:1, rot:0, flip:false, opacity:1,
@@ -1095,8 +1151,8 @@ function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id
   if(l){ if(l.type==='surface') setMode('surface'); else setMode('furniture'); }
   syncPanels(); renderLayers(); rebuildMaskPreview(); render();
 }
-function deleteLayer(id){ const i=State.layers.findIndex(x=>x.id===id); if(i<0) return; State.layers.splice(i,1); if(State.selectedId===id) State.selectedId=null; renderLayers(); syncPanels(); rebuildMaskPreview(); render(); }
-function moveLayer(id,dir){ const i=State.layers.findIndex(x=>x.id===id); const j=i+dir; if(i<0||j<0||j>=State.layers.length) return; const t=State.layers[i]; State.layers[i]=State.layers[j]; State.layers[j]=t; renderLayers(); render(); }
+function deleteLayer(id){ const i=State.layers.findIndex(x=>x.id===id); if(i<0) return; pushHistory(); State.layers.splice(i,1); if(State.selectedId===id) State.selectedId=null; renderLayers(); syncPanels(); rebuildMaskPreview(); render(); }
+function moveLayer(id,dir){ const i=State.layers.findIndex(x=>x.id===id); const j=i+dir; if(i<0||j<0||j>=State.layers.length) return; pushHistory(); const t=State.layers[i]; State.layers[i]=State.layers[j]; State.layers[j]=t; renderLayers(); render(); }
 
 function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerCount').textContent=State.layers.length; $('layerEmpty').style.display=State.layers.length?'none':'block';
   // show top first
@@ -1169,7 +1225,7 @@ function setupRoomFromCanvas(srcCanvas){
   State.roomOriginal=State.roomCtx.getImageData(0,0,w,h);
   State.compare.before=document.createElement('canvas'); State.compare.before.width=w; State.compare.before.height=h; State.compare.before.getContext('2d').putImageData(State.roomOriginal,0,0);
   State.compare.active=false; State.compare.split=0.5; $('btnCompare').classList.remove('primary');
-  invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true;
+  invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory();
   resizePreviews(); erasePreviewClear();
   $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomNote').style.display='block';
   $('zoomNote').textContent=`${w} × ${h}px`;
@@ -1276,10 +1332,14 @@ function buildDemoRoom(){
    WIRING — events
    ========================================================================= */
 // header
-on($('btnDemo'),'click',()=>{ setupRoomFromCanvas(buildDemoRoom()); addSurfaceLayer(); toast('デモの部屋を読み込みました'); });
+on($('btnDemo'),'click',()=>{ setupRoomFromCanvas(buildDemoRoom()); addSurfaceLayer(); clearHistory(); toast('デモの部屋を読み込みました'); });
 on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
+on($('btnRedo'),'click',doRedo);
+on(document,'keydown',e=>{ if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
+  if(k==='z'&&!e.shiftKey){ e.preventDefault(); doUndo(); }
+  else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); doRedo(); } });
 on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; }
   State.compare.active=!State.compare.active; $('btnCompare').classList.toggle('primary',State.compare.active);
   $('dock').style.display=(State.compare.active||State.mode==='erase')?'none':'flex';
@@ -1289,7 +1349,7 @@ on($('btnExport'),'click',()=>{ if(!State.W){toast('先に部屋を読み込ん�
 on($('btnSaveProj'),'click',saveProject);
 on($('btnLoadProj'),'click',()=>$('fileProj').click());
 on($('fileProj'),'change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ let obj; try{ obj=JSON.parse(r.result); }catch(err){ toast('JSONを解析できませんでした'); return; } loadProject(obj); }; r.readAsText(f); e.target.value=''; });
-on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true; erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
+on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory(); erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
 
 // tabs
 document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
@@ -1307,38 +1367,38 @@ on($('addSurface'),'click',addSurfaceLayer);
 document.querySelectorAll('#surfTools button').forEach(b=>on(b,'click',()=>setSurfTool(b.dataset.tool)));
 on($('brushSize'),'input',e=>{ $('brushSizeV').textContent=e.target.value; renderOverlay(); });
 on($('wandTol'),'input',e=>$('wandTolV').textContent=e.target.value);
-on($('clearMask'),'click',()=>{ const a=activeSurface(); if(!a) return; a.mask=newMask(); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); });
+on($('clearMask'),'click',()=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.mask=newMask(); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); });
 on($('samCommit'),'click',samCommit);
 on($('samReset'),'click',samResetPoints);
-buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; a.color=hex; a.material=null; $('surfColor').value=hex; $('surfHex').textContent=hex.toUpperCase(); markChips('colorChips',hex); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
-on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; a.color=e.target.value; a.material=null; $('surfHex').textContent=e.target.value.toUpperCase(); markChips('colorChips',e.target.value); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
-on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
-on($('surfLight'),'input',e=>{ const a=activeSurface(); if(!a) return; a.lightShift=+e.target.value/100; $('surfLightV').textContent=e.target.value; a.dirty=true; rebuildSurface(a); render(); });
-on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; a.keepTexture=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
-buildMats('matGrid',key=>{ const a=activeSurface(); if(!a) return; a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }, false);
-on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
-on($('matScale'),'input',e=>{ const a=activeSurface(); if(!a) return; a.matScale=+e.target.value; $('matScaleV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.color=hex; a.material=null; $('surfColor').value=hex; $('surfHex').textContent=hex.toUpperCase(); markChips('colorChips',hex); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
+on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfColor'); a.color=e.target.value; a.material=null; $('surfHex').textContent=e.target.value.toUpperCase(); markChips('colorChips',e.target.value); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
+on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfStrength'); a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+on($('surfLight'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfLight'); a.lightShift=+e.target.value/100; $('surfLightV').textContent=e.target.value; a.dirty=true; rebuildSurface(a); render(); });
+on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.keepTexture=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
+buildMats('matGrid',key=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }, false);
+on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matStrength'); a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+on($('matScale'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matScale'); a.matScale=+e.target.value; $('matScaleV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 
 // furniture panel
 on($('addFurniture'),'click',()=>$('fileFurniture').click());
 on($('fileFurniture'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} addFurnitureLayer(c, f.name.replace(/\.[^.]+$/,'')); toast('家具を追加しました。ドラッグで移動できます'); }); e.target.value=''; });
-on($('fBgRemove'),'change',e=>{ const f=selectedFurniture(); if(!f) return; f.bgRemove=e.target.checked; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
-on($('fBgTol'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.bgTol=+e.target.value; $('fBgTolV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
+on($('fBgRemove'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.bgRemove=e.target.checked; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
+on($('fBgTol'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fBgTol'); f.bgTol=+e.target.value; $('fBgTolV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fAiCut'),'click',()=>{ const f=selectedFurniture(); if(f) aiCutFurniture(f); });
-on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; f.aiCutCanvas=null; f.dirty=true; rebuildFurniture(f); syncFurnitureUI(f); renderLayers(); render(); });
-on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
-on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
-on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
-on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; f.flip=!f.flip; render(); });
+on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.aiCutCanvas=null; f.dirty=true; rebuildFurniture(f); syncFurnitureUI(f); renderLayers(); render(); });
+on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fScale'); f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
+on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fRot'); f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
+on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
+on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
 on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
 on($('fFront'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,1); });
 on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1); });
-on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
-buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
-on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
-on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
-buildMats('fMatGrid',key=>{ const f=selectedFurniture(); if(!f) return; f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }, false);
-on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
+on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
+buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
+on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fColor'); f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
+on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
+buildMats('fMatGrid',key=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }, false);
+on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fMatStrength'); f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fDelete'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
 on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; loadImageFile(file,c=>{ const key='user_'+Date.now(); MATERIALS.push({key,name:'追加',base:'#ccc',draw:()=>c}); tileCache[key]=c; const a=activeSurface(); buildMats('matGrid',k=>{ const aa=activeSurface(); if(!aa)return; aa.material=k; markMats('matGrid',k); aa.dirty=true; rebuildSurface(aa); renderLayers(); render(); },false); if(a){ a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); render(); } }); e.target.value=''; });
 
