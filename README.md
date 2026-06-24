@@ -91,8 +91,8 @@ python server.py
 
 ### 5. 仕上げ（順次実装中）
 - **before/afterスライダー** ✅ 実装済み（2026-06）… ヘッダー「比較」ボタン。編集前（元写真）と編集後（合成結果）をドラッグで比較。`State.compare` + `renderOverlay` のクリップ描画。
+- **プロジェクト保存/読込** ✅ 実装済み（2026-06）… ヘッダー「保存」「読込」。部屋（元写真＋編集後）と全レイヤー（表面マスク・家具画像・各パラメータ）を1つの `.json` に直列化。`saveProject`/`loadProject`。
 - 汎用Undo/Redo（今は消しゴムのみ）… 予定
-- プロジェクト保存（レイヤーをJSON化）… 予定
 
 ### LaMa をさらに強化したい場合
 - `server.py` は `simple-lama-inpainting` を使用。より多機能にするなら **IOPaint（旧 lama-cleaner）** に置換可能（モデル選択・各種インペイント手法）。
