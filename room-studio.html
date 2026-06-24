@@ -352,6 +352,11 @@
             <input type="file" id="fileMat" accept="image/*" hidden>
             <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="80"><span class="val" id="matStrengthV">80%</span></div>
             <div class="slider"><label>柄の大きさ</label><input type="range" id="matScale" min="40" max="220" value="100"><span class="val" id="matScaleV">100%</span></div>
+            <label class="toggle"><input type="checkbox" id="matPersp"><span class="sw"></span>遠近に合わせる（床/壁）</label>
+            <div id="matPerspBox" style="display:none">
+              <p class="hint" style="margin:0 0 6px">ステージ上の<b>4つの角</b>を、床（または壁）の四隅にドラッグして合わせると、柄がパースに沿って投影されます。</p>
+              <button class="btn" id="matPerspReset" style="width:100%;justify-content:center">四隅を選択範囲に合わせる</button>
+            </div>
           </div>
         </div>
       </div>
@@ -549,6 +554,56 @@ function buildMaterialBuffer(key, scalePct){
 }
 
 /* =========================================================================
+   PERSPECTIVE — homography so a material follows a floor/wall plane
+   ========================================================================= */
+/* Solve the 3x3 homography H (h8=1) mapping src[i]→dst[i] (4 correspondences). */
+function computeHomography(src, dst){
+  const A=[], b=[];
+  for(let i=0;i<4;i++){ const [sx,sy]=src[i], [dx,dy]=dst[i];
+    A.push([sx,sy,1,0,0,0,-sx*dx,-sy*dx]); b.push(dx);
+    A.push([0,0,0,sx,sy,1,-sx*dy,-sy*dy]); b.push(dy);
+  }
+  // Gaussian elimination with partial pivoting on the 8×8 system
+  const n=8;
+  for(let col=0;col<n;col++){
+    let piv=col; for(let r=col+1;r<n;r++) if(Math.abs(A[r][col])>Math.abs(A[piv][col])) piv=r;
+    if(Math.abs(A[piv][col])<1e-9) return null;
+    if(piv!==col){ const t=A[piv];A[piv]=A[col];A[col]=t; const tb=b[piv];b[piv]=b[col];b[col]=tb; }
+    const d=A[col][col];
+    for(let r=0;r<n;r++){ if(r===col) continue; const f=A[r][col]/d; if(!f) continue;
+      for(let c=col;c<n;c++) A[r][c]-=f*A[col][c]; b[r]-=f*b[col]; }
+  }
+  const h=new Array(8); for(let i=0;i<n;i++) h[i]=b[i]/A[i][i];
+  return h; // [h0..h7], h8=1
+}
+/* a sensible default floor quad (near edge wide at bottom, far edge narrow higher up) */
+function defaultFloorQuad(){ const W=State.W,H=State.H;
+  return [[W*0.30,H*0.55],[W*0.70,H*0.55],[W*0.98,H*0.96],[W*0.02,H*0.96]]; } // TL,TR,BR,BL of the plane
+function maskBBoxQuad(mask){ let minx=State.W,miny=State.H,maxx=0,maxy=0,has=false;
+  for(let y=0;y<State.H;y++)for(let x=0;x<State.W;x++){ if(mask[y*State.W+x]>0){ has=true; if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y; } }
+  if(!has) return defaultFloorQuad();
+  return [[minx,miny],[maxx,miny],[maxx,maxy],[minx,maxy]]; }
+
+/* perspective-projected, tiled material buffer (RGBA over W×H). quad = screen-space [TL,TR,BR,BL]. */
+function buildPerspectiveMaterialBuffer(key, scalePct, quad){
+  const t=matTile(key), tw=t.width, th=t.height;
+  const tdata=t.getContext('2d').getImageData(0,0,tw,th).data;
+  const W=State.W,H=State.H, buf=new Uint8ClampedArray(W*H*4);
+  const planeSq=[[0,0],[1,0],[1,1],[0,1]];
+  const Hs=computeHomography(quad, planeSq); // screen → plane unit square
+  if(!Hs) return new ImageData(buf,W,H);
+  const rep=Math.max(0.5, 6*(100/scalePct)); // tile repeats across the plane
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const w=Hs[6]*x+Hs[7]*y+1; if(Math.abs(w)<1e-6) continue;
+    const u=(Hs[0]*x+Hs[1]*y+Hs[2])/w, v=(Hs[3]*x+Hs[4]*y+Hs[5])/w;
+    const tu=((u*rep)%1+1)%1, tv=((v*rep)%1+1)%1;
+    const sx=Math.min(tw-1,(tu*tw)|0), sy=Math.min(th-1,(tv*th)|0), si=(sy*tw+sx)*4, di=(y*W+x)*4;
+    buf[di]=tdata[si]; buf[di+1]=tdata[si+1]; buf[di+2]=tdata[si+2]; buf[di+3]=255;
+  }
+  return new ImageData(buf,W,H);
+}
+
+/* =========================================================================
    MASK utilities (Uint8 alpha arrays at W×H)
    ========================================================================= */
 function newMask(){ return new Uint8ClampedArray(State.W*State.H); }
@@ -631,7 +686,12 @@ function rebuildSurface(layer){
   const src=getRoomData().data;
   const out=cctx.createImageData(w,h);
   let matBuf=null;
-  if(layer.material){ const k=layer.material+'@'+layer.matScale; if(layer._matBufKey!==k){ layer._matBuf=buildMaterialBuffer(layer.material,layer.matScale); layer._matBufKey=k; } matBuf=layer._matBuf; }
+  if(layer.material){
+    const persp = layer.perspective && layer.quad;
+    const k=layer.material+'@'+layer.matScale+(persp?'@p'+layer.quad.map(p=>(p[0]|0)+'_'+(p[1]|0)).join(','):'');
+    if(layer._matBufKey!==k){ layer._matBuf = persp ? buildPerspectiveMaterialBuffer(layer.material,layer.matScale,layer.quad) : buildMaterialBuffer(layer.material,layer.matScale); layer._matBufKey=k; }
+    matBuf=layer._matBuf;
+  }
   const opts={
     color: rgb2hsl(...hex2rgb(layer.color)),
     strength: layer.strength,
@@ -1003,7 +1063,8 @@ function captureState(){
     layers: State.layers.map(l=> l.type==='surface' ? {
       type:'surface', id:l.id, name:l.name, mask:l.mask.slice(), color:l.color,
       strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture,
-      material:l.material, matStrength:l.matStrength, matScale:l.matScale, visible:l.visible
+      material:l.material, matStrength:l.matStrength, matScale:l.matScale,
+      perspective:l.perspective, quad:l.quad?l.quad.map(p=>p.slice()):null, visible:l.visible
     } : {
       type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
       x:l.x, y:l.y, scale:l.scale, rot:l.rot, flip:l.flip, opacity:l.opacity,
@@ -1018,7 +1079,8 @@ function restoreState(s){
   State.layers = s.layers.map(d=> d.type==='surface' ? {
       id:d.id, type:'surface', name:d.name, mask:d.mask.slice(), color:d.color, strength:d.strength,
       lightShift:d.lightShift, keepTexture:d.keepTexture, material:d.material, matStrength:d.matStrength,
-      matScale:d.matScale, visible:d.visible, dirty:true, cache:null
+      matScale:d.matScale, perspective:d.perspective, quad:d.quad?d.quad.map(p=>p.slice()):null,
+      visible:d.visible, dirty:true, cache:null
     } : {
       id:d.id, type:'furniture', name:d.name, srcCanvas:d.srcCanvas, aiCutCanvas:d.aiCutCanvas,
       x:d.x, y:d.y, scale:d.scale, rot:d.rot, flip:d.flip, opacity:d.opacity,
@@ -1079,6 +1141,7 @@ function renderOverlay(){
   }
   // active surface mask outline (subtle), only in surface mode
   if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); }
+    if(a && a.perspective && a.quad){ drawPerspectiveQuad(a.quad); }
     if(State.surfTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0);
       for(const pt of State.sam.points){ octx.beginPath(); octx.arc(pt.x,pt.y,6,0,7);
         octx.fillStyle= pt.label? 'rgba(44,110,107,.95)':'rgba(187,82,57,.95)'; octx.fill();
@@ -1102,6 +1165,12 @@ function drawFurnitureHandles(f){
   f._scaleHandle=hp;
 }
 
+function drawPerspectiveQuad(quad){
+  octx.beginPath(); octx.moveTo(quad[0][0],quad[0][1]); for(let i=1;i<4;i++) octx.lineTo(quad[i][0],quad[i][1]); octx.closePath();
+  octx.strokeStyle='rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
+  for(const p of quad){ octx.beginPath(); octx.arc(p[0],p[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#2C6E6B'; octx.stroke(); }
+}
+
 /* preview canvases (so painting feels instant without rebuilding masks each move) */
 const maskPreviewCanvas=document.createElement('canvas'); const erasePreviewCanvas=document.createElement('canvas');
 function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas,samPreviewCanvas]){ c.width=State.W; c.height=State.H; } }
@@ -1118,6 +1187,7 @@ function canvasPos(e){ const rect=overlay.getBoundingClientRect(); const sx=Stat
 on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.pointerId); const p=canvasPos(e); lastMouse=p;
   if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
   if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
+    if(a.perspective && a.quad){ for(let i=0;i<4;i++){ const dx=p.x-a.quad[i][0], dy=p.y-a.quad[i][1]; if(dx*dx+dy*dy<=14*14){ pushHistory('quad'+a.id+'_'+i); drag={type:'quad',idx:i,layer:a}; return; } } }
     if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; handleSamClick(p,label); return; }
     if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
     pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
@@ -1132,6 +1202,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
 });
 on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMouse=p;
   if(drag){ if(drag.type==='compare'){ State.compare.split=clamp(p.x/State.W,0,1); renderOverlay(); }
+    else if(drag.type==='quad'){ const a=drag.layer; a.quad[drag.idx]=[clamp(p.x,0,State.W),clamp(p.y,0,State.H)]; a.dirty=true; rebuildSurface(a); render(); }
     else if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p);
     else if(drag.type==='move'){ drag.layer.x=p.x-drag.offx; drag.layer.y=p.y-drag.offy; render(); }
     else if(drag.type==='scale'){ const f=selectedFurniture(); const d=Math.hypot(p.x-f.x,p.y-f.y); f.scale=clamp(drag.startScale*(d/drag.startDist),0.05,6); syncFurnitureUI(f); render(); }
@@ -1159,7 +1230,8 @@ function addSurfaceLayer(){
   const id=State.nextId++;
   const layer={ id, type:'surface', name:`表面 ${State.layers.filter(l=>l.type==='surface').length+1}`,
     mask:newMask(), color:'#cfd8d4', strength:0.85, lightShift:0, keepTexture:true,
-    material:null, matStrength:0.8, matScale:100, visible:true, dirty:false, cache:null };
+    material:null, matStrength:0.8, matScale:100, perspective:false, quad:null,
+    visible:true, dirty:false, cache:null };
   State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
 }
 function addFurnitureLayer(srcCanvas, name){
@@ -1216,7 +1288,7 @@ function setMode(m){ State.mode=m;
   renderOverlay();
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
-  if(a){ $('surfColor').value=a.color; $('surfHex').textContent=a.color.toUpperCase(); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); }
+  if(a){ $('surfColor').value=a.color; $('surfHex').textContent=a.color.toUpperCase(); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
   const f=selectedFurniture(); $('furnitureControls').style.display=f?'block':'none'; $('furnitureEmpty').style.display=f?'none':'block';
   if(f) syncFurnitureUI(f);
 }
@@ -1276,7 +1348,8 @@ function saveProject(){
     layers:State.layers.map(l=> l.type==='surface' ? {
       type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
       strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture,
-      material:l.material, matStrength:l.matStrength, matScale:l.matScale, visible:l.visible
+      material:l.material, matStrength:l.matStrength, matScale:l.matScale,
+      perspective:l.perspective, quad:l.quad, visible:l.visible
     } : {
       type:'furniture', id:l.id, name:l.name, src:canvasToPNG(l.srcCanvas),
       aiCut:l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null,
@@ -1305,7 +1378,7 @@ async function loadProject(obj){
         const mask=newMask(), bytes=b64ToBytes(d.mask); mask.set(bytes.subarray(0,mask.length));
         layers.push({ id:d.id, type:'surface', name:d.name, mask, color:d.color, strength:d.strength,
           lightShift:d.lightShift, keepTexture:d.keepTexture, material:d.material, matStrength:d.matStrength,
-          matScale:d.matScale, visible:d.visible, dirty:true, cache:null });
+          matScale:d.matScale, perspective:d.perspective||false, quad:d.quad||null, visible:d.visible, dirty:true, cache:null });
       } else {
         const src=await loadDataURL(d.src), aiCut=d.aiCut? await loadDataURL(d.aiCut):null;
         layers.push({ id:d.id, type:'furniture', name:d.name, srcCanvas:src, aiCutCanvas:aiCut,
@@ -1404,6 +1477,8 @@ on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHi
 buildMats('matGrid',key=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }, false);
 on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matStrength'); a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 on($('matScale'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matScale'); a.matScale=+e.target.value; $('matScaleV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+on($('matPersp'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.perspective=e.target.checked; if(a.perspective && !a.quad) a.quad=maskBBoxQuad(a.mask); $('matPerspBox').style.display=a.perspective?'block':'none'; a._matBufKey=null; a.dirty=true; rebuildSurface(a); render(); });
+on($('matPerspReset'),'click',()=>{ const a=activeSurface(); if(!a||!a.perspective) return; pushHistory(); a.quad=maskBBoxQuad(a.mask); a._matBufKey=null; a.dirty=true; rebuildSurface(a); render(); });
 
 // furniture panel
 on($('addFurniture'),'click',()=>$('fileFurniture').click());

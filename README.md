@@ -61,7 +61,8 @@ python server.py
 | 素材生成 | `MATERIALS`, `woodTile/tileTile/...`, `buildMaterialBuffer` |
 | 選択 | `stampDisc`, `stampDiscSoft`(ソフト), `floodFill`, `boxBlurMask` |
 | AI選択(SAM) | `ensureSamLoaded`/`ensureSamEmbeddings`(モデル&埋め込み), `samDecode`(クリック→マスク), `samTensorToMask`, `handleSamClick`, `samCommit`/`samResetPoints`, `invalidateSam` |
-| 表面の色・素材 | `applyRecolorToImageData`, `rebuildSurface` |
+| 表面の色・素材 | `applyRecolorToImageData`, `rebuildSurface`, `buildMaterialBuffer` |
+| 遠近投影 | `computeHomography`(DLT), `buildPerspectiveMaterialBuffer`, `drawPerspectiveQuad`, `maskBBoxQuad`/`defaultFloorQuad` |
 | 家具 | `removeBg`(改良マット・単色), `aiCutFurniture`(@imgly任意背景), `rebuildFurniture`, `furnitureHit` ほか |
 | 消しゴム統括 | `runEraseNow`（LaMa→PatchMatchの切替）, `probeServer`, `updateEraseBadge` |
 | LaMa連携 | `serverInpaintRegion`, `dataURLToCanvas` |
@@ -83,8 +84,12 @@ python server.py
 ### 2. 家具の任意背景の切り抜き ✅ 実装済み（2026-06）
 単色背景は従来の `removeBg`（フラッド）、**複雑な背景は「AIで背景を切り抜く」ボタン**で **@imgly/background-removal**（U²-Net系・ブラウザ完結）を実行。結果（アルファ付き）を `layer.aiCutCanvas` に保持し、`rebuildFurniture` がこれをベースに使う（色・素材変更もそのまま適用）。「AI切り抜きを解除」で元に戻せる。初回のみモデルDL（ネット接続必要）、画像は端末内で処理。
 
-### 3. 床/壁の遠近対応
-床の四隅を指定 → ホモグラフィで素材タイルと家具を**床平面に正しく投影**（今は正対貼り）。
+### 3. 床/壁の遠近対応 ✅ 実装済み（2026-06・素材の投影）
+表面の素材セクションに「**遠近に合わせる（床/壁）**」トグルを追加。ステージ上の**4つの角ハンドル**を床（壁）の四隅にドラッグすると、ホモグラフィで素材タイルがその平面に**パース投影**される（従来の正対貼りと選択可）。
+- `computeHomography`（DLT＋ガウス消去で8自由度を求解）→ `buildPerspectiveMaterialBuffer`（スクリーン→平面の逆写像で各ピクセルをサンプリング＋タイル繰り返し）。質感の再ライティング（部屋輝度）は従来通り適用。
+- 「柄の大きさ」スライダーが平面上のタイル繰り返し密度を制御。四隅は選択範囲のbboxに初期化（リセット可）。遠近設定はUndo/Redo・プロジェクト保存に対応。
+
+> 次の発展候補: 家具を床平面の奥行きに合わせて自動スケール／設置（現状は素材投影のみ）。
 
 ### 4. 速度 ✅ 一部実装済み（2026-06）
 - **PatchMatch を Web Worker 化** … UIを固める主犯だったCPU補完をワーカーへ退避し、補完中もスピナー/UIが固まらない。ワーカーのソースは既存の純粋関数（`pmComplete`/`patchMatchComplete`/`pmValidSrc` ほか）を `.toString()` で束ねて生成（**単一HTML維持・アルゴリズムの二重管理なし**）。`getPMWorker`/`runPatchMatchWorker`。Worker非対応環境では自動でメインスレッドにフォールバック。
