@@ -65,7 +65,7 @@ python server.py
 | 家具 | `removeBg`(改良マット・単色), `aiCutFurniture`(@imgly任意背景), `rebuildFurniture`, `furnitureHit` ほか |
 | 消しゴム統括 | `runEraseNow`（LaMa→PatchMatchの切替）, `probeServer`, `updateEraseBadge` |
 | LaMa連携 | `serverInpaintRegion`, `dataURLToCanvas` |
-| PatchMatch | `patchMatchRegion`→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`） |
+| PatchMatch | `patchMatchRegion`(async)→`runPatchMatchWorker`(Web Worker)→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`）。ワーカー組立は`getPMWorker` |
 | 描画/入力/レイヤー/UI | `render/renderOverlay`, ポインタ系, `addSurfaceLayer/addFurnitureLayer`, `setMode/syncPanels` |
 
 ---
@@ -86,8 +86,9 @@ python server.py
 ### 3. 床/壁の遠近対応
 床の四隅を指定 → ホモグラフィで素材タイルと家具を**床平面に正しく投影**（今は正対貼り）。
 
-### 4. 速度
-重い画素処理（PatchMatch・recolor）を **Web Worker + OffscreenCanvas** へ。UIは縮小プレビュー即時→確定時フル解像度。
+### 4. 速度 ✅ 一部実装済み（2026-06）
+- **PatchMatch を Web Worker 化** … UIを固める主犯だったCPU補完をワーカーへ退避し、補完中もスピナー/UIが固まらない。ワーカーのソースは既存の純粋関数（`pmComplete`/`patchMatchComplete`/`pmValidSrc` ほか）を `.toString()` で束ねて生成（**単一HTML維持・アルゴリズムの二重管理なし**）。`getPMWorker`/`runPatchMatchWorker`。Worker非対応環境では自動でメインスレッドにフォールバック。
+- 残: recolor の Web Worker/OffscreenCanvas 化（現状はコアレッシング済みで実用上は軽快なためメインスレッド）。縮小プレビュー即時→確定時フル解像度。
 
 ### 5. 仕上げ（順次実装中）
 - **before/afterスライダー** ✅ 実装済み（2026-06）… ヘッダー「比較」ボタン。編集前（元写真）と編集後（合成結果）をドラッグで比較。`State.compare` + `renderOverlay` のクリップ描画。

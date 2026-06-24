@@ -771,9 +771,9 @@ async function runEraseNow(){
   let usedFallback=false;
   if(SERVER.available){
     try{ filled = await serverInpaintRegion(minx,miny,rw,rh); }
-    catch(err){ console.error('LaMa server failed:',err); filled = patchMatchRegion(minx,miny,rw,rh); usedFallback=true; }
+    catch(err){ console.error('LaMa server failed:',err); filled = await patchMatchRegion(minx,miny,rw,rh); usedFallback=true; }
   } else {
-    filled = patchMatchRegion(minx,miny,rw,rh);
+    filled = await patchMatchRegion(minx,miny,rw,rh);
   }
 
   // composite filled into roomCanvas (only the feathered mask area changes)
@@ -801,8 +801,34 @@ async function serverInpaintRegion(minx,miny,rw,rh){
   return out.getContext('2d').getImageData(minx,miny,rw,rh);
 }
 
+/* ---- PatchMatch runs in a Web Worker so the UI stays responsive ----
+   The worker source is assembled from the existing pure functions via toString()
+   (single source of truth — no duplicated algorithm). Falls back to the main
+   thread if Workers are unavailable. */
+let pmWorker=null;
+function getPMWorker(){
+  if(pmWorker!==null) return pmWorker;
+  const PM_FUNCS=[clamp,dilate,pmDownRGB,pmValidSrc,pmDist,pmRange,pmComplete,patchMatchComplete];
+  const src='const PM_P='+PM_P+';\n'+PM_FUNCS.map(f=>f.toString()).join('\n')+
+    '\nonmessage=function(e){var d=e.data;var out=patchMatchComplete(d.img,d.hole,d.w,d.h);postMessage({out:out},[out.buffer]);};';
+  const url=URL.createObjectURL(new Blob([src],{type:'text/javascript'}));
+  pmWorker=new Worker(url); URL.revokeObjectURL(url);
+  return pmWorker;
+}
+function runPatchMatchWorker(img,hole,w,h){
+  return new Promise((resolve,reject)=>{
+    let worker; try{ worker=getPMWorker(); }
+    catch(e){ try{ resolve(patchMatchComplete(img,hole,w,h)); }catch(err){ reject(err); } return; }
+    const onMsg=ev=>{ cleanup(); resolve(ev.data.out); };
+    const onErr=ev=>{ cleanup(); console.warn('PatchMatch worker failed, using main thread:',ev.message||ev); try{ resolve(patchMatchComplete(img,hole,w,h)); }catch(err){ reject(err); } };
+    function cleanup(){ worker.removeEventListener('message',onMsg); worker.removeEventListener('error',onErr); }
+    worker.addEventListener('message',onMsg); worker.addEventListener('error',onErr);
+    worker.postMessage({img,hole,w,h}); // copy (not transfer) so the main-thread fallback keeps valid data
+  });
+}
+
 /* ---- in-browser PatchMatch content-aware fill (fallback / zero-setup) ---- */
-function patchMatchRegion(minx,miny,rw,rh){
+async function patchMatchRegion(minx,miny,rw,rh){
   const em=State.eraseMask;
   // region color canvas
   const rc=document.createElement('canvas'); rc.width=rw; rc.height=rh; rc.getContext('2d').putImageData(State.roomCtx.getImageData(minx,miny,rw,rh),0,0);
@@ -817,7 +843,7 @@ function patchMatchRegion(minx,miny,rw,rh){
   const img=new Float32Array(sw*sh*3); for(let i=0;i<sw*sh;i++){ img[i*3]=cd[i*4]; img[i*3+1]=cd[i*4+1]; img[i*3+2]=cd[i*4+2]; }
   let hole=new Uint8Array(sw*sh); for(let i=0;i<sw*sh;i++) hole[i]= mdn[i*4]>40?1:0;
   hole=dilate(hole,sw,sh,1);
-  const filled=patchMatchComplete(img,hole,sw,sh);
+  const filled=await runPatchMatchWorker(img,hole,sw,sh);
   // back to small canvas, upscale to region size
   const fImg=sColX.createImageData(sw,sh); for(let i=0;i<sw*sh;i++){ fImg.data[i*4]=filled[i*3]; fImg.data[i*4+1]=filled[i*3+1]; fImg.data[i*4+2]=filled[i*3+2]; fImg.data[i*4+3]=255; }
   sColX.putImageData(fImg,0,0);
