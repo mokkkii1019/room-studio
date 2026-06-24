@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Room Studio — 部屋を買う前に試す</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E8E6E1;          /* cool light greige workspace (not cream) */
+    --panel:#FAFAF9;
+    --panel-2:#F1F0EC;
+    --ink:#23262A;         /* graphite */
+    --muted:#71777D;
+    --line:#D9D7D1;
+    --line-2:#E7E5E0;
+    --stage:#2A2D31;       /* dark backdrop so the photo reads true */
+    --stage-2:#212427;
+    --accent:#2C6E6B;      /* deep petrol/teal — the one bold note */
+    --accent-ink:#0f3433;
+    --accent-weak:#DCEAE8;
+    --warn:#BB5239;        /* terracotta — destructive / eraser / furniture handles */
+    --warn-weak:#F1DED7;
+    --r:10px;
+    --r-sm:7px;
+    --shadow:0 1px 2px rgba(20,22,24,.06), 0 6px 20px rgba(20,22,24,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans JP",system-ui,-apple-system,sans-serif;
+    font-size:13.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column;
+  }
+  .label{font-family:"Space Grotesk","Noto Sans JP",sans-serif; text-transform:uppercase; letter-spacing:.12em; font-size:10.5px; font-weight:600; color:var(--muted)}
+  button{font-family:inherit; cursor:pointer}
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:center; gap:18px; padding:11px 18px;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  .brand{display:flex; align-items:baseline; gap:10px; margin-right:auto}
+  .brand .mark{font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:18px; letter-spacing:.02em}
+  .brand .mark b{color:var(--accent)}
+  .brand .tag{font-size:11px; color:var(--muted)}
+  .h-actions{display:flex; gap:8px; flex-wrap:wrap}
+  .btn{
+    border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    border-radius:var(--r-sm); padding:7px 12px; font-size:12.5px; font-weight:500;
+    display:inline-flex; align-items:center; gap:7px; transition:background .15s, border-color .15s;
+  }
+  .btn:hover{background:var(--panel-2)}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btn.primary:hover{background:#235754}
+  .btn.ghost-warn{color:var(--warn); border-color:var(--warn-weak)}
+  .btn.ghost-warn:hover{background:var(--warn-weak)}
+  .btn svg{width:15px;height:15px;stroke-width:1.8}
+
+  /* ---------- layout ---------- */
+  main{flex:1 1 auto; display:grid; grid-template-columns:1fr 348px; min-height:0}
+  .stage-wrap{
+    position:relative; background:
+      radial-gradient(120% 120% at 50% 0%, var(--stage) 0%, var(--stage-2) 100%);
+    display:flex; align-items:center; justify-content:center; padding:26px; min-width:0; overflow:hidden;
+  }
+  .canvas-box{position:relative; box-shadow:0 18px 50px rgba(0,0,0,.42); border-radius:6px; overflow:hidden; background:#111}
+  #stage,#overlay{display:block; max-width:100%; max-height:100%}
+  #overlay{position:absolute; inset:0; touch-action:none}
+  .empty-hint{
+    position:absolute; color:#cfd3d6; text-align:center; max-width:340px; pointer-events:none;
+  }
+  .empty-hint .label{color:#9aa0a4}
+
+  /* floating tool dock on the stage */
+  .dock{
+    position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+    display:flex; gap:4px; background:rgba(24,26,29,.82); backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:5px; box-shadow:var(--shadow);
+  }
+  .dock button{
+    border:0; background:transparent; color:#d6dadd; border-radius:7px; padding:8px 10px;
+    font-size:12px; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:54px;
+  }
+  .dock button svg{width:18px;height:18px;stroke-width:1.7}
+  .dock button:hover{background:rgba(255,255,255,.08); color:#fff}
+  .dock button.on{background:var(--accent); color:#fff}
+  .dock .sep{width:1px; background:rgba(255,255,255,.12); margin:4px 2px}
+  .zoom-note{position:absolute; right:14px; bottom:16px; color:#80878c; font-size:11px}
+
+  /* ---------- right panel ---------- */
+  .panel{background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  .tabs{display:flex; padding:10px 12px 0; gap:4px; border-bottom:1px solid var(--line)}
+  .tab{
+    flex:1; border:0; background:transparent; padding:9px 6px 11px; border-radius:7px 7px 0 0;
+    font-weight:600; font-size:12.5px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .tab svg{width:15px;height:15px;stroke-width:1.8}
+  .tab:hover{color:var(--ink)}
+  .tab.on{color:var(--accent); border-bottom-color:var(--accent)}
+  .tab.on.erase{color:var(--warn); border-bottom-color:var(--warn)}
+
+  .scroll{overflow-y:auto; padding:14px; flex:1 1 auto; min-height:0}
+  .scroll::-webkit-scrollbar{width:9px}
+  .scroll::-webkit-scrollbar-thumb{background:var(--line); border-radius:9px; border:2px solid var(--panel)}
+
+  .section{margin-bottom:18px}
+  .section > .label{display:block; margin-bottom:9px}
+  .hint{font-size:11.5px; color:var(--muted); margin:0 0 10px}
+
+  .row{display:flex; align-items:center; gap:9px; margin-bottom:10px}
+  .row .grow{flex:1}
+  .seg{display:flex; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:3px; gap:3px}
+  .seg button{flex:1; border:0; background:transparent; border-radius:6px; padding:7px 4px; font-size:12px; font-weight:500; color:var(--muted); display:flex; align-items:center; justify-content:center; gap:5px}
+  .seg button svg{width:14px;height:14px;stroke-width:1.8}
+  .seg button.on{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .seg.warn button.on{color:var(--warn)}
+
+  .slider{display:flex; align-items:center; gap:10px; margin:9px 0}
+  .slider label{font-size:11.5px; color:var(--muted); min-width:62px}
+  .slider input[type=range]{flex:1; accent-color:var(--accent)}
+  .slider .val{font-variant-numeric:tabular-nums; font-size:11.5px; color:var(--ink); min-width:34px; text-align:right}
+  .erase-scope input[type=range]{accent-color:var(--warn)}
+
+  /* color swatches (paint chips) */
+  .chips{display:grid; grid-template-columns:repeat(6,1fr); gap:7px}
+  .chip{aspect-ratio:1; border-radius:7px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -10px 14px rgba(0,0,0,.04)}
+  .chip.on{outline:2px solid var(--accent); outline-offset:2px}
+  .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:12px; text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  .picker-row{display:flex; align-items:center; gap:10px; margin-top:11px}
+  .picker-row input[type=color]{width:40px;height:32px; border:1px solid var(--line); border-radius:8px; background:none; padding:2px}
+  .picker-row .hexv{font-family:"Space Grotesk",monospace; font-size:12px; color:var(--muted)}
+
+  /* material tiles */
+  .mats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+  .mat{cursor:pointer; border-radius:8px; overflow:hidden; border:1px solid var(--line); background:#fff}
+  .mat.on{outline:2px solid var(--accent); outline-offset:2px}
+  .mat canvas{display:block; width:100%; height:46px; object-fit:cover}
+  .mat .nm{display:block; font-size:10px; text-align:center; padding:3px 2px; color:var(--muted)}
+  .mat.none{display:flex; align-items:center; justify-content:center; height:69px; color:var(--muted); font-size:11px; flex-direction:column; gap:4px}
+  .mat.none svg{width:18px;height:18px;stroke-width:1.7}
+
+  .toggle{display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; font-size:12.5px; margin:10px 0}
+  .toggle input{display:none}
+  .toggle .sw{width:36px;height:21px;border-radius:21px;background:var(--line);position:relative;transition:background .15s; flex:0 0 auto}
+  .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  .toggle input:checked + .sw{background:var(--accent)}
+  .toggle input:checked + .sw::after{transform:translateX(15px)}
+
+  .addbtn{width:100%; border:1px dashed var(--line); background:var(--panel-2); border-radius:9px; padding:12px; color:var(--ink); font-weight:600; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:8px}
+  .addbtn:hover{border-color:var(--accent); color:var(--accent)}
+  .addbtn svg{width:16px;height:16px;stroke-width:1.9}
+
+  .run-erase{width:100%; background:var(--warn); border:1px solid var(--warn); color:#fff; border-radius:9px; padding:11px; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px}
+  .run-erase:hover{background:#a3472f}
+  .run-erase svg{width:16px;height:16px;stroke-width:1.9}
+  .run-erase[disabled]{opacity:.5; cursor:not-allowed}
+
+  .empty-note{font-size:12px; color:var(--muted); text-align:center; padding:16px 8px; border:1px dashed var(--line); border-radius:9px}
+  .engine{font-size:11px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:12px; color:var(--muted); background:var(--panel-2); font-weight:500}
+  .engine.ok{color:var(--accent-ink); border-color:var(--accent); background:var(--accent-weak)}
+
+  /* layers */
+  .layers{border-top:1px solid var(--line); padding:12px 14px; background:var(--panel-2); flex:0 0 auto; max-height:42%; overflow-y:auto}
+  .layers .label{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+  .layer{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; border:1px solid transparent}
+  .layer.on{background:#fff; border-color:var(--line)}
+  .layer .swatch{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.12); flex:0 0 auto; background-size:cover}
+  .layer .nm{flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .layer .kind{font-size:9.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
+  .layer .ic{border:0;background:transparent;color:var(--muted);padding:3px;border-radius:5px;display:flex}
+  .layer .ic:hover{background:var(--panel-2); color:var(--ink)}
+  .layer .ic svg{width:15px;height:15px;stroke-width:1.8}
+  .layer .ic.del:hover{color:var(--warn)}
+  .layer .eye.off{opacity:.32}
+
+  /* toast */
+  #toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px); opacity:0;
+    background:var(--ink); color:#fff; padding:10px 16px; border-radius:9px; font-size:12.5px; box-shadow:var(--shadow);
+    transition:opacity .2s, transform .2s; pointer-events:none; z-index:50; max-width:80vw}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  /* busy overlay */
+  #busy{position:fixed; inset:0; background:rgba(20,22,24,.45); display:none; align-items:center; justify-content:center; z-index:60}
+  #busy.show{display:flex}
+  #busy .card{background:var(--panel); padding:18px 22px; border-radius:12px; display:flex; align-items:center; gap:13px; box-shadow:var(--shadow); font-weight:600; font-size:13px}
+  .spin{width:18px;height:18px;border:2.5px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  @media (max-width:880px){
+    main{grid-template-columns:1fr; grid-template-rows:minmax(280px,52vh) 1fr}
+    .panel{border-left:0; border-top:1px solid var(--line)}
+    .layers{max-height:none}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark">ROOM&nbsp;<b>STUDIO</b></span>
+    <span class="tag">買う前に、塗って・置いて・消して試す</span>
+  </div>
+  <div class="h-actions">
+    <button class="btn" id="btnDemo" title="サンプルの部屋で試す">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-8 9 8M5 10v10h14V10"/></svg>
+      デモの部屋
+    </button>
+    <button class="btn" id="btnOpen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
+      画像を開く
+    </button>
+    <input type="file" id="fileRoom" accept="image/*" hidden />
+    <button class="btn" id="btnUndo" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-3"/></svg>
+      取り消す
+    </button>
+    <button class="btn primary" id="btnExport">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+      書き出す
+    </button>
+    <button class="btn ghost-warn" id="btnReset">リセット</button>
+  </div>
+</header>
+
+<main>
+  <!-- STAGE -->
+  <section class="stage-wrap">
+    <div class="canvas-box" id="canvasBox" style="display:none">
+      <canvas id="stage"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="empty-hint" id="emptyHint">
+      <div class="label">START</div>
+      <p style="font-size:15px;color:#e7eaec;margin:.5em 0">部屋の写真を読み込んでください</p>
+      <p>上の「画像を開く」、または「デモの部屋」でまず触ってみましょう。<br>写真はこの端末の中だけで処理され、どこにも送信されません。</p>
+    </div>
+
+    <div class="dock" id="dock" style="display:none">
+      <button data-tool="brush" class="on" title="塗って選択">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>選択ブラシ
+      </button>
+      <button data-tool="wand" title="近い色を自動で選択">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 4V2m0 16v2M9 6L7.5 4.5M22.5 9.5L21 8M4 13l9 9 7-7-9-9-7 7z"/></svg>自動選択
+      </button>
+      <button data-tool="unmask" title="選択を消す">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>選択消し
+      </button>
+      <div class="sep"></div>
+      <button data-tool="move" title="家具を動かす">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>移動
+      </button>
+    </div>
+    <div class="zoom-note" id="zoomNote" style="display:none"></div>
+  </section>
+
+  <!-- PANEL -->
+  <aside class="panel">
+    <div class="tabs">
+      <button class="tab on" data-mode="surface" id="tabSurface">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3h18v18H3zM3 9h18M9 9v12"/></svg>表面
+      </button>
+      <button class="tab" data-mode="furniture" id="tabFurniture">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3m-16 0a2 2 0 0 0-2 2v3h20v-3a2 2 0 0 0-2-2m-16 0h16M5 19v-3m14 3v-3"/></svg>家具
+      </button>
+      <button class="tab erase" data-mode="erase" id="tabErase">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>消しゴム
+      </button>
+    </div>
+
+    <div class="scroll">
+      <!-- ===== SURFACE PANEL ===== -->
+      <div id="panelSurface">
+        <button class="addbtn" id="addSurface">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+          表面を追加（壁・床・天井など）
+        </button>
+        <p class="hint" style="margin-top:10px">追加した表面を選び、ブラシか自動選択でその範囲を塗ってから、下で色や素材を変えます。質感や陰影は保ったまま色だけ変わります。</p>
+
+        <div id="surfaceControls" style="display:none">
+          <div class="section">
+            <span class="label">選択ツール</span>
+            <div class="seg" id="surfTools">
+              <button data-tool="brush" class="on">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>ブラシ
+              </button>
+              <button data-tool="wand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 4V2M4 13l9 9 7-7-9-9-7 7z"/></svg>自動
+              </button>
+              <button data-tool="unmask">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8"/></svg>消す
+              </button>
+            </div>
+            <div class="slider" id="brushSizeRow"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
+            <div class="slider" id="wandTolRow" style="display:none"><label>色の許容</label><input type="range" id="wandTol" min="6" max="90" value="34"><span class="val" id="wandTolV">34</span></div>
+            <div class="row" style="margin-top:4px">
+              <button class="btn" id="clearMask" style="flex:1; justify-content:center">この表面の選択をクリア</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <span class="label">色</span>
+            <div class="chips" id="colorChips"></div>
+            <div class="picker-row">
+              <input type="color" id="surfColor" value="#cfd8d4">
+              <span class="hexv" id="surfHex">#CFD8D4</span>
+            </div>
+            <div class="slider"><label>強さ</label><input type="range" id="surfStrength" min="0" max="100" value="85"><span class="val" id="surfStrengthV">85%</span></div>
+            <div class="slider"><label>明るさ</label><input type="range" id="surfLight" min="-40" max="40" value="0"><span class="val" id="surfLightV">0</span></div>
+            <label class="toggle"><input type="checkbox" id="keepTexture" checked><span class="sw"></span>質感・陰影を保つ</label>
+          </div>
+
+          <div class="section">
+            <span class="label">素材（任意・色より優先）</span>
+            <div class="mats" id="matGrid"></div>
+            <input type="file" id="fileMat" accept="image/*" hidden>
+            <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="80"><span class="val" id="matStrengthV">80%</span></div>
+            <div class="slider"><label>柄の大きさ</label><input type="range" id="matScale" min="40" max="220" value="100"><span class="val" id="matScaleV">100%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== FURNITURE PANEL ===== -->
+      <div id="panelFurniture" style="display:none">
+        <button class="addbtn" id="addFurniture">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+          家具の画像を追加
+        </button>
+        <input type="file" id="fileFurniture" accept="image/*" hidden>
+        <p class="hint" style="margin-top:10px">家具やオブジェの画像を追加→ステージ上でドラッグして移動。下のツールで背景の切り抜き・色・素材・大きさを調整できます。白や単色背景の商品写真がきれいに抜けます。</p>
+
+        <div id="furnitureControls" style="display:none">
+          <div class="section">
+            <span class="label">切り抜き</span>
+            <label class="toggle"><input type="checkbox" id="fBgRemove"><span class="sw"></span>背景を自動で消す</label>
+            <div class="slider" id="fBgTolRow" style="display:none"><label>許容</label><input type="range" id="fBgTol" min="6" max="80" value="30"><span class="val" id="fBgTolV">30</span></div>
+          </div>
+          <div class="section">
+            <span class="label">配置</span>
+            <div class="slider"><label>大きさ</label><input type="range" id="fScale" min="10" max="300" value="100"><span class="val" id="fScaleV">100%</span></div>
+            <div class="slider"><label>回転</label><input type="range" id="fRot" min="-180" max="180" value="0"><span class="val" id="fRotV">0°</span></div>
+            <div class="slider"><label>不透明度</label><input type="range" id="fOpacity" min="20" max="100" value="100"><span class="val" id="fOpacityV">100%</span></div>
+            <div class="row">
+              <button class="btn" id="fFlip" style="flex:1;justify-content:center">左右反転</button>
+              <button class="btn" id="fDup" style="flex:1;justify-content:center">複製</button>
+            </div>
+            <div class="row">
+              <button class="btn" id="fFront" style="flex:1;justify-content:center">前面へ</button>
+              <button class="btn" id="fBack" style="flex:1;justify-content:center">背面へ</button>
+            </div>
+          </div>
+          <div class="section">
+            <span class="label">色を変える</span>
+            <label class="toggle"><input type="checkbox" id="fRecolor"><span class="sw"></span>色を置き換える</label>
+            <div id="fRecolorBox" style="display:none">
+              <div class="chips" id="fColorChips"></div>
+              <div class="picker-row">
+                <input type="color" id="fColor" value="#7d8aa0">
+                <span class="hexv" id="fHex">#7D8AA0</span>
+              </div>
+              <div class="slider"><label>強さ</label><input type="range" id="fStrength" min="0" max="100" value="80"><span class="val" id="fStrengthV">80%</span></div>
+            </div>
+          </div>
+          <div class="section">
+            <span class="label">素材</span>
+            <div class="mats" id="fMatGrid"></div>
+            <div class="slider"><label>強さ</label><input type="range" id="fMatStrength" min="0" max="100" value="80"><span class="val" id="fMatStrengthV">80%</span></div>
+          </div>
+          <button class="btn ghost-warn" id="fDelete" style="width:100%;justify-content:center">この家具を削除</button>
+        </div>
+        <div id="furnitureEmpty" class="empty-note">家具を追加するか、レイヤーから選択してください。</div>
+      </div>
+
+      <!-- ===== ERASE PANEL ===== -->
+      <div id="panelErase" style="display:none">
+        <div class="engine" id="eraseEngine">○ ブラウザ内補完（PatchMatch）で動作中 — サーバー未接続</div>
+        <p class="hint">消したいもの（散らかった小物・コンセント・壁の写真など）を<b>赤いブラシで塗りつぶし</b>、「この範囲を消す」を押すと、周囲から自然に埋め直します。<b>LaMaサーバーを起動すると</b>Photoshopの「コンテンツに応じた塗りつぶし」相当の品質になります（READMEの起動手順を参照）。未起動でもブラウザ内の補完で動きます。</p>
+        <div class="section erase-scope">
+          <span class="label">消しゴムブラシ</span>
+          <div class="slider"><label>ブラシ径</label><input type="range" id="eraseSize" min="8" max="160" value="60"><span class="val" id="eraseSizeV">60</span></div>
+          <div class="row">
+            <button class="btn" id="eraseClear" style="flex:1;justify-content:center">塗りをクリア</button>
+            <button class="btn" id="eraseRecheck" style="flex:1;justify-content:center">接続を再確認</button>
+          </div>
+        </div>
+        <button class="run-erase" id="runErase" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7M3 21h18"/></svg>
+          この範囲を消す
+        </button>
+        <p class="hint" style="margin-top:12px">仕上がりが甘い時は、範囲を少し広めに塗り直すと改善します。大きな物・複雑な柄ほどLaMaサーバーが有利です。</p>
+      </div>
+    </div>
+
+    <!-- LAYERS -->
+    <div class="layers">
+      <span class="label"><span>レイヤー</span><span id="layerCount" style="font-size:10px">0</span></span>
+      <div id="layerList"></div>
+      <div id="layerEmpty" class="empty-note" style="margin-top:6px">まだレイヤーはありません</div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast"></div>
+<div id="busy"><div class="card"><span class="spin"></span><span id="busyText">処理中…</span></div></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   Room Studio — single-file prototype
+   - Surfaces: paint/auto-select a region, recolor (texture-preserving) or apply a material
+   - Furniture: import image, cut out background, recolor/material, move/scale/rotate/place
+   - Eraser: paint a region, content-aware fill (coarse-to-fine diffusion inpaint)
+   All processing is client-side. Built to be extended in Claude Code (see README).
+   ========================================================================= */
+
+/* ---------------- small DOM helpers ---------------- */
+const $ = id => document.getElementById(id);
+const on = (el, ev, fn) => el.addEventListener(ev, fn);
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
+function busy(show, text){ $('busyText').textContent=text||'処理中…'; $('busy').classList.toggle('show',show); }
+
+/* ---------------- color math (validated) ---------------- */
+function rgb2hsl(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b); let h,s,l=(max+min)/2;
+  if(max===min){h=s=0;}
+  else{ const d=max-min; s=l>0.5?d/(2-max-min):d/(max+min);
+    switch(max){case r:h=(g-b)/d+(g<b?6:0);break; case g:h=(b-r)/d+2;break; default:h=(r-g)/d+4;} h/=6; }
+  return [h,s,l];
+}
+function hue2rgb(p,q,t){ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }
+function hsl2rgb(h,s,l){ let r,g,b; if(s===0){r=g=b=l;} else{ const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q; r=hue2rgb(p,q,h+1/3); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1/3);} return [r*255,g*255,b*255]; }
+function hex2rgb(hex){ const n=parseInt(hex.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function lpOf(r,g,b){ const mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b); return (mx+mn)/510; } // HSL lightness, fast
+
+/* ---------------- global state ---------------- */
+const MAXSIDE = 1100;
+const State = {
+  W:0, H:0,
+  roomCanvas:null, roomCtx:null,      // editable (eraser writes here)
+  roomOriginal:null,                  // backup for reset
+  roomData:null,                      // cached ImageData of roomCanvas
+  layers:[],                          // ordered bottom->top
+  selectedId:null,
+  mode:'surface',                     // surface | furniture | erase
+  surfTool:'brush',                   // brush | wand | unmask
+  eraseMask:null,                     // Uint8 over room
+  undo:[],                            // room snapshots (ImageData)
+  nextId:1,
+};
+const stage = $('stage'), sctx = stage.getContext('2d');
+const overlay = $('overlay'), octx = overlay.getContext('2d');
+
+function getRoomData(){ if(!State.roomData) State.roomData = State.roomCtx.getImageData(0,0,State.W,State.H); return State.roomData; }
+function invalidateRoomData(){ State.roomData=null; }
+function activeSurface(){ const l=State.layers.find(x=>x.id===State.selectedId); return (l&&l.type==='surface')?l:null; }
+function selectedFurniture(){ const l=State.layers.find(x=>x.id===State.selectedId); return (l&&l.type==='furniture')?l:null; }
+
+/* =========================================================================
+   PROCEDURAL MATERIALS  (256x256 tiles, copyright-free, offline)
+   ========================================================================= */
+const MATERIALS = [
+  {key:'oak',     name:'オーク',   base:'#caa56d', draw:woodTile('#caa56d','#a07d44',6)},
+  {key:'walnut',  name:'ウォルナット', base:'#6b4a32', draw:woodTile('#6b4a32','#4a3220',7)},
+  {key:'ash',     name:'アッシュ', base:'#d9c7ab', draw:woodTile('#d9c7ab','#c0ab86',5)},
+  {key:'tile',    name:'タイル',   base:'#e7e4dd', draw:tileTile('#efece5','#c9c4b8')},
+  {key:'concrete',name:'コンクリ', base:'#b8b6b1', draw:concreteTile('#b8b6b1')},
+  {key:'linen',   name:'リネン',   base:'#d8cfc0', draw:linenTile('#d8cfc0','#c4b9a6')},
+  {key:'marble',  name:'マーブル', base:'#ecebe7', draw:marbleTile('#efeeea','#b9b7b0')},
+  {key:'terr',    name:'テラコッタ', base:'#c47a55', draw:tileTile('#c47a55','#9c5d3e')},
+];
+function newTile(){ const c=document.createElement('canvas'); c.width=c.height=256; return c; }
+function woodTile(base,dark,planks){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256);
+  const pw=256/planks; for(let p=0;p<planks;p++){ // plank shading
+    const g=x.createLinearGradient(p*pw,0,(p+1)*pw,0); g.addColorStop(0,shade(base,-6)); g.addColorStop(.5,shade(base,4)); g.addColorStop(1,shade(base,-8));
+    x.fillStyle=g; x.fillRect(p*pw,0,pw,256);
+    x.strokeStyle=shade(dark,-10); x.globalAlpha=.5; x.lineWidth=1; x.beginPath(); x.moveTo(p*pw,0); x.lineTo(p*pw,256); x.stroke(); x.globalAlpha=1;
+  }
+  x.strokeStyle=dark; for(let i=0;i<140;i++){ x.globalAlpha=Math.random()*.10+.03; x.lineWidth=Math.random()*1.4; const y=Math.random()*256; x.beginPath(); x.moveTo(0,y); x.bezierCurveTo(64,y+Math.random()*6-3,128,y+Math.random()*6-3,256,y+Math.random()*8-4); x.stroke(); }
+  x.globalAlpha=1; return c; }; }
+function tileTile(light,grout){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=grout; x.fillRect(0,0,256,256); const n=4, s=256/n, gap=4;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){ const g=x.createLinearGradient(i*s,j*s,(i+1)*s,(j+1)*s); g.addColorStop(0,shade(light,5)); g.addColorStop(1,shade(light,-6)); x.fillStyle=g; x.fillRect(i*s+gap/2,j*s+gap/2,s-gap,s-gap);} return c; }; }
+function concreteTile(base){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256); const img=x.getImageData(0,0,256,256),d=img.data;
+  for(let i=0;i<d.length;i+=4){ const n=(Math.random()-.5)*26; d[i]+=n; d[i+1]+=n; d[i+2]+=n; } x.putImageData(img,0,0);
+  for(let i=0;i<30;i++){ x.globalAlpha=Math.random()*.05; x.fillStyle=Math.random()>.5?'#fff':'#000'; const r=Math.random()*60+20; x.beginPath(); x.arc(Math.random()*256,Math.random()*256,r,0,7); x.fill(); } x.globalAlpha=1; return c; }; }
+function linenTile(base,thread){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256); x.strokeStyle=thread; x.lineWidth=1;
+  for(let i=0;i<256;i+=3){ x.globalAlpha=.10+Math.random()*.06; x.beginPath(); x.moveTo(i,0); x.lineTo(i,256); x.stroke(); x.beginPath(); x.moveTo(0,i); x.lineTo(256,i); x.stroke(); } x.globalAlpha=1; return c; }; }
+function marbleTile(base,vein){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256); x.strokeStyle=vein;
+  for(let i=0;i<8;i++){ x.globalAlpha=.10+Math.random()*.14; x.lineWidth=Math.random()*3+.5; x.beginPath(); let px=Math.random()*256,py=0; x.moveTo(px,py); while(py<256){ px+=(Math.random()-.5)*60; py+=Math.random()*40+12; x.lineTo(px,py);} x.stroke(); } x.globalAlpha=1; return c; }; }
+function shade(hex,amt){ const [r,g,b]=hex2rgb(hex); return `rgb(${clamp(r+amt*2.55,0,255)|0},${clamp(g+amt*2.55,0,255)|0},${clamp(b+amt*2.55,0,255)|0})`; }
+// cache rendered tiles
+const tileCache={};
+function matTile(key){ if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); const t=m?m.draw():newTile(); tileCache[key]=t; return t; }
+
+/* build a W×H relit-texture buffer (Uint8 RGBA) for a material + scale, lit by room luminance */
+function buildMaterialBuffer(key, scalePct){
+  const t = matTile(key);
+  const buf = document.createElement('canvas'); buf.width=State.W; buf.height=State.H;
+  const bx = buf.getContext('2d'); const sc=(scalePct/100); const ts=Math.max(24, t.width*sc);
+  for(let y=0;y<State.H;y+=ts) for(let x=0;x<State.W;x+=ts) bx.drawImage(t,x,y,ts,ts);
+  return bx.getImageData(0,0,State.W,State.H);
+}
+
+/* =========================================================================
+   MASK utilities (Uint8 alpha arrays at W×H)
+   ========================================================================= */
+function newMask(){ return new Uint8ClampedArray(State.W*State.H); }
+function stampDisc(mask, cx, cy, r, val){
+  const x0=Math.max(0,(cx-r)|0), x1=Math.min(State.W-1,(cx+r)|0), y0=Math.max(0,(cy-r)|0), y1=Math.min(State.H-1,(cy+r)|0), r2=r*r;
+  for(let y=y0;y<=y1;y++){ const dy=y-cy; for(let x=x0;x<=x1;x++){ const dx=x-cx; if(dx*dx+dy*dy<=r2) mask[y*State.W+x]=val; } }
+}
+function stampDiscSoft(mask, cx, cy, r){ // feathered: outer 35% fades; takes max with existing
+  const x0=Math.max(0,(cx-r)|0), x1=Math.min(State.W-1,(cx+r)|0), y0=Math.max(0,(cy-r)|0), y1=Math.min(State.H-1,(cy+r)|0);
+  const inner=r*0.65;
+  for(let y=y0;y<=y1;y++){ const dy=y-cy; for(let x=x0;x<=x1;x++){ const dx=x-cx; const d=Math.sqrt(dx*dx+dy*dy); if(d>r) continue;
+    let a = d<=inner?1:(1-(d-inner)/(r-inner)); a=a*a*(3-2*a); const v=(a*255)|0; const i=y*State.W+x; if(v>mask[i]) mask[i]=v; } }
+}
+function boxBlurMask(src, radius){
+  const w=State.W,h=State.H, tmp=new Float32Array(w*h), out=new Uint8ClampedArray(w*h), r=radius|0; if(r<=0){ out.set(src); return out; }
+  for(let y=0;y<h;y++){ let acc=0; const row=y*w; for(let x=-r;x<=r;x++) acc+=src[row+clamp(x,0,w-1)];
+    for(let x=0;x<w;x++){ tmp[row+x]=acc/(2*r+1); acc+=src[row+clamp(x+r+1,0,w-1)]-src[row+clamp(x-r,0,w-1)]; } }
+  for(let x=0;x<w;x++){ let acc=0; for(let y=-r;y<=r;y++) acc+=tmp[clamp(y,0,h-1)*w+x];
+    for(let y=0;y<h;y++){ out[y*w+x]=acc/(2*r+1); acc+=tmp[clamp(y+r+1,0,h-1)*w+x]-tmp[clamp(y-r,0,h-1)*w+x]; } }
+  return out;
+}
+/* scanline flood fill on room by color similarity, adds to mask */
+function floodFill(mask, sx, sy, tolPct){
+  const d=getRoomData().data, w=State.W, h=State.H; sx|=0; sy|=0; if(sx<0||sy<0||sx>=w||sy>=h) return;
+  const si=(sy*w+sx)*4, sr=d[si],sg=d[si+1],sb=d[si+2]; const tol=(tolPct/100)*255*1.732; const tol2=tol*tol;
+  const visited=new Uint8Array(w*h); const stack=[sx,sy];
+  while(stack.length){ const y=stack.pop(), x=stack.pop(); const idx=y*w+x; if(visited[idx]) continue;
+    const p=idx*4, dr=d[p]-sr, dg=d[p+1]-sg, db=d[p+2]-sb; if(dr*dr+dg*dg+db*db>tol2) continue;
+    // expand left/right on this row
+    let xl=x; while(xl>0){ const q=(idx-(x-xl)-1)*4; const a=d[q]-sr,b=d[q+1]-sg,c=d[q+2]-sb; if(a*a+b*b+c*c>tol2||visited[idx-(x-xl)-1])break; xl--; }
+    let xr=x; while(xr<w-1){ const q=(idx+(xr-x)+1)*4; const a=d[q]-sr,b=d[q+1]-sg,c=d[q+2]-sb; if(a*a+b*b+c*c>tol2||visited[idx+(xr-x)+1])break; xr++; }
+    for(let xi=xl;xi<=xr;xi++){ const ii=y*w+xi; visited[ii]=1; mask[ii]=255;
+      if(y>0 && !visited[ii-w]) stack.push(xi,y-1);
+      if(y<h-1 && !visited[ii+w]) stack.push(xi,y+1);
+    }
+  }
+}
+
+/* =========================================================================
+   RECOLOR / MATERIAL → produce an RGBA result for a set of pixels
+   `getSrcLp(i)` returns original lightness; we keep it to preserve texture.
+   ========================================================================= */
+function applyRecolorToImageData(out, srcData, alphaOf, opts){
+  // opts: {color:[h,s,l], strength, lightShift, keepTexture, materialBuf, matStrength}
+  const w=State.W,h=State.H, n=w*h;
+  // average L over affected pixels (fast lightness, no full HSL)
+  let sumL=0,cnt=0; for(let i=0;i<n;i++){ const a=alphaOf(i); if(a>4){ const p=i*4; sumL+=lpOf(srcData[p],srcData[p+1],srcData[p+2]); cnt++; } }
+  const avgL = cnt? sumL/cnt : 0.5;
+  const useMat = !!opts.materialBuf;
+  const [th,ts,tl] = opts.color || [0,0,.5];
+  const variation = opts.keepTexture?1:0.4;
+  const o=out.data, mb = useMat? opts.materialBuf.data : null;
+  for(let i=0;i<n;i++){
+    const a=alphaOf(i); if(a<=0){ continue; }
+    const p=i*4; const lp=lpOf(srcData[p],srcData[p+1],srcData[p+2]);
+    let R,G,B, strength;
+    if(useMat){
+      const shadeF = clamp(lp/Math.max(avgL,0.05), 0.30, 1.7);
+      R=mb[p]*shadeF; G=mb[p+1]*shadeF; B=mb[p+2]*shadeF; strength=opts.matStrength;
+    } else {
+      const nl = clamp(tl + (lp-avgL)*variation + (opts.lightShift||0), 0, 1);
+      const rgb=hsl2rgb(th,ts,nl); R=rgb[0];G=rgb[1];B=rgb[2]; strength=opts.strength;
+    }
+    o[p]=R; o[p+1]=G; o[p+2]=B; o[p+3]=Math.round(a*strength);
+  }
+}
+
+/* =========================================================================
+   SURFACE rendering (cache per layer)
+   ========================================================================= */
+function rebuildSurface(layer){
+  const w=State.W,h=State.H;
+  if(!layer.cache){ layer.cache=document.createElement('canvas'); layer.cache.width=w; layer.cache.height=h; }
+  const cctx=layer.cache.getContext('2d'); cctx.clearRect(0,0,w,h);
+  // any selection?
+  let any=false; for(let i=0;i<layer.mask.length;i++){ if(layer.mask[i]>0){any=true;break;} }
+  layer._hasMask=any;
+  if(!any){ layer.dirty=false; return; }
+  const feather = boxBlurMask(layer.mask, 3);
+  const src=getRoomData().data;
+  const out=cctx.createImageData(w,h);
+  let matBuf=null;
+  if(layer.material){ const k=layer.material+'@'+layer.matScale; if(layer._matBufKey!==k){ layer._matBuf=buildMaterialBuffer(layer.material,layer.matScale); layer._matBufKey=k; } matBuf=layer._matBuf; }
+  const opts={
+    color: rgb2hsl(...hex2rgb(layer.color)),
+    strength: layer.strength,
+    lightShift: layer.lightShift,
+    keepTexture: layer.keepTexture,
+    materialBuf: matBuf,
+    matStrength: layer.matStrength,
+  };
+  applyRecolorToImageData(out, src, i=>feather[i], opts);
+  cctx.putImageData(out,0,0);
+  layer.dirty=false;
+}
+
+/* =========================================================================
+   FURNITURE processing (cache processed image with alpha)
+   ========================================================================= */
+function removeBg(imgData, tolPct){
+  const w=imgData.width,h=imgData.height,d=imgData.data, tol=(tolPct/100)*255*1.732, tol2=tol*tol;
+  const corners=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]]; let cr=0,cg=0,cb=0;
+  for(const [x,y] of corners){ const p=(y*w+x)*4; cr+=d[p];cg+=d[p+1];cb+=d[p+2]; } cr/=4;cg/=4;cb/=4;
+  const visited=new Uint8Array(w*h), stack=[];
+  for(const [x,y] of corners) stack.push(x,y);
+  while(stack.length){ const y=stack.pop(),x=stack.pop(); if(x<0||y<0||x>=w||y>=h) continue; const idx=y*w+x; if(visited[idx]) continue; visited[idx]=1;
+    const p=idx*4; const a=d[p]-cr,b=d[p+1]-cg,c=d[p+2]-cb; if(a*a+b*b+c*c>tol2) continue;
+    d[p+3]=0; stack.push(x+1,y,x-1,y,x,y+1,x,y-1);
+  }
+  // alpha map
+  let alpha=new Uint8ClampedArray(w*h); for(let i=0;i<w*h;i++) alpha[i]=d[i*4+3];
+  // erode opaque by 1px (cut colored fringe just inside the cut)
+  const er=new Uint8ClampedArray(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let mn=255; for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const xx=clamp(x+dx,0,w-1),yy=clamp(y+dy,0,h-1); const v=alpha[yy*w+xx]; if(v<mn)mn=v; } er[y*w+x]=mn; }
+  // feather (2px box) for a soft, clean edge
+  const fe=new Uint8ClampedArray(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let s=0,c=0; for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){ const xx=clamp(x+dx,0,w-1),yy=clamp(y+dy,0,h-1); s+=er[yy*w+xx];c++; } fe[y*w+x]=s/c; }
+  // write alpha + despill (unmix background color out of semi-transparent edge)
+  for(let i=0;i<w*h;i++){ const a=fe[i]; const p=i*4; d[p+3]=a;
+    if(a>20 && a<250){ const af=a/255; d[p]=clamp((d[p]-(1-af)*cr)/af,0,255); d[p+1]=clamp((d[p+1]-(1-af)*cg)/af,0,255); d[p+2]=clamp((d[p+2]-(1-af)*cb)/af,0,255); }
+  }
+}
+function rebuildFurniture(layer){
+  const src=layer.srcCanvas, w=src.width, h=src.height;
+  const work=document.createElement('canvas'); work.width=w; work.height=h; const wx=work.getContext('2d',{willReadFrequently:true});
+  wx.drawImage(src,0,0);
+  let img=wx.getImageData(0,0,w,h);
+  if(layer.bgRemove) removeBg(img, layer.bgTol);
+  // recolor / material applied to opaque pixels
+  if(layer.recolor || layer.material){
+    const d=img.data, n=w*h;
+    let sumL=0,cnt=0; for(let i=0;i<n;i++){ if(d[i*4+3]>10){ const p=i*4; sumL+=lpOf(d[p],d[p+1],d[p+2]); cnt++; } }
+    const avgL=cnt?sumL/cnt:0.5;
+    let matBuf=null;
+    if(layer.material){ const t=matTile(layer.material); const bc=document.createElement('canvas'); bc.width=w;bc.height=h; const bcx=bc.getContext('2d'); const ts=t.width*0.7; for(let y=0;y<h;y+=ts)for(let x=0;x<w;x+=ts) bcx.drawImage(t,x,y,ts,ts); matBuf=bcx.getImageData(0,0,w,h).data; }
+    const col = layer.recolor? rgb2hsl(...hex2rgb(layer.color)) : null;
+    for(let i=0;i<n;i++){ const al=d[i*4+3]; if(al<=10) continue; const p=i*4; const lp=lpOf(d[p],d[p+1],d[p+2]);
+      if(layer.material){ const shadeF=clamp(lp/Math.max(avgL,0.05),0.3,1.7); const R=matBuf[p]*shadeF,G=matBuf[p+1]*shadeF,B=matBuf[p+2]*shadeF; const s=layer.matStrength; d[p]=d[p]*(1-s)+R*s; d[p+1]=d[p+1]*(1-s)+G*s; d[p+2]=d[p+2]*(1-s)+B*s; }
+      else { const nl=clamp(col[2]+(lp-avgL),0,1); const rgb=hsl2rgb(col[0],col[1],nl); const s=layer.strength; d[p]=d[p]*(1-s)+rgb[0]*s; d[p+1]=d[p+1]*(1-s)+rgb[1]*s; d[p+2]=d[p+2]*(1-s)+rgb[2]*s; }
+    }
+  }
+  const proc=document.createElement('canvas'); proc.width=w; proc.height=h; proc.getContext('2d').putImageData(img,0,0);
+  layer.proc=proc; layer.natW=w; layer.natH=h; layer.dirty=false;
+}
+/* transform helpers */
+function furnitureMatrixPoint(layer, lx, ly){ // local (center-origin) -> stage px
+  const fx = layer.flip? -lx: lx; const rad=layer.rot*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad);
+  const sx=fx*layer.scale, sy=ly*layer.scale; return [layer.x + sx*c - sy*s, layer.y + sx*s + sy*c];
+}
+function pointToFurnitureLocal(layer, px, py){ // stage px -> local center-origin (pre-flip)
+  const rad=-layer.rot*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad); const dx=px-layer.x, dy=py-layer.y;
+  let lx=(dx*c - dy*s)/layer.scale, ly=(dx*s + dy*c)/layer.scale; if(layer.flip) lx=-lx; return [lx,ly];
+}
+function furnitureHit(layer, px, py){
+  const [lx,ly]=pointToFurnitureLocal(layer,px,py); const hw=layer.natW/2, hh=layer.natH/2;
+  if(lx<-hw||lx>hw||ly<-hh||ly>hh) return false;
+  // alpha test
+  const ix=clamp((lx+hw)|0,0,layer.natW-1), iy=clamp((ly+hh)|0,0,layer.natH-1);
+  const a=layer.proc.getContext('2d').getImageData(ix,iy,1,1).data[3]; return a>16;
+}
+
+/* =========================================================================
+   INPAINT — LaMa local server (best, CPU-friendly) with in-browser PatchMatch fallback
+   ========================================================================= */
+const SERVER = { available:false, url:'' };
+async function probeServer(){
+  const cands = ['', 'http://127.0.0.1:7865', 'http://localhost:7865'];
+  for(const base of cands){
+    try{ const r=await fetch(base+'/health',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(j&&j.inpaint){ SERVER.available=true; SERVER.url=base; updateEraseBadge(); return; } } }catch(e){}
+  }
+  SERVER.available=false; updateEraseBadge();
+}
+function updateEraseBadge(){ const b=$('eraseEngine'); if(!b) return;
+  if(SERVER.available){ b.textContent='● AI補完エンジン（LaMa）に接続済み — 高品質'; b.className='engine ok'; }
+  else { b.textContent='○ ブラウザ内補完（PatchMatch）で動作中 — サーバー未接続'; b.className='engine'; }
+}
+function dataURLToCanvas(url, w, h){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(im,0,0,w,h); res(c); }; im.onerror=rej; im.src=url; }); }
+function dilate(mask,w,h,r){ if(r<=0) return mask; const out=new Uint8Array(w*h); for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let v=0; for(let dy=-r;dy<=r&&!v;dy++)for(let dx=-r;dx<=r;dx++){ const xx=clamp(x+dx,0,w-1),yy=clamp(y+dy,0,h-1); if(mask[yy*w+xx]){v=1;break;} } out[y*w+x]=v; } return out; }
+function boxBlurSub(src,w,h,r){ const tmp=new Float32Array(w*h),out=new Uint8ClampedArray(w*h);
+  for(let y=0;y<h;y++){ let acc=0; const row=y*w; for(let x=-r;x<=r;x++) acc+=src[row+clamp(x,0,w-1)]; for(let x=0;x<w;x++){ tmp[row+x]=acc/(2*r+1); acc+=src[row+clamp(x+r+1,0,w-1)]-src[row+clamp(x-r,0,w-1)]; } }
+  for(let x=0;x<w;x++){ let acc=0; for(let y=-r;y<=r;y++) acc+=tmp[clamp(y,0,h-1)*w+x]; for(let y=0;y<h;y++){ out[y*w+x]=acc/(2*r+1); acc+=tmp[clamp(y+r+1,0,h-1)*w+x]-tmp[clamp(y-r,0,h-1)*w+x]; } }
+  return out;
+}
+
+/* ---- main entry, called by the button ---- */
+async function runEraseNow(){
+  const em=State.eraseMask, w=State.W, h=State.H;
+  let minx=w,miny=h,maxx=0,maxy=0,has=false;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ if(em[y*w+x]>0){ has=true; if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y; } }
+  if(!has){ toast('消す範囲を塗ってください'); return; }
+  const pad=28; minx=Math.max(0,minx-pad); miny=Math.max(0,miny-pad); maxx=Math.min(w-1,maxx+pad); maxy=Math.min(h-1,maxy+pad);
+  const rw=maxx-minx+1, rh=maxy-miny+1;
+
+  // feather mask for seamless composite (region-local)
+  const fm=new Uint8ClampedArray(rw*rh); for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){ fm[y*rw+x]= em[(miny+y)*w+(minx+x)]>0?255:0; }
+  const fmb=boxBlurSub(fm,rw,rh,3);
+
+  let filled;   // ImageData (rw×rh) with the hole filled
+  let usedFallback=false;
+  if(SERVER.available){
+    try{ filled = await serverInpaintRegion(minx,miny,rw,rh); }
+    catch(err){ console.error('LaMa server failed:',err); filled = patchMatchRegion(minx,miny,rw,rh); usedFallback=true; }
+  } else {
+    filled = patchMatchRegion(minx,miny,rw,rh);
+  }
+
+  // composite filled into roomCanvas (only the feathered mask area changes)
+  const region=State.roomCtx.getImageData(minx,miny,rw,rh), rd=region.data, fd=filled.data;
+  for(let i=0;i<rw*rh;i++){ const a=fmb[i]/255; if(a<=0) continue; const p=i*4; rd[p]=rd[p]*(1-a)+fd[p]*a; rd[p+1]=rd[p+1]*(1-a)+fd[p+1]*a; rd[p+2]=rd[p+2]*(1-a)+fd[p+2]*a; }
+  pushUndo();
+  State.roomCtx.putImageData(region,minx,miny);
+  invalidateRoomData();
+  State.eraseMask=newMask(); erasePreviewClear();
+  State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); });
+  render(); $('runErase').disabled=true;
+  if(usedFallback) toast('AI補完に接続できず、ブラウザ内補完で処理しました');
+}
+
+/* ---- LaMa server: send full image + mask, receive inpainted image ---- */
+async function serverInpaintRegion(minx,miny,rw,rh){
+  const imgURL = State.roomCanvas.toDataURL('image/png');
+  const mc=document.createElement('canvas'); mc.width=State.W; mc.height=State.H; const mx=mc.getContext('2d');
+  const mi=mx.createImageData(State.W,State.H), md=mi.data, em=State.eraseMask;
+  for(let i=0;i<em.length;i++){ const v=em[i]>0?255:0; md[i*4]=v;md[i*4+1]=v;md[i*4+2]=v;md[i*4+3]=255; }
+  mx.putImageData(mi,0,0); const maskURL=mc.toDataURL('image/png');
+  const resp=await fetch(SERVER.url+'/inpaint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:imgURL,mask:maskURL})});
+  if(!resp.ok) throw new Error('HTTP '+resp.status);
+  const j=await resp.json(); const out=await dataURLToCanvas(j.image, State.W, State.H);
+  return out.getContext('2d').getImageData(minx,miny,rw,rh);
+}
+
+/* ---- in-browser PatchMatch content-aware fill (fallback / zero-setup) ---- */
+function patchMatchRegion(minx,miny,rw,rh){
+  const em=State.eraseMask;
+  // region color canvas
+  const rc=document.createElement('canvas'); rc.width=rw; rc.height=rh; rc.getContext('2d').putImageData(State.roomCtx.getImageData(minx,miny,rw,rh),0,0);
+  // region mask canvas (white=hole)
+  const rmc=document.createElement('canvas'); rmc.width=rw; rmc.height=rh; const rmx=rmc.getContext('2d');
+  const rmi=rmx.createImageData(rw,rh); for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){ const v=em[(miny+y)*State.W+(minx+x)]>0?255:0; const i=(y*rw+x)*4; rmi.data[i]=v;rmi.data[i+1]=v;rmi.data[i+2]=v;rmi.data[i+3]=255; } rmx.putImageData(rmi,0,0);
+  // downscale for speed
+  const cap=360; const sc=Math.min(1, cap/Math.max(rw,rh)); const sw=Math.max(12,Math.round(rw*sc)), sh=Math.max(12,Math.round(rh*sc));
+  const sCol=document.createElement('canvas'); sCol.width=sw; sCol.height=sh; const sColX=sCol.getContext('2d'); sColX.imageSmoothingEnabled=true; sColX.drawImage(rc,0,0,sw,sh);
+  const sMask=document.createElement('canvas'); sMask.width=sw; sMask.height=sh; const sMaskX=sMask.getContext('2d'); sMaskX.imageSmoothingEnabled=true; sMaskX.drawImage(rmc,0,0,sw,sh);
+  const cd=sColX.getImageData(0,0,sw,sh).data, mdn=sMaskX.getImageData(0,0,sw,sh).data;
+  const img=new Float32Array(sw*sh*3); for(let i=0;i<sw*sh;i++){ img[i*3]=cd[i*4]; img[i*3+1]=cd[i*4+1]; img[i*3+2]=cd[i*4+2]; }
+  let hole=new Uint8Array(sw*sh); for(let i=0;i<sw*sh;i++) hole[i]= mdn[i*4]>40?1:0;
+  hole=dilate(hole,sw,sh,1);
+  const filled=patchMatchComplete(img,hole,sw,sh);
+  // back to small canvas, upscale to region size
+  const fImg=sColX.createImageData(sw,sh); for(let i=0;i<sw*sh;i++){ fImg.data[i*4]=filled[i*3]; fImg.data[i*4+1]=filled[i*3+1]; fImg.data[i*4+2]=filled[i*3+2]; fImg.data[i*4+3]=255; }
+  sColX.putImageData(fImg,0,0);
+  const up=document.createElement('canvas'); up.width=rw; up.height=rh; const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(sCol,0,0,rw,rh);
+  return ux.getImageData(0,0,rw,rh);
+}
+
+/* PatchMatch (Barnes et al.) multi-scale completion — validated against diffusion */
+const PM_P=4; // patch half-size (patch = 2P+1)
+function pmDownRGB(img,hole,w,h){ const nw=Math.max(1,w>>1),nh=Math.max(1,h>>1); const ni=new Float32Array(nw*nh*3),nm=new Uint8Array(nw*nh);
+  for(let y=0;y<nh;y++)for(let x=0;x<nw;x++){ let r=0,g=0,b=0,c=0,ho=0; for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){ const xx=Math.min(w-1,x*2+dx),yy=Math.min(h-1,y*2+dy),i=yy*w+xx; if(hole[i])ho=1; else{ r+=img[i*3];g+=img[i*3+1];b+=img[i*3+2];c++; } } const j=y*nw+x; nm[j]=ho; if(c){ni[j*3]=r/c;ni[j*3+1]=g/c;ni[j*3+2]=b/c;} } return {img:ni,hole:nm,w:nw,h:nh}; }
+function pmValidSrc(hole,w,h){ const P=PM_P, integ=new Int32Array((w+1)*(h+1));
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) integ[(y+1)*(w+1)+(x+1)]=hole[y*w+x]+integ[y*(w+1)+(x+1)]+integ[(y+1)*(w+1)+x]-integ[y*(w+1)+x];
+  const vm=new Uint8Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ if(x<P||y<P||x>=w-P||y>=h-P){vm[y*w+x]=0;continue;} const x0=x-P,y0=y-P,x1=x+P+1,y1=y+P+1; const s=integ[y1*(w+1)+x1]-integ[y0*(w+1)+x1]-integ[y1*(w+1)+x0]+integ[y0*(w+1)+x0]; vm[y*w+x]= s===0?1:0; } return vm; }
+function pmDist(img,w,tx,ty,sx,sy,best){ const P=PM_P; let d=0; for(let dy=-P;dy<=P;dy++)for(let dx=-P;dx<=P;dx++){ const ti=((ty+dy)*w+(tx+dx))*3, si=((sy+dy)*w+(sx+dx))*3; const dr=img[ti]-img[si],dg=img[ti+1]-img[si+1],db=img[ti+2]-img[si+2]; d+=dr*dr+dg*dg+db*db; if(d>=best) return d; } return d; }
+function pmRange(a,b,s){ const r=[]; if(s>0)for(let i=a;i<b;i+=s)r.push(i); else for(let i=a;i>b;i+=s)r.push(i); return r; }
+function pmComplete(img,hole,w,h,nnf,emIters){ const P=PM_P; const vm=pmValidSrc(hole,w,h); const srcs=[]; for(let i=0;i<w*h;i++) if(vm[i]) srcs.push(i); if(!srcs.length) return img;
+  const inR=(x,y)=>x>=P&&y>=P&&x<w-P&&y<h-P;
+  for(let ty=P;ty<h-P;ty++)for(let tx=P;tx<w-P;tx++){ const t=ty*w+tx; if(nnf[t*2]>=0) continue; const s=srcs[(Math.random()*srcs.length)|0]; nnf[t*2]=s%w; nnf[t*2+1]=(s/w)|0; }
+  const GW=[]; { const sig=P/1.5; for(let dy=-P;dy<=P;dy++)for(let dx=-P;dx<=P;dx++) GW.push(Math.exp(-(dx*dx+dy*dy)/(2*sig*sig))); }
+  for(let em=0; em<emIters; em++){
+    for(let sweep=0;sweep<3;sweep++){ const rev=sweep%2===1; const xs=rev?pmRange(w-1-P,P-1,-1):pmRange(P,w-P,1); const ys=rev?pmRange(h-1-P,P-1,-1):pmRange(P,h-P,1); const step=rev?1:-1;
+      for(const ty of ys)for(const tx of xs){ const t=ty*w+tx; let bsx=nnf[t*2],bsy=nnf[t*2+1]; let bd=pmDist(img,w,tx,ty,bsx,bsy,1e18);
+        const nxp=tx+step; if(nxp>=P&&nxp<w-P){ const nt=ty*w+nxp; const csx=nnf[nt*2]-step,csy=nnf[nt*2+1]; if(inR(csx,csy)&&vm[csy*w+csx]){ const d=pmDist(img,w,tx,ty,csx,csy,bd); if(d<bd){bd=d;bsx=csx;bsy=csy;} } }
+        const nyp=ty+step; if(nyp>=P&&nyp<h-P){ const nt=nyp*w+tx; const csx=nnf[nt*2],csy=nnf[nt*2+1]-step; if(inR(csx,csy)&&vm[csy*w+csx]){ const d=pmDist(img,w,tx,ty,csx,csy,bd); if(d<bd){bd=d;bsx=csx;bsy=csy;} } }
+        let radius=Math.max(w,h); while(radius>1){ const rx=bsx+((Math.random()*2-1)*radius)|0, ry=bsy+((Math.random()*2-1)*radius)|0; if(inR(rx,ry)&&vm[ry*w+rx]){ const d=pmDist(img,w,tx,ty,rx,ry,bd); if(d<bd){bd=d;bsx=rx;bsy=ry;} } radius=(radius*0.5)|0; }
+        nnf[t*2]=bsx; nnf[t*2+1]=bsy;
+      } }
+    const acc=new Float32Array(w*h*3), wsum=new Float32Array(w*h);
+    for(let ty=P;ty<h-P;ty++)for(let tx=P;tx<w-P;tx++){ const t=ty*w+tx, sx=nnf[t*2], sy=nnf[t*2+1];
+      for(let dy=-P;dy<=P;dy++)for(let dx=-P;dx<=P;dx++){ const p=(ty+dy)*w+(tx+dx); if(!hole[p]) continue; const si=((sy+dy)*w+(sx+dx))*3; const wgt=GW[(dy+P)*(2*P+1)+(dx+P)]; acc[p*3]+=img[si]*wgt; acc[p*3+1]+=img[si+1]*wgt; acc[p*3+2]+=img[si+2]*wgt; wsum[p]+=wgt; } }
+    for(let p=0;p<w*h;p++){ if(hole[p]&&wsum[p]>0){ img[p*3]=acc[p*3]/wsum[p]; img[p*3+1]=acc[p*3+1]/wsum[p]; img[p*3+2]=acc[p*3+2]/wsum[p]; } }
+  }
+  return img;
+}
+function patchMatchComplete(img0,hole0,w,h){
+  const pyr=[{img:img0.slice(),hole:hole0.slice(),w,h}];
+  while(Math.min(pyr[0].w,pyr[0].h)>32 && pyr.length<5) pyr.unshift(pmDownRGB(pyr[0].img,pyr[0].hole,pyr[0].w,pyr[0].h));
+  const c0=pyr[0]; for(let cc=0;cc<3;cc++){ let s=0,n=0; for(let i=0;i<c0.w*c0.h;i++) if(!c0.hole[i]){s+=c0.img[i*3+cc];n++;} const m=n?s/n:0; for(let i=0;i<c0.w*c0.h;i++) if(c0.hole[i]) c0.img[i*3+cc]=m; }
+  let nnf=new Int32Array(c0.w*c0.h*2).fill(-1);
+  pmComplete(c0.img,c0.hole,c0.w,c0.h,nnf,10);
+  for(let l=1;l<pyr.length;l++){ const lo=pyr[l-1], hi=pyr[l];
+    for(let y=0;y<hi.h;y++)for(let x=0;x<hi.w;x++){ const i=y*hi.w+x; if(hi.hole[i]){ const lx=Math.min(lo.w-1,x>>1),ly=Math.min(lo.h-1,y>>1),li=ly*lo.w+lx; hi.img[i*3]=lo.img[li*3]; hi.img[i*3+1]=lo.img[li*3+1]; hi.img[i*3+2]=lo.img[li*3+2]; } }
+    const nf=new Int32Array(hi.w*hi.h*2).fill(-1);
+    for(let y=0;y<hi.h;y++)for(let x=0;x<hi.w;x++){ const i=y*hi.w+x; const lx=Math.min(lo.w-1,x>>1),ly=Math.min(lo.h-1,y>>1),li=ly*lo.w+lx; if(nnf[li*2]>=0){ nf[i*2]=Math.min(hi.w-1,nnf[li*2]*2); nf[i*2+1]=Math.min(hi.h-1,nnf[li*2+1]*2); } }
+    nnf=nf; pmComplete(hi.img,hi.hole,hi.w,hi.h,nnf, l===pyr.length-1?7:5);
+  }
+  return pyr[pyr.length-1].img;
+}
+
+/* =========================================================================
+   UNDO (room snapshots)
+   ========================================================================= */
+function pushUndo(){ const snap=State.roomCtx.getImageData(0,0,State.W,State.H); State.undo.push(snap); if(State.undo.length>8) State.undo.shift(); $('btnUndo').disabled=false; }
+function doUndo(){ if(!State.undo.length) return; const snap=State.undo.pop(); State.roomCtx.putImageData(snap,0,0); invalidateRoomData(); State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); }); render(); if(!State.undo.length) $('btnUndo').disabled=true; }
+
+/* =========================================================================
+   RENDER
+   ========================================================================= */
+function render(){
+  if(!State.W) return;
+  sctx.clearRect(0,0,State.W,State.H);
+  sctx.drawImage(State.roomCanvas,0,0);
+  for(const l of State.layers){ if(!l.visible) continue;
+    if(l.type==='surface'){ if(l.dirty) rebuildSurface(l); if(l.cache) sctx.drawImage(l.cache,0,0); }
+    else { if(l.dirty||!l.proc) rebuildFurniture(l); sctx.save(); sctx.translate(l.x,l.y); sctx.rotate(l.rot*Math.PI/180); sctx.scale(l.flip?-l.scale:l.scale, l.scale); sctx.globalAlpha=l.opacity; sctx.drawImage(l.proc,-l.natW/2,-l.natH/2); sctx.restore(); sctx.globalAlpha=1; }
+  }
+  renderOverlay();
+}
+let lastMouse=null;
+function renderOverlay(){
+  octx.clearRect(0,0,State.W,State.H);
+  // active surface mask outline (subtle), only in surface mode
+  if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); } }
+  if(State.mode==='erase'){ octx.drawImage(erasePreviewCanvas,0,0); }
+  // selected furniture handles
+  if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); } }
+  // brush cursor
+  if(lastMouse && (State.mode!=='furniture')){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
+    octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle=(State.mode==='erase')?'rgba(187,82,57,.9)':'rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.stroke();
+    octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke();
+  }
+}
+function drawFurnitureHandles(f){
+  const corners=[[-f.natW/2,-f.natH/2],[f.natW/2,-f.natH/2],[f.natW/2,f.natH/2],[-f.natW/2,f.natH/2]].map(c=>furnitureMatrixPoint(f,c[0],c[1]));
+  octx.beginPath(); octx.moveTo(corners[0][0],corners[0][1]); for(let i=1;i<4;i++) octx.lineTo(corners[i][0],corners[i][1]); octx.closePath();
+  octx.strokeStyle='rgba(187,82,57,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
+  // scale handle bottom-right (index 2)
+  const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#BB5239'; octx.stroke();
+  f._scaleHandle=hp;
+}
+
+/* preview canvases (so painting feels instant without rebuilding masks each move) */
+const maskPreviewCanvas=document.createElement('canvas'); const erasePreviewCanvas=document.createElement('canvas');
+function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas]){ c.width=State.W; c.height=State.H; } }
+function rebuildMaskPreview(){ const a=activeSurface(); const c=maskPreviewCanvas, x=c.getContext('2d'); x.clearRect(0,0,State.W,State.H); if(!a) return;
+  const img=x.createImageData(State.W,State.H), d=img.data; for(let i=0;i<a.mask.length;i++){ if(a.mask[i]>0){ const p=i*4; d[p]=44;d[p+1]=110;d[p+2]=107;d[p+3]=70; } } x.putImageData(img,0,0); }
+function erasePreviewClear(){ erasePreviewCanvas.getContext('2d').clearRect(0,0,State.W,State.H); }
+function stampPreview(canvas, cx, cy, r, color){ const x=canvas.getContext('2d'); x.beginPath(); x.arc(cx,cy,r,0,7); x.fillStyle=color; x.fill(); }
+
+/* =========================================================================
+   POINTER interaction
+   ========================================================================= */
+let drag=null;
+function canvasPos(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left, cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top; return {x:cx*sx, y:cy*sy}; }
+on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.pointerId); const p=canvasPos(e); lastMouse=p;
+  if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
+    if(State.surfTool==='wand'){ floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
+    drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
+  } else if(State.mode==='erase'){ drag={type:'erasepaint'}; eraseAt(p);
+  } else if(State.mode==='furniture'){ const f=selectedFurniture();
+    if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
+    // pick topmost furniture hit
+    let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
+    if(pick){ selectLayer(pick.id); drag={type:'move',offx:p.x-pick.x,offy:p.y-pick.y,layer:pick}; }
+    render();
+  }
+});
+on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMouse=p;
+  if(drag){ if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p);
+    else if(drag.type==='move'){ drag.layer.x=p.x-drag.offx; drag.layer.y=p.y-drag.offy; render(); }
+    else if(drag.type==='scale'){ const f=selectedFurniture(); const d=Math.hypot(p.x-f.x,p.y-f.y); f.scale=clamp(drag.startScale*(d/drag.startDist),0.05,6); syncFurnitureUI(f); render(); }
+  } else { renderOverlay(); }
+});
+function endDrag(e){ if(drag && (drag.type==='paint'||drag.type==='erasemask')){ const a=activeSurface(); if(a){ a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); } }
+  if(drag && drag.type==='erasepaint'){ $('runErase').disabled=false; }
+  drag=null; render(); }
+on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
+on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
+
+function paintAt(p){ const a=activeSurface(); if(!a) return; const r=+$('brushSize').value/2;
+  if(drag.type==='erasemask'){ stampDisc(a.mask,p.x,p.y,r,0); const x=maskPreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); }
+  else { stampDiscSoft(a.mask,p.x,p.y,r); stampPreview(maskPreviewCanvas,p.x,p.y,r,'rgba(44,110,107,.28)'); }
+  renderOverlay();
+}
+function eraseAt(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,p.x,p.y,r,255); stampPreview(erasePreviewCanvas,p.x,p.y,r,'rgba(187,82,57,.42)'); renderOverlay(); }
+
+/* =========================================================================
+   LAYER management
+   ========================================================================= */
+function addSurfaceLayer(){
+  const id=State.nextId++;
+  const layer={ id, type:'surface', name:`表面 ${State.layers.filter(l=>l.type==='surface').length+1}`,
+    mask:newMask(), color:'#cfd8d4', strength:0.85, lightShift:0, keepTexture:true,
+    material:null, matStrength:0.8, matScale:100, visible:true, dirty:false, cache:null };
+  State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
+}
+function addFurnitureLayer(srcCanvas, name){
+  const id=State.nextId++;
+  const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
+    srcCanvas, x:State.W/2, y:State.H/2, scale:1, rot:0, flip:false, opacity:1,
+    bgRemove:false, bgTol:30, recolor:false, color:'#7d8aa0', strength:0.8,
+    material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
+  // fit initial size so it's ~40% of room width
+  layer.scale = clamp((State.W*0.4)/layer.natW, 0.08, 2);
+  State.layers.push(layer); rebuildFurniture(layer); selectLayer(id); renderLayers(); render();
+}
+function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id===id);
+  if(l){ if(l.type==='surface') setMode('surface'); else setMode('furniture'); }
+  syncPanels(); renderLayers(); rebuildMaskPreview(); render();
+}
+function deleteLayer(id){ const i=State.layers.findIndex(x=>x.id===id); if(i<0) return; State.layers.splice(i,1); if(State.selectedId===id) State.selectedId=null; renderLayers(); syncPanels(); rebuildMaskPreview(); render(); }
+function moveLayer(id,dir){ const i=State.layers.findIndex(x=>x.id===id); const j=i+dir; if(i<0||j<0||j>=State.layers.length) return; const t=State.layers[i]; State.layers[i]=State.layers[j]; State.layers[j]=t; renderLayers(); render(); }
+
+function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerCount').textContent=State.layers.length; $('layerEmpty').style.display=State.layers.length?'none':'block';
+  // show top first
+  for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; const row=document.createElement('div'); row.className='layer'+(l.id===State.selectedId?' on':'');
+    const sw=document.createElement('div'); sw.className='swatch';
+    if(l.type==='surface'){ sw.style.background=l.material? 'none':l.color; if(l.material){ sw.style.backgroundImage=`url(${matTile(l.material).toDataURL()})`; } }
+    else { sw.style.backgroundImage=`url(${(l.proc||l.srcCanvas).toDataURL()})`; sw.style.backgroundSize='cover'; }
+    row.appendChild(sw);
+    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=l.name; row.appendChild(nm);
+    const kind=document.createElement('span'); kind.className='kind'; kind.textContent=l.type==='surface'?'表面':'家具'; row.appendChild(kind);
+    const eye=document.createElement('button'); eye.className='ic eye'+(l.visible?'':' off'); eye.title='表示/非表示'; eye.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayers(); render(); });
+    const up=document.createElement('button'); up.className='ic'; up.title='前面へ'; up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'; on(up,'click',ev=>{ev.stopPropagation(); moveLayer(l.id,1);});
+    const dn=document.createElement('button'); dn.className='ic'; dn.title='背面へ'; dn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12l7 7 7-7"/></svg>'; on(dn,'click',ev=>{ev.stopPropagation(); moveLayer(l.id,-1);});
+    const del=document.createElement('button'); del.className='ic del'; del.title='削除'; del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>'; on(del,'click',ev=>{ev.stopPropagation(); deleteLayer(l.id);});
+    row.appendChild(eye); row.appendChild(up); row.appendChild(dn); row.appendChild(del);
+    on(row,'click',()=>selectLayer(l.id));
+    host.appendChild(row);
+  }
+}
+
+/* =========================================================================
+   MODE / PANEL sync
+   ========================================================================= */
+function setMode(m){ State.mode=m;
+  $('tabSurface').classList.toggle('on',m==='surface');
+  $('tabFurniture').classList.toggle('on',m==='furniture');
+  $('tabErase').classList.toggle('on',m==='erase');
+  $('panelSurface').style.display=m==='surface'?'block':'none';
+  $('panelFurniture').style.display=m==='furniture'?'block':'none';
+  $('panelErase').style.display=m==='erase'?'block':'none';
+  // dock tools relevance
+  document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
+  if(State.W) $('dock').style.display=(m==='erase')?'none':'flex';
+  renderOverlay();
+}
+function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
+  if(a){ $('surfColor').value=a.color; $('surfHex').textContent=a.color.toUpperCase(); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); }
+  const f=selectedFurniture(); $('furnitureControls').style.display=f?'block':'none'; $('furnitureEmpty').style.display=f?'none':'block';
+  if(f) syncFurnitureUI(f);
+}
+function syncFurnitureUI(f){ $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
+  setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
+  $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%');
+}
+function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val; const v=$(id+'V'); if(v) v.textContent= (suffix? val+suffix : val); }
+
+/* =========================================================================
+   Build swatch & material UIs
+   ========================================================================= */
+const PALETTE=['#F4F1EA','#E7E2D6','#CFC8B8','#A7B0A2','#7E8C7A','#516253','#D9C2A6','#C7956B','#9A5B3F','#2E3A46','#5A6B82','#1F2A33'];
+function buildChips(hostId, onPick){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); }); }
+function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
+function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
+  const none=document.createElement('button'); none.className='mat none'; none.dataset.key=''; none.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4l16 16M20 4L4 20"/></svg>なし'; on(none,'click',()=>onPick(null)); host.appendChild(none);
+  MATERIALS.forEach(m=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key; const cv=document.createElement('canvas'); cv.width=64; cv.height=32; cv.getContext('2d').drawImage(matTile(m.key),0,0,64,32); b.appendChild(cv); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=m.name; b.appendChild(nm); on(b,'click',()=>onPick(m.key)); host.appendChild(b); });
+  if(includeUpload){ const up=document.createElement('button'); up.className='mat none'; up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>追加'; on(up,'click',()=>$('fileMat').click()); host.appendChild(up); }
+}
+function markMats(hostId,key){ document.querySelectorAll('#'+hostId+' .mat').forEach(m=>m.classList.toggle('on',(m.dataset.key||'')===(key||''))); }
+
+/* =========================================================================
+   ROOM loading
+   ========================================================================= */
+function setupRoomFromCanvas(srcCanvas){
+  let w=srcCanvas.width,h=srcCanvas.height; const sc=Math.min(1, MAXSIDE/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+  State.W=w; State.H=h; stage.width=w; stage.height=h; overlay.width=w; overlay.height=h;
+  State.roomCanvas=document.createElement('canvas'); State.roomCanvas.width=w; State.roomCanvas.height=h; State.roomCtx=State.roomCanvas.getContext('2d',{willReadFrequently:true});
+  State.roomCtx.drawImage(srcCanvas,0,0,w,h);
+  State.roomOriginal=State.roomCtx.getImageData(0,0,w,h);
+  invalidateRoomData(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true;
+  resizePreviews(); erasePreviewClear();
+  $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomNote').style.display='block';
+  $('zoomNote').textContent=`${w} × ${h}px`;
+  renderLayers(); syncPanels(); render();
+}
+function loadImageFile(file, cb){ const img=new Image(); img.onload=()=>{ const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext('2d').drawImage(img,0,0); cb(c); URL.revokeObjectURL(img.src); }; img.onerror=()=>toast('画像を読み込めませんでした'); img.src=URL.createObjectURL(file); }
+
+/* Demo room (procedural, so you can try without uploading) */
+function buildDemoRoom(){
+  const w=1100,h=740, c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d');
+  // ceiling
+  x.fillStyle='#eceae6'; x.fillRect(0,0,w,h);
+  // back wall
+  const wallTop=120, wallBot=470, wl=170, wr=w-170;
+  let g=x.createLinearGradient(0,wallTop,0,wallBot); g.addColorStop(0,'#e6e1d8'); g.addColorStop(1,'#d7d1c5'); x.fillStyle=g; x.fillRect(wl,wallTop,wr-wl,wallBot-wallTop);
+  // left wall (perspective)
+  x.fillStyle='#d2cbbd'; x.beginPath(); x.moveTo(0,40); x.lineTo(wl,wallTop); x.lineTo(wl,wallBot); x.lineTo(0,h-40); x.closePath(); x.fill();
+  // right wall
+  x.fillStyle='#cfc8ba'; x.beginPath(); x.moveTo(w,40); x.lineTo(wr,wallTop); x.lineTo(wr,wallBot); x.lineTo(w,h-40); x.closePath(); x.fill();
+  // floor (perspective trapezoid)
+  g=x.createLinearGradient(0,wallBot,0,h); g.addColorStop(0,'#b8a079'); g.addColorStop(1,'#9c845f'); x.fillStyle=g; x.beginPath(); x.moveTo(wl,wallBot); x.lineTo(wr,wallBot); x.lineTo(w,h); x.lineTo(0,h); x.closePath(); x.fill();
+  // floor boards
+  x.strokeStyle='rgba(90,70,45,.25)'; x.lineWidth=2; for(let i=1;i<10;i++){ const fx=wl+(wr-wl)*i/10; x.beginPath(); x.moveTo(fx,wallBot); x.lineTo(0+ (w)*i/10,h); x.stroke(); }
+  // baseboard
+  x.fillStyle='#efeae2'; x.fillRect(wl,wallBot-14,wr-wl,14);
+  // window on back wall with sky
+  const winX=wl+150, winY=170, winW=300, winH=190; g=x.createLinearGradient(0,winY,0,winY+winH); g.addColorStop(0,'#aa d4e8'.replace(' ','')); g.addColorStop(0,'#aad4e8'); g.addColorStop(1,'#e8f3f8'); x.fillStyle=g; x.fillRect(winX,winY,winW,winH);
+  x.strokeStyle='#fbfaf7'; x.lineWidth=10; x.strokeRect(winX,winY,winW,winH); x.beginPath(); x.moveTo(winX+winW/2,winY); x.lineTo(winX+winW/2,winY+winH); x.moveTo(winX,winY+winH/2); x.lineTo(winX+winW,winY+winH/2); x.stroke();
+  // a framed picture (something to remove with the eraser)
+  x.fillStyle='#bca'; x.fillStyle='#8a7d63'; x.fillRect(wr-220,210,120,90); x.fillStyle='#cfc3a6'; x.fillRect(wr-212,218,104,74);
+  // a small plant pot on the floor (another erase target / context)
+  x.fillStyle='#7a5c3a'; x.beginPath(); x.moveTo(240,560); x.lineTo(300,560); x.lineTo(288,640); x.lineTo(252,640); x.closePath(); x.fill();
+  x.fillStyle='#4f7a48'; for(let i=0;i<5;i++){ x.beginPath(); x.ellipse(270+ (i-2)*16, 520+Math.abs(i-2)*8, 12, 40-Math.abs(i-2)*6, (i-2)*0.3,0,7); x.fill(); }
+  // soft floor shadow
+  g=x.createRadialGradient(w/2,h-60,40,w/2,h-60,420); g.addColorStop(0,'rgba(0,0,0,.10)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(0,wallBot,w,h-wallBot);
+  return c;
+}
+
+/* =========================================================================
+   WIRING — events
+   ========================================================================= */
+// header
+on($('btnDemo'),'click',()=>{ setupRoomFromCanvas(buildDemoRoom()); addSurfaceLayer(); toast('デモの部屋を読み込みました'); });
+on($('btnOpen'),'click',()=>$('fileRoom').click());
+on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
+on($('btnUndo'),'click',doUndo);
+on($('btnExport'),'click',()=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} render(); const url=stage.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='room-studio.png'; a.click(); toast('PNGを書き出しました'); });
+on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true; erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
+// dock
+document.querySelectorAll('#dock [data-tool]').forEach(b=>on(b,'click',()=>{ const t=b.dataset.tool;
+  if(t==='move'){ setMode('furniture'); return; }
+  setMode('surface'); setSurfTool(t);
+}));
+function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
+  $('brushSizeRow').style.display=(t==='wand')?'none':'flex'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; }
+
+// surface panel
+on($('addSurface'),'click',addSurfaceLayer);
+document.querySelectorAll('#surfTools button').forEach(b=>on(b,'click',()=>setSurfTool(b.dataset.tool)));
+on($('brushSize'),'input',e=>{ $('brushSizeV').textContent=e.target.value; renderOverlay(); });
+on($('wandTol'),'input',e=>$('wandTolV').textContent=e.target.value);
+on($('clearMask'),'click',()=>{ const a=activeSurface(); if(!a) return; a.mask=newMask(); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); });
+buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; a.color=hex; a.material=null; $('surfColor').value=hex; $('surfHex').textContent=hex.toUpperCase(); markChips('colorChips',hex); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
+on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; a.color=e.target.value; a.material=null; $('surfHex').textContent=e.target.value.toUpperCase(); markChips('colorChips',e.target.value); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
+on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+on($('surfLight'),'input',e=>{ const a=activeSurface(); if(!a) return; a.lightShift=+e.target.value/100; $('surfLightV').textContent=e.target.value; a.dirty=true; rebuildSurface(a); render(); });
+on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; a.keepTexture=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
+buildMats('matGrid',key=>{ const a=activeSurface(); if(!a) return; a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }, false);
+on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+on($('matScale'),'input',e=>{ const a=activeSurface(); if(!a) return; a.matScale=+e.target.value; $('matScaleV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+
+// furniture panel
+on($('addFurniture'),'click',()=>$('fileFurniture').click());
+on($('fileFurniture'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} addFurnitureLayer(c, f.name.replace(/\.[^.]+$/,'')); toast('家具を追加しました。ドラッグで移動できます'); }); e.target.value=''; });
+on($('fBgRemove'),'change',e=>{ const f=selectedFurniture(); if(!f) return; f.bgRemove=e.target.checked; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
+on($('fBgTol'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.bgTol=+e.target.value; $('fBgTolV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
+on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
+on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
+on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
+on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; f.flip=!f.flip; render(); });
+on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
+on($('fFront'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,1); });
+on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1); });
+on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
+buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
+on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
+on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
+buildMats('fMatGrid',key=>{ const f=selectedFurniture(); if(!f) return; f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }, false);
+on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
+on($('fDelete'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
+on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; loadImageFile(file,c=>{ const key='user_'+Date.now(); MATERIALS.push({key,name:'追加',base:'#ccc',draw:()=>c}); tileCache[key]=c; const a=activeSurface(); buildMats('matGrid',k=>{ const aa=activeSurface(); if(!aa)return; aa.material=k; markMats('matGrid',k); aa.dirty=true; rebuildSurface(aa); renderLayers(); render(); },false); if(a){ a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); render(); } }); e.target.value=''; });
+
+// erase panel
+on($('eraseSize'),'input',e=>{ $('eraseSizeV').textContent=e.target.value; renderOverlay(); });
+on($('eraseClear'),'click',()=>{ State.eraseMask=newMask(); erasePreviewClear(); $('runErase').disabled=true; render(); });
+on($('eraseRecheck'),'click',async()=>{ updateEraseBadge(); await probeServer(); toast(SERVER.available?'AI補完エンジンに接続しました':'サーバーは見つかりませんでした'); });
+on($('runErase'),'click',()=>{ busy(true, SERVER.available?'AIで補完しています…':'周囲から補完しています…'); setTimeout(async()=>{ try{ await runEraseNow(); }catch(err){ console.error(err); toast('補完に失敗しました'); } busy(false); },30); });
+
+// init
+setMode('surface');
+probeServer();
+</script>
+</body>
+</html>
