@@ -220,6 +220,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-3"/></svg>
       取り消す
     </button>
+    <button class="btn" id="btnCompare" title="編集前と編集後を比べる">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18M5 7l-3 3 3 3M19 7l3 3-3 3"/></svg>
+      比較
+    </button>
     <button class="btn primary" id="btnExport">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
       書き出す
@@ -476,6 +480,7 @@ const State = {
   sam:{ ready:false, loading:false, busy:false, model:null, processor:null,
         RawImage:null, Tensor:null, device:'',
         imageInputs:null, embeddings:null, points:[], preview:null },
+  compare:{ active:false, split:0.5, before:null }, // before = pristine room canvas
 };
 const stage = $('stage'), sctx = stage.getContext('2d');
 const overlay = $('overlay'), octx = overlay.getContext('2d');
@@ -968,6 +973,21 @@ function render(){
 let lastMouse=null;
 function renderOverlay(){
   octx.clearRect(0,0,State.W,State.H);
+  // before/after compare takes over the overlay (left=before pristine, right=after composite shows through)
+  if(State.compare.active && State.compare.before){
+    const sx=Math.round(State.compare.split*State.W);
+    octx.save(); octx.beginPath(); octx.rect(0,0,sx,State.H); octx.clip(); octx.drawImage(State.compare.before,0,0); octx.restore();
+    // divider + handle
+    octx.fillStyle='rgba(255,255,255,.95)'; octx.fillRect(sx-1,0,2,State.H);
+    const hy=State.H/2, hr=Math.max(14, State.W*0.016);
+    octx.beginPath(); octx.arc(sx,hy,hr,0,7); octx.fillStyle='rgba(35,38,42,.85)'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#fff'; octx.stroke();
+    octx.fillStyle='#fff'; octx.font=`${(hr*0.9)|0}px sans-serif`; octx.textAlign='center'; octx.textBaseline='middle'; octx.fillText('⟺',sx,hy);
+    // labels
+    octx.font='600 13px "Noto Sans JP",sans-serif'; octx.textBaseline='top';
+    octx.fillStyle='rgba(255,255,255,.92)'; octx.textAlign='left'; octx.fillText('編集前',10,10);
+    octx.textAlign='right'; octx.fillText('編集後',State.W-10,10);
+    return;
+  }
   // active surface mask outline (subtle), only in surface mode
   if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); }
     if(State.surfTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0);
@@ -1007,6 +1027,7 @@ function stampPreview(canvas, cx, cy, r, color){ const x=canvas.getContext('2d')
 let drag=null;
 function canvasPos(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left, cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top; return {x:cx*sx, y:cy*sy}; }
 on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.pointerId); const p=canvasPos(e); lastMouse=p;
+  if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
   if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
     if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; handleSamClick(p,label); return; }
     if(State.surfTool==='wand'){ floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
@@ -1021,7 +1042,8 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   }
 });
 on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMouse=p;
-  if(drag){ if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p);
+  if(drag){ if(drag.type==='compare'){ State.compare.split=clamp(p.x/State.W,0,1); renderOverlay(); }
+    else if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p);
     else if(drag.type==='move'){ drag.layer.x=p.x-drag.offx; drag.layer.y=p.y-drag.offy; render(); }
     else if(drag.type==='scale'){ const f=selectedFurniture(); const d=Math.hypot(p.x-f.x,p.y-f.y); f.scale=clamp(drag.startScale*(d/drag.startDist),0.05,6); syncFurnitureUI(f); render(); }
   } else { renderOverlay(); }
@@ -1099,7 +1121,7 @@ function setMode(m){ State.mode=m;
   $('panelErase').style.display=m==='erase'?'block':'none';
   // dock tools relevance
   document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask','sam'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
-  if(State.W) $('dock').style.display=(m==='erase')?'none':'flex';
+  if(State.W) $('dock').style.display=(m==='erase'||State.compare.active)?'none':'flex';
   renderOverlay();
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
@@ -1136,6 +1158,8 @@ function setupRoomFromCanvas(srcCanvas){
   State.roomCanvas=document.createElement('canvas'); State.roomCanvas.width=w; State.roomCanvas.height=h; State.roomCtx=State.roomCanvas.getContext('2d',{willReadFrequently:true});
   State.roomCtx.drawImage(srcCanvas,0,0,w,h);
   State.roomOriginal=State.roomCtx.getImageData(0,0,w,h);
+  State.compare.before=document.createElement('canvas'); State.compare.before.width=w; State.compare.before.height=h; State.compare.before.getContext('2d').putImageData(State.roomOriginal,0,0);
+  State.compare.active=false; State.compare.split=0.5; $('btnCompare').classList.remove('primary');
   invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true;
   resizePreviews(); erasePreviewClear();
   $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomNote').style.display='block';
@@ -1183,7 +1207,12 @@ on($('btnDemo'),'click',()=>{ setupRoomFromCanvas(buildDemoRoom()); addSurfaceLa
 on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
-on($('btnExport'),'click',()=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} render(); const url=stage.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='room-studio.png'; a.click(); toast('PNGを書き出しました'); });
+on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+  State.compare.active=!State.compare.active; $('btnCompare').classList.toggle('primary',State.compare.active);
+  $('dock').style.display=(State.compare.active||State.mode==='erase')?'none':'flex';
+  overlay.style.cursor=State.compare.active?'ew-resize':'';
+  toast(State.compare.active?'スライダーをドラッグして編集前/後を比較':'比較を終了しました'); renderOverlay(); });
+on($('btnExport'),'click',()=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} if(State.compare.active){ State.compare.active=false; $('btnCompare').classList.remove('primary'); overlay.style.cursor=''; } render(); const url=stage.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='room-studio.png'; a.click(); toast('PNGを書き出しました'); });
 on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); State.undo=[]; $('btnUndo').disabled=true; erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
 
 // tabs

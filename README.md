@@ -89,8 +89,10 @@ python server.py
 ### 4. 速度
 重い画素処理（PatchMatch・recolor）を **Web Worker + OffscreenCanvas** へ。UIは縮小プレビュー即時→確定時フル解像度。
 
-### 5. 仕上げ
-汎用Undo/Redo（今は消しゴムのみ）、プロジェクト保存（レイヤーをJSON化）、before/afterスライダー。
+### 5. 仕上げ（順次実装中）
+- **before/afterスライダー** ✅ 実装済み（2026-06）… ヘッダー「比較」ボタン。編集前（元写真）と編集後（合成結果）をドラッグで比較。`State.compare` + `renderOverlay` のクリップ描画。
+- 汎用Undo/Redo（今は消しゴムのみ）… 予定
+- プロジェクト保存（レイヤーをJSON化）… 予定
 
 ### LaMa をさらに強化したい場合
 - `server.py` は `simple-lama-inpainting` を使用。より多機能にするなら **IOPaint（旧 lama-cleaner）** に置換可能（モデル選択・各種インペイント手法）。
