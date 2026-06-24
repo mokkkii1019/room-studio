@@ -351,8 +351,14 @@
         <div id="furnitureControls" style="display:none">
           <div class="section">
             <span class="label">切り抜き</span>
-            <label class="toggle"><input type="checkbox" id="fBgRemove"><span class="sw"></span>背景を自動で消す</label>
+            <label class="toggle"><input type="checkbox" id="fBgRemove"><span class="sw"></span>背景を自動で消す（白・単色向け）</label>
             <div class="slider" id="fBgTolRow" style="display:none"><label>許容</label><input type="range" id="fBgTol" min="6" max="80" value="30"><span class="val" id="fBgTolV">30</span></div>
+            <button class="btn" id="fAiCut" style="width:100%;justify-content:center;margin-top:8px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>
+              AIで背景を切り抜く（任意背景・高品質）
+            </button>
+            <button class="btn ghost-warn" id="fAiCutClear" style="width:100%;justify-content:center;margin-top:6px;display:none">AI切り抜きを解除</button>
+            <p class="hint" style="margin:6px 0 0">複雑な背景の写真でもきれいに抜けます。初回のみモデルのダウンロード（数十MB・ネット接続が必要）が走ります。画像は端末内で処理されます。</p>
           </div>
           <div class="section">
             <span class="label">配置</span>
@@ -648,11 +654,11 @@ function removeBg(imgData, tolPct){
   }
 }
 function rebuildFurniture(layer){
-  const src=layer.srcCanvas, w=src.width, h=src.height;
+  const src=layer.aiCutCanvas || layer.srcCanvas, w=src.width, h=src.height;
   const work=document.createElement('canvas'); work.width=w; work.height=h; const wx=work.getContext('2d',{willReadFrequently:true});
   wx.drawImage(src,0,0);
   let img=wx.getImageData(0,0,w,h);
-  if(layer.bgRemove) removeBg(img, layer.bgTol);
+  if(!layer.aiCutCanvas && layer.bgRemove) removeBg(img, layer.bgTol); // AI cut already has alpha
   // recolor / material applied to opaque pixels
   if(layer.recolor || layer.material){
     const d=img.data, n=w*h;
@@ -668,6 +674,26 @@ function rebuildFurniture(layer){
   }
   const proc=document.createElement('canvas'); proc.width=w; proc.height=h; proc.getContext('2d').putImageData(img,0,0);
   layer.proc=proc; layer.natW=w; layer.natH=h; layer.dirty=false;
+}
+
+/* AI background removal for arbitrary backgrounds (@imgly/background-removal, U²-Net, browser).
+   Model weights are fetched on first use; the image itself never leaves the device. */
+const IMGLY_CDN='https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+let IMGLY=null;
+async function aiCutFurniture(layer){
+  busy(true,'AIで背景を切り抜き中…（初回はモデル読み込みで時間がかかります）');
+  try{
+    if(!IMGLY) IMGLY=await import(/* @vite-ignore */ IMGLY_CDN);
+    const inBlob=await new Promise(res=>layer.srcCanvas.toBlob(res,'image/png'));
+    const outBlob=await IMGLY.removeBackground(inBlob);
+    const url=URL.createObjectURL(outBlob);
+    const cut=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=layer.srcCanvas.width; c.height=layer.srcCanvas.height; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c); }; im.onerror=rej; im.src=url; });
+    URL.revokeObjectURL(url);
+    layer.aiCutCanvas=cut; layer.bgRemove=false; layer.dirty=true;
+    rebuildFurniture(layer); syncFurnitureUI(layer); renderLayers(); render();
+    toast('背景を切り抜きました');
+  }catch(err){ console.error('imgly bg-removal failed:',err); toast('AI切り抜きに失敗しました（ネット接続を確認）'); }
+  finally{ busy(false); }
 }
 /* transform helpers */
 function furnitureMatrixPoint(layer, lx, ly){ // local (center-origin) -> stage px
@@ -1028,7 +1054,7 @@ function addFurnitureLayer(srcCanvas, name){
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
     srcCanvas, x:State.W/2, y:State.H/2, scale:1, rot:0, flip:false, opacity:1,
-    bgRemove:false, bgTol:30, recolor:false, color:'#7d8aa0', strength:0.8,
+    bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
   layer.scale = clamp((State.W*0.4)/layer.natW, 0.08, 2);
@@ -1082,6 +1108,7 @@ function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.displ
   if(f) syncFurnitureUI(f);
 }
 function syncFurnitureUI(f){ $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
+  $('fAiCutClear').style.display=f.aiCutCanvas?'block':'none'; $('fAiCut').lastChild.textContent= f.aiCutCanvas?' AIで切り抜き直す':' AIで背景を切り抜く（任意背景・高品質）';
   setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
   $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%');
 }
@@ -1192,11 +1219,13 @@ on($('addFurniture'),'click',()=>$('fileFurniture').click());
 on($('fileFurniture'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} addFurnitureLayer(c, f.name.replace(/\.[^.]+$/,'')); toast('家具を追加しました。ドラッグで移動できます'); }); e.target.value=''; });
 on($('fBgRemove'),'change',e=>{ const f=selectedFurniture(); if(!f) return; f.bgRemove=e.target.checked; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fBgTol'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.bgTol=+e.target.value; $('fBgTolV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
+on($('fAiCut'),'click',()=>{ const f=selectedFurniture(); if(f) aiCutFurniture(f); });
+on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; f.aiCutCanvas=null; f.dirty=true; rebuildFurniture(f); syncFurnitureUI(f); renderLayers(); render(); });
 on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
 on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
 on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; f.flip=!f.flip; render(); });
-on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
+on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
 on($('fFront'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,1); });
 on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1); });
 on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });

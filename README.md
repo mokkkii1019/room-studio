@@ -41,7 +41,7 @@ python server.py
    - *選択ブラシ*（縁が柔らかいソフトブラシ）
    - *自動選択*（近い色をまとめて）
    - **AI選択（SlimSAM）** … 壁・床・家具などを**クリック**すると物体の範囲を自動推定。追加クリックで精度を上げ、**Alt/右クリック**で不要部分を除外。「選択に追加」で確定。初回はモデルのダウンロード（数十MB・ネット接続が必要）に少し時間がかかります（2回目以降はブラウザキャッシュ）。**画像は端末内のみで処理され外部送信されません**（取得するのはモデルの重みファイルのみ）。WebGPU対応ブラウザでは高速、未対応時はCPU(WASM)で動作。
-3. **家具** … 画像を追加 → ドラッグ移動・角ハンドルで拡縮。*背景を自動で消す*（白/単色背景向け。エロード＋フェザー＋地色逆合成でハロー低減）・色・素材・回転・不透明度・反転・複製・前面/背面。
+3. **家具** … 画像を追加 → ドラッグ移動・角ハンドルで拡縮。切り抜きは2通り: *背景を自動で消す*（白/単色背景向け。エロード＋フェザー＋地色逆合成でハロー低減）か **AIで背景を切り抜く**（任意背景・U²-Net）。さらに色・素材・回転・不透明度・反転・複製・前面/背面。
 4. **消しゴム** … 消したい物を赤ブラシで塗る →「この範囲を消す」。LaMa接続時はAIで、未接続時はPatchMatchで補完。
 5. **書き出す（PNG）** / **取り消す**（消しゴム操作の巻き戻し）。
 
@@ -62,7 +62,7 @@ python server.py
 | 選択 | `stampDisc`, `stampDiscSoft`(ソフト), `floodFill`, `boxBlurMask` |
 | AI選択(SAM) | `ensureSamLoaded`/`ensureSamEmbeddings`(モデル&埋め込み), `samDecode`(クリック→マスク), `samTensorToMask`, `handleSamClick`, `samCommit`/`samResetPoints`, `invalidateSam` |
 | 表面の色・素材 | `applyRecolorToImageData`, `rebuildSurface` |
-| 家具 | `removeBg`(改良マット), `rebuildFurniture`, `furnitureHit` ほか |
+| 家具 | `removeBg`(改良マット・単色), `aiCutFurniture`(@imgly任意背景), `rebuildFurniture`, `furnitureHit` ほか |
 | 消しゴム統括 | `runEraseNow`（LaMa→PatchMatchの切替）, `probeServer`, `updateEraseBadge` |
 | LaMa連携 | `serverInpaintRegion`, `dataURLToCanvas` |
 | PatchMatch | `patchMatchRegion`→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`） |
@@ -80,8 +80,8 @@ python server.py
 
 > 次の発展候補: 室内特化の ADE20K セグメンテーションで壁/床/家具を**自動レイヤー化**（クリック不要の一括分割）。
 
-### 2. 家具の任意背景の切り抜き
-単色背景以外は **@imgly/background-removal**（U²-Net系・ブラウザ完結）に置換。`removeBg` を差し替え。
+### 2. 家具の任意背景の切り抜き ✅ 実装済み（2026-06）
+単色背景は従来の `removeBg`（フラッド）、**複雑な背景は「AIで背景を切り抜く」ボタン**で **@imgly/background-removal**（U²-Net系・ブラウザ完結）を実行。結果（アルファ付き）を `layer.aiCutCanvas` に保持し、`rebuildFurniture` がこれをベースに使う（色・素材変更もそのまま適用）。「AI切り抜きを解除」で元に戻せる。初回のみモデルDL（ネット接続必要）、画像は端末内で処理。
 
 ### 3. 床/壁の遠近対応
 床の四隅を指定 → ホモグラフィで素材タイルと家具を**床平面に正しく投影**（今は正対貼り）。
