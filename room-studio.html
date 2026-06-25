@@ -1708,6 +1708,7 @@ function setupRoomFromCanvas(srcCanvas){
   resizePreviews(); erasePreviewClear();
   $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomNote').style.display='block';
   $('zoomNote').textContent=`${w} × ${h}px`;
+  setMode('surface'); // 新しい部屋を読み込んだら表面タブの綺麗な状態に戻す（家具タブのまま取り残されない）
   renderLayers(); syncPanels(); render();
 }
 function loadImageFile(file, cb){ const img=new Image(); img.onload=()=>{ const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext('2d').drawImage(img,0,0); cb(c); URL.revokeObjectURL(img.src); }; img.onerror=()=>toast('画像を読み込めませんでした'); img.src=URL.createObjectURL(file); }
