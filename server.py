@@ -36,6 +36,7 @@ import os
 import json
 import urllib.parse
 import urllib.request
+import urllib.error
 import uvicorn
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -138,64 +139,93 @@ def inpaint(req: InpaintReq):
     return {"image": image_to_data_url(result)}
 
 
-# ---- ネットから家具画像を収集（Openverse / CCライセンス・APIキー不要） ----
-# 種類キー -> 検索語（英語）。フロントの選択肢と一致させる。
-TYPE_TERMS = {
-    "chair": "chair",
-    "dining_table": "dining table",
-    "sofa": "sofa couch",
-    "bed": "bed",
-    "coffee_table": "coffee table",
-    "lampshade": "lamp shade",
-    "table_lamp": "table lamp",
-    "carpet": "rug carpet",
-    "plant": "houseplant potted plant",
+# ---- ネットから家具画像を収集（楽天市場 商品検索API：家具店の商品写真） ----
+# 無料の楽天アプリIDが必要: https://webservice.rakuten.co.jp/  → 環境変数で設定
+#   set RAKUTEN_APP_ID=xxxxx         （必須）
+#   set RAKUTEN_AFFILIATE_ID=xxxxx   （任意・設定すると購入リンクがアフィリエイトURLになる）
+RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APP_ID", "").strip()
+RAKUTEN_AFFILIATE_ID = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
+RAKUTEN_ENDPOINT = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+INTERIOR_GENRE = "100804"  # インテリア・寝具・収納（人物/風景の混入が少ない商品写真）
+
+# 種類キー -> (検索キーワード, ジャンルID or None)。フロントの選択肢と一致させる。
+TYPE_QUERY = {
+    "chair": ("椅子 チェア", INTERIOR_GENRE),
+    "dining_table": ("ダイニングテーブル", INTERIOR_GENRE),
+    "sofa": ("ソファ", INTERIOR_GENRE),
+    "bed": ("ベッド フレーム", INTERIOR_GENRE),
+    "coffee_table": ("ローテーブル センターテーブル", INTERIOR_GENRE),
+    "lampshade": ("ランプシェード", INTERIOR_GENRE),
+    "table_lamp": ("テーブルランプ", INTERIOR_GENRE),
+    "carpet": ("ラグ カーペット", INTERIOR_GENRE),
+    "plant": ("観葉植物", None),  # 家具ジャンル外
 }
-OPENVERSE = "https://api.openverse.org/v1/images/"
 
 
 @app.get("/collect")
-def collect(type: str, taste: str = "", count: int = 50):
-    """家具の種類＋テイストで CC 画像を検索し、プロキシURL付きの一覧を返す。"""
-    term = TYPE_TERMS.get(type, type)
-    q = (taste.strip() + " " + term).strip()
-    count = max(1, min(80, int(count)))
+def collect(type: str, taste: str = "", count: int = 50, shop: str = ""):
+    """家具店（楽天市場）の商品を種類＋テイストで検索し、画像プロキシURL＋購入リンク付きで返す。"""
+    if not RAKUTEN_APP_ID:
+        raise HTTPException(
+            status_code=503,
+            detail="RAKUTEN_APP_ID 未設定。https://webservice.rakuten.co.jp/ で無料のアプリIDを取得し、"
+                   "環境変数 RAKUTEN_APP_ID に設定して server.py を再起動してください。",
+        )
+    kw, genre = TYPE_QUERY.get(type, (type, None))
+    keyword = (taste.strip() + " " + kw).strip()
+    count = max(1, min(90, int(count)))
     items, seen, page = [], set(), 1
-    while len(items) < count and page <= 12:
-        url = OPENVERSE + "?" + urllib.parse.urlencode({
-            "q": q, "page_size": 20, "page": page, "mature": "false",  # anonymous cap is 20/page
-        })
+    while len(items) < count and page <= 5:  # 楽天は30件/ページ
+        params = {
+            "applicationId": RAKUTEN_APP_ID, "keyword": keyword,
+            "hits": 30, "page": page, "imageFlag": 1, "format": "json", "sort": "standard",
+        }
+        if genre:
+            params["genreId"] = genre
+        if shop.strip():
+            params["shopCode"] = shop.strip()
+        if RAKUTEN_AFFILIATE_ID:
+            params["affiliateId"] = RAKUTEN_AFFILIATE_ID
+        url = RAKUTEN_ENDPOINT + "?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={"User-Agent": "RoomStudio/1.0"})
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 data = json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "ignore")[:200]
+            if items:
+                break
+            raise HTTPException(status_code=502, detail=f"楽天検索に失敗 (HTTP {e.code}): {body}")
         except Exception as e:  # noqa: BLE001
             if items:
                 break
-            raise HTTPException(status_code=502, detail=f"画像検索に失敗: {e}")
-        results = data.get("results", []) or []
-        if not results:
+            raise HTTPException(status_code=502, detail=f"楽天検索に失敗: {e}")
+        arr = data.get("Items", []) or []
+        if not arr:
             break
-        for it in results:
-            iid = it.get("id")
-            if not iid or iid in seen:
+        for w in arr:
+            it = w.get("Item", w)
+            code = it.get("itemCode")
+            if not code or code in seen:
                 continue
-            seen.add(iid)
-            # 原画像URL（サードパーティのホスト）をプロキシする＝Openverse側のレート制限を消費しない
-            src = it.get("url") or it.get("thumbnail")
-            if not src:
+            seen.add(code)
+            imgs = it.get("mediumImageUrls") or it.get("smallImageUrls") or []
+            img = imgs[0].get("imageUrl") if imgs and isinstance(imgs[0], dict) else None
+            if not img:
                 continue
+            img = img.replace("?_ex=128x128", "?_ex=500x500").replace("?_ex=64x64", "?_ex=500x500")
             items.append({
-                "id": iid,
-                "title": (it.get("title") or term)[:60],
-                "proxy": "/imgproxy?url=" + urllib.parse.quote(src, safe=""),
-                "source": it.get("foreign_landing_url") or "",
-                "license": it.get("license") or "",
+                "id": code,
+                "title": (it.get("itemName") or kw)[:80],
+                "proxy": "/imgproxy?url=" + urllib.parse.quote(img, safe=""),
+                "link": it.get("affiliateUrl") or it.get("itemUrl") or "",
+                "price": it.get("itemPrice") or 0,
+                "shop": it.get("shopName") or "",
             })
             if len(items) >= count:
                 break
         page += 1
-    return {"query": q, "count": len(items), "items": items}
+    return {"query": keyword, "count": len(items), "items": items}
 
 
 @app.get("/imgproxy")

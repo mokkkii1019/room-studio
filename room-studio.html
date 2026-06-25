@@ -156,6 +156,9 @@
   .furni-item:hover .add{opacity:1}
   .furni-item .del{position:absolute; top:3px; right:3px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:13px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
   .furni-item:hover .del{display:flex}
+  .furni-item .buy{position:absolute; top:3px; left:3px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-decoration:none; display:none; z-index:2}
+  .furni-item:hover .buy{display:block}
+  .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px}
   .field{width:100%; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; font-size:12.5px; background:var(--panel); color:var(--ink); margin:6px 0}
   select.field{cursor:pointer}
   .drop-active{outline:2px dashed var(--accent); outline-offset:-5px}
@@ -405,7 +408,7 @@
         <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
 
         <div class="section" id="collectSection" style="margin-top:12px">
-          <span class="label">ネットから収集（CC画像）</span>
+          <span class="label">家具店から収集（楽天市場）</span>
           <select class="field" id="collectType">
             <option value="chair">椅子</option>
             <option value="dining_table">ダイニングテーブル</option>
@@ -421,10 +424,10 @@
           <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
           <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
-            この種類の画像を収集
+            家具店から収集
           </button>
           <div class="engine" id="collectStatus" style="display:none"></div>
-          <p class="hint" style="margin:6px 0 0">server.py 起動が必要。Openverse 経由でCCライセンス画像を取得します（商用利用時は各画像のライセンスをご確認ください）。</p>
+          <p class="hint" style="margin:6px 0 0">server.py 起動＋楽天アプリID（無料）が必要。家具ジャンルの商品写真（白背景中心でノイズ少）を取得し、各画像に購入リンクが付きます。</p>
         </div>
 
         <div class="section" id="furniLibSection" style="margin-top:12px">
@@ -1539,7 +1542,7 @@ function addFurnitureLayer(srcCanvas, name, px, py){
    FURNITURE LIBRARY — staged images you can place into the room
    ========================================================================= */
 function copyCanvas(src){ const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; c.getContext('2d').drawImage(src,0,0); return c; }
-function addToFurniLib(canvas, name){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,40), srcCanvas:canvas }; State.furniLib.push(it); renderFurniLib(); return it; }
+function addToFurniLib(canvas, name, meta){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,60), srcCanvas:canvas, link:(meta&&meta.link)||'', price:(meta&&meta.price)||0, shop:(meta&&meta.shop)||'' }; State.furniLib.push(it); renderFurniLib(); return it; }
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
 function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py); toast('部屋に配置しました。ドラッグで移動できます'); }
 function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.innerHTML=''; $('furniLibEmpty').style.display=State.furniLib.length?'none':'block'; const la=$('libActions'); if(la) la.style.display=State.furniLib.length?'flex':'none';
@@ -1550,7 +1553,9 @@ function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.inne
     x.drawImage(it.srcCanvas,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); el.appendChild(cv);
     const add=document.createElement('div'); add.className='add'; add.textContent='＋ 配置'; el.appendChild(add);
     const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
+    if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
     const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
+    if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='購入'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='購入ページを開く'; on(buy,'click',ev=>ev.stopPropagation()); buy.draggable=false; el.appendChild(buy); }
     on(el,'click',()=>placeFromLib(it.id));
     on(el,'dragstart',ev=>{ ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
     host.appendChild(el);
@@ -1572,29 +1577,29 @@ async function doCollect(){
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
     const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count)}), {cache:'no-store'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
     const j=await r.json(); const items=j.items||[];
     if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
     setMode('furniture');
     let done=0, ok=0;
     await pool(items, 5, it=> new Promise(res=>{
-      loadImageURL(SERVER.url+it.proxy, c=>{ addToFurniLib(downscaleCanvas(c,1000), it.title); ok++; done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); },
+      loadImageURL(SERVER.url+it.proxy, c=>{ addToFurniLib(downscaleCanvas(c,1000), it.title, {link:it.link, price:it.price, shop:it.shop}); ok++; done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); },
         ()=>{ done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); });
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
-  }catch(err){ console.error('collect failed:',err); setCollectStatus('収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
+  }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
   finally{ $('collectBtn').disabled=false; }
 }
 
 /* ---- save / load the furniture library as a JSON list ---- */
 function exportLib(){ if(!State.furniLib.length){ toast('ライブラリが空です'); return; }
-  const obj={ app:'room-studio-lib', version:1, items:State.furniLib.map(it=>({ name:it.name, src:canvasToPNG(it.srcCanvas) })) };
+  const obj={ app:'room-studio-lib', version:1, items:State.furniLib.map(it=>({ name:it.name, src:canvasToPNG(it.srcCanvas), link:it.link||'', price:it.price||0, shop:it.shop||'' })) };
   const blob=new Blob([JSON.stringify(obj)],{type:'application/json'}); const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='room-studio-furniture-library.json'; a.click(); URL.revokeObjectURL(url); toast('リストを保存しました'); }
 async function importLib(obj){ if(!obj || obj.app!=='room-studio-lib'){ toast('対応していないファイルです'); return; }
   busy(true,'ライブラリを読み込み中…'); setMode('furniture');
-  try{ for(const it of (obj.items||[])){ const c=await loadDataURL(it.src); addToFurniLib(c, it.name); } toast('リストを読み込みました'); }
+  try{ for(const it of (obj.items||[])){ const c=await loadDataURL(it.src); addToFurniLib(c, it.name, {link:it.link, price:it.price, shop:it.shop}); } toast('リストを読み込みました'); }
   catch(e){ console.error(e); toast('読み込みに失敗しました'); } finally{ busy(false); } }
 function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id===id);
   if(l){ if(l.type==='surface') setMode('surface'); else setMode('furniture'); }
