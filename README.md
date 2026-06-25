@@ -44,7 +44,7 @@ python server.py
    - **壁の塗り分け** … 壁面ごとに「表面を追加」して各面を選択すれば、面ごとに別の色・素材を適用できます。
    - **スポイト** … 色セクションの「スポイト」ボタンON → 画像をクリックすると**周りの色を採取**し、選択中の表面（選択範囲）をその色で塗ります（カーソルに採取色ルーペを表示）。隣の壁と同じ色に合わせる時などに便利。**家具の「色を変える」にも同じスポイト**があり、採取色を家具に適用できます。
    - **AI選択（SlimSAM）** … 壁・床・家具などを**クリック**すると物体の範囲を自動推定。追加クリックで精度を上げ、**Alt/右クリック**で不要部分を除外。「選択に追加」で確定。初回はモデルのダウンロード（数十MB・ネット接続が必要）に少し時間がかかります（2回目以降はブラウザキャッシュ）。**画像は端末内のみで処理され外部送信されません**（取得するのはモデルの重みファイルのみ）。WebGPU対応ブラウザでは高速、未対応時はCPU(WASM)で動作。
-3. **家具** … 画像を追加 → ドラッグ移動・角ハンドルで拡縮。**回転**（面内）と**Z軸回転**（垂直軸まわりに向きを変える＝0°正面/±90°真横/180°背面）。切り抜きは2通り: *背景を自動で消す*（白/単色背景向け。エロード＋フェザー＋地色逆合成でハロー低減）か **AIで背景を切り抜く**（任意背景・U²-Net）。さらに色・素材・回転・不透明度・反転・複製・前面/背面。
+3. **家具** … 画像を追加 → ドラッグ移動・角ハンドルで拡縮。**回転**（面内）と**Z軸回転**（垂直軸まわりに向きを変える＝0°正面/±90°真横/180°背面）。Z軸回転は**台形パース**（奥側が小さくなる）で投影＝立体的な向き変更。移動/拡縮/当たり判定/ハンドルもパースに追従。切り抜きは2通り: *背景を自動で消す*（白/単色背景向け。エロード＋フェザー＋地色逆合成でハロー低減）か **AIで背景を切り抜く**（任意背景・U²-Net）。さらに色・素材・回転・不透明度・反転・複製・前面/背面。
 4. **消しゴム** … 消したい範囲を指定 →「この範囲を消す」。LaMa接続時はAIで、未接続時はPatchMatchで補完。範囲指定とAI選択の手動補正:
    - *ブラシ*（赤ブラシで足す）／ *削る*（選択しすぎた所を減らす）
    - **AI選択（SlimSAM）** … 消したい物を**クリック**で自動推定（Alt/右クリックでその点を除外）。
@@ -72,6 +72,7 @@ python server.py
 | 表面の色・素材 | `applyRecolorToImageData`, `rebuildSurface`, `buildMaterialBuffer` |
 | 遠近投影 | `computeHomography`(DLT), `buildPerspectiveMaterialBuffer`, `drawPerspectiveQuad`, `maskBBoxQuad`/`defaultFloorQuad` |
 | 家具 | `removeBg`(改良マット・単色), `aiCutFurniture`(@imgly任意背景), `rebuildFurniture`, `furnitureHit` ほか |
+| 家具Z軸回転 | `yawCornersLocal`(透視台形), `drawImagePerspective`/`drawTexTri`/`solveAffine`(三角形分割ワープ), `buildYawCanvas`(キャッシュ), `furnitureOuter`/`furnitureOuterInv` |
 | 消しゴム統括 | `runEraseNow`（LaMa→PatchMatchの切替）, `probeServer`, `updateEraseBadge` |
 | LaMa連携 | `serverInpaintRegion`, `dataURLToCanvas` |
 | PatchMatch | `patchMatchRegion`(async)→`runPatchMatchWorker`(Web Worker)→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`）。ワーカー組立は`getPMWorker` |
