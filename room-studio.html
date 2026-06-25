@@ -425,6 +425,11 @@
             <div class="slider"><label>大きさ</label><input type="range" id="fScale" min="10" max="300" value="100"><span class="val" id="fScaleV">100%</span></div>
             <div class="slider"><label>回転</label><input type="range" id="fRot" min="-180" max="180" value="0"><span class="val" id="fRotV">0°</span></div>
             <div class="slider"><label title="垂直軸まわりに回転して向きを変える">Z軸回転</label><input type="range" id="fYaw" min="-180" max="180" value="0"><span class="val" id="fYawV">0°</span></div>
+            <label class="toggle"><input type="checkbox" id="fKeystone"><span class="sw"></span>台形補正（四隅を自由に変形）</label>
+            <div id="fKeystoneBox" style="display:none">
+              <p class="hint" style="margin:0 0 6px">ステージ上の家具の<b>四隅ハンドルをドラッグ</b>して台形に変形できます（床・ラグや斜めの壁に合わせる）。移動・拡大・回転は引き続き可能。</p>
+              <button class="btn" id="fKeystoneReset" style="width:100%;justify-content:center">四隅をリセット（長方形に戻す）</button>
+            </div>
             <div class="slider"><label>不透明度</label><input type="range" id="fOpacity" min="20" max="100" value="100"><span class="val" id="fOpacityV">100%</span></div>
             <div class="row">
               <button class="btn" id="fFlip" style="flex:1;justify-content:center">左右反転</button>
@@ -853,7 +858,7 @@ function rebuildFurniture(layer){
     }
   }
   const proc=document.createElement('canvas'); proc.width=w; proc.height=h; proc.getContext('2d').putImageData(img,0,0);
-  layer.proc=proc; layer.natW=w; layer.natH=h; layer.dirty=false; layer._yawKey=null; // proc changed → yaw warp cache stale
+  layer.proc=proc; layer.natW=w; layer.natH=h; layer.dirty=false; layer._warpKey=null; // proc changed → warp cache stale
 }
 
 /* AI background removal for arbitrary backgrounds (@imgly/background-removal, U²-Net, browser).
@@ -885,6 +890,11 @@ function yawCornersLocal(layer){
   const src=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]];
   return src.map(([x,y])=>{ const zr=-x*st, ps=d/(d-zr); return [x*ct*ps, y*ps]; });
 }
+function rectCornersLocal(l){ const hw=l.natW/2, hh=l.natH/2; return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]; }
+/* the local-space quad the image maps to: manual keystone if set, else yaw trapezoid (rect when yaw=0) */
+function effectiveCorners(l){ return l.corners ? l.corners.map(p=>[p[0],p[1]]) : yawCornersLocal(l); }
+function isPlainFurniture(l){ return !l.corners && Math.abs(l.yaw||0)<0.5; }
+function warpKeyOf(l){ return (l.yaw||0).toFixed(2)+'|'+(l.corners?l.corners.map(p=>(p[0]|0)+','+(p[1]|0)).join(';'):''); }
 function furnitureOuter(l, lx, ly){ // local trapezoid space → stage px (translate∘rotate∘scale, flip via X sign)
   const sgn=l.flip?-1:1, sx=lx*l.scale*sgn, sy=ly*l.scale, rad=l.rot*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad);
   return [l.x + sx*c - sy*s, l.y + sx*s + sy*c];
@@ -897,7 +907,7 @@ function furnitureOuterInv(l, px, py){ // stage px → local trapezoid space
 function furnitureHit(layer, px, py){
   const hw=layer.natW/2, hh=layer.natH/2;
   const loc=furnitureOuterInv(layer,px,py);
-  const Hinv=computeHomography(yawCornersLocal(layer), [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]); // trapezoid → source rect
+  const Hinv=computeHomography(effectiveCorners(layer), [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]); // warped quad → source rect
   if(!Hinv) return false;
   const den=Hinv[6]*loc[0]+Hinv[7]*loc[1]+1; if(Math.abs(den)<1e-6) return false;
   const u=(Hinv[0]*loc[0]+Hinv[1]*loc[1]+Hinv[2])/den, v=(Hinv[3]*loc[0]+Hinv[4]*loc[1]+Hinv[5])/den;
@@ -939,14 +949,14 @@ function drawTexTri(ctx,img, sx0,sy0,sx1,sy1,sx2,sy2, p0,p1,p2){
 function expandTri(p0,p1,p2,d){ const cx=(p0[0]+p1[0]+p2[0])/3, cy=(p0[1]+p1[1]+p2[1])/3;
   const ex=p=>{ const vx=p[0]-cx, vy=p[1]-cy, len=Math.hypot(vx,vy)||1; return [p[0]+vx/len*d, p[1]+vy/len*d]; };
   return [ex(p0),ex(p1),ex(p2)]; }
-/* cached perspective-warped furniture canvas (rebuilt when yaw changes) */
-function buildYawCanvas(l){
-  const dl=yawCornersLocal(l); let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+/* cached perspective-warped furniture canvas (rebuilt when yaw / keystone corners change) */
+function buildWarpCanvas(l){
+  const dl=effectiveCorners(l); let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   for(const [x,y] of dl){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
   const W=Math.max(1,Math.ceil(maxX-minX)+2), Hh=Math.max(1,Math.ceil(maxY-minY)+2);
   const cv=document.createElement('canvas'); cv.width=W; cv.height=Hh; const cx=cv.getContext('2d');
   cx.translate(-minX+1,-minY+1); drawImagePerspective(cx, l.proc, dl);
-  l._yawCanvas=cv; l._yawOff=[minX-1,minY-1]; l._yawKey=(l.yaw||0).toFixed(2);
+  l._warpCanvas=cv; l._warpOff=[minX-1,minY-1]; l._warpKey=warpKeyOf(l);
 }
 
 /* =========================================================================
@@ -1236,7 +1246,7 @@ function captureState(){
       perspective:l.perspective, quad:l.quad?l.quad.map(p=>p.slice()):null, visible:l.visible
     } : {
       type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
-      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, flip:l.flip, opacity:l.opacity,
+      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners?l.corners.map(p=>p.slice()):null, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
       material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH
     })
@@ -1252,7 +1262,7 @@ function restoreState(s){
       visible:d.visible, dirty:true, cache:null
     } : {
       id:d.id, type:'furniture', name:d.name, srcCanvas:d.srcCanvas, aiCutCanvas:d.aiCutCanvas,
-      x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, flip:d.flip, opacity:d.opacity,
+      x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners?d.corners.map(p=>p.slice()):null, flip:d.flip, opacity:d.opacity,
       bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
       material:d.material, matStrength:d.matStrength, visible:d.visible, dirty:true, proc:null,
       natW:d.natW, natH:d.natH
@@ -1287,8 +1297,8 @@ function render(){
   for(const l of State.layers){ if(!l.visible) continue;
     if(l.type==='surface'){ if(l.dirty) rebuildSurface(l); if(l.cache) sctx.drawImage(l.cache,0,0); }
     else { if(l.dirty||!l.proc) rebuildFurniture(l); sctx.save(); sctx.translate(l.x,l.y); sctx.rotate(l.rot*Math.PI/180); sctx.scale((l.flip?-1:1)*l.scale, l.scale); sctx.globalAlpha=l.opacity;
-      if(Math.abs(l.yaw||0)<0.5){ sctx.drawImage(l.proc,-l.natW/2,-l.natH/2); }
-      else { if(l._yawKey!==(l.yaw||0).toFixed(2)||!l._yawCanvas) buildYawCanvas(l); if(l._yawCanvas) sctx.drawImage(l._yawCanvas, l._yawOff[0], l._yawOff[1]); }
+      if(isPlainFurniture(l)){ sctx.drawImage(l.proc,-l.natW/2,-l.natH/2); }
+      else { if(l._warpKey!==warpKeyOf(l)||!l._warpCanvas) buildWarpCanvas(l); if(l._warpCanvas) sctx.drawImage(l._warpCanvas, l._warpOff[0], l._warpOff[1]); }
       sctx.restore(); sctx.globalAlpha=1; }
   }
   renderOverlay();
@@ -1329,12 +1339,17 @@ function renderOverlay(){
   }
 }
 function drawFurnitureHandles(f){
-  const corners=yawCornersLocal(f).map(c=>furnitureOuter(f,c[0],c[1]));
+  const corners=effectiveCorners(f).map(c=>furnitureOuter(f,c[0],c[1]));
+  f._cornersStage=corners;
   octx.beginPath(); octx.moveTo(corners[0][0],corners[0][1]); for(let i=1;i<4;i++) octx.lineTo(corners[i][0],corners[i][1]); octx.closePath();
   octx.strokeStyle='rgba(187,82,57,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
-  // scale handle bottom-right (index 2)
-  const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#BB5239'; octx.stroke();
-  f._scaleHandle=hp;
+  if(f.corners){ // keystone mode: all 4 corners are draggable
+    for(const hp of corners){ octx.beginPath(); octx.arc(hp[0],hp[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#BB5239'; octx.stroke(); }
+    f._scaleHandle=null;
+  } else { // scale handle bottom-right (index 2)
+    const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#BB5239'; octx.stroke();
+    f._scaleHandle=hp;
+  }
 }
 
 function drawPerspectiveQuad(quad){
@@ -1422,6 +1437,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
     const sub=(e.altKey||e.ctrlKey||e.button===2); drag={type:sub?'erasesub':'erasepaint'}; if(sub) eraseAtSub(p); else eraseAt(p);
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
     if(State.furniEyedrop){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColorFurniture(col); return; }
+    if(f && f.corners && f._cornersStage){ for(let i=0;i<4;i++){ const h=f._cornersStage[i]; const dx=p.x-h[0], dy=p.y-h[1]; if(dx*dx+dy*dy<=16*16){ pushHistory('kcorner'+f.id+'_'+i); drag={type:'kcorner',idx:i,layer:f}; return; } } }
     if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit; if none, select the topmost surface under the cursor (edit any layer by clicking it)
     let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
@@ -1434,6 +1450,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
 on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMouse=p;
   if(drag){ if(drag.type==='compare'){ State.compare.split=clamp(p.x/State.W,0,1); renderOverlay(); }
     else if(drag.type==='quad'){ const a=drag.layer; a.quad[drag.idx]=[clamp(p.x,0,State.W),clamp(p.y,0,State.H)]; a.dirty=true; rebuildSurface(a); render(); }
+    else if(drag.type==='kcorner'){ const l=drag.layer; const loc=furnitureOuterInv(l,p.x,p.y); l.corners[drag.idx]=[loc[0],loc[1]]; l._warpKey=null; render(); }
     else if(drag.type==='sampend'){ const dx=p.x-drag.sx, dy=p.y-drag.sy; if(dx*dx+dy*dy>36){ // moved → brush stroke that supplements/trims the AI selection
         if(drag.samMode==='surface'){ const a=activeSurface(); if(a){ pushHistory('stroke'); samFlushPreview(); drag.type='paint'; paintAt({x:drag.sx,y:drag.sy}); paintAt(p); } else { drag=null; } }
         else { samFlushPreview(); const fn=drag.sub?eraseAtSub:eraseAt; drag.type=drag.sub?'erasesub':'erasepaint'; fn({x:drag.sx,y:drag.sy}); fn(p); } } }
@@ -1478,7 +1495,7 @@ function addFurnitureLayer(srcCanvas, name, px, py){
   pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
-    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, flip:false, opacity:1,
+    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1,
     bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
@@ -1561,6 +1578,7 @@ function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.displ
 function syncFurnitureUI(f){ $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
   $('fAiCutClear').style.display=f.aiCutCanvas?'block':'none'; $('fAiCut').lastChild.textContent= f.aiCutCanvas?' AIで切り抜き直す':' AIで背景を切り抜く（任意背景・高品質）';
   setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fYaw',Math.round(f.yaw||0),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
+  $('fKeystone').checked=!!f.corners; $('fKeystoneBox').style.display=f.corners?'block':'none'; $('fYaw').disabled=!!f.corners;
   $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%');
 }
 function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val; const v=$(id+'V'); if(v) v.textContent= (suffix? val+suffix : val); }
@@ -1619,7 +1637,7 @@ function saveProject(){
     } : {
       type:'furniture', id:l.id, name:l.name, src:canvasToPNG(l.srcCanvas),
       aiCut:l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null,
-      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, flip:l.flip, opacity:l.opacity,
+      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
       material:l.material, matStrength:l.matStrength, visible:l.visible
     })
@@ -1648,7 +1666,7 @@ async function loadProject(obj){
       } else {
         const src=await loadDataURL(d.src), aiCut=d.aiCut? await loadDataURL(d.aiCut):null;
         layers.push({ id:d.id, type:'furniture', name:d.name, srcCanvas:src, aiCutCanvas:aiCut,
-          x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, flip:d.flip, opacity:d.opacity,
+          x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners||null, flip:d.flip, opacity:d.opacity,
           bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
           material:d.material, matStrength:d.matStrength, visible:d.visible,
           dirty:true, proc:null, natW:src.width, natH:src.height });
@@ -1780,9 +1798,14 @@ on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pu
 on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fScale'); f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
 on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fRot'); f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
 on($('fYaw'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fYaw'); f.yaw=+e.target.value; $('fYawV').textContent=e.target.value+'°'; render(); });
+on($('fKeystone'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory();
+  f.corners = e.target.checked ? effectiveCorners(f).map(c=>[c[0],c[1]]) : null;
+  f._warpKey=null; $('fKeystoneBox').style.display=e.target.checked?'block':'none'; $('fYaw').disabled=e.target.checked;
+  renderLayers(); render(); toast(e.target.checked?'家具の四隅をドラッグして台形補正できます':'台形補正を解除しました'); });
+on($('fKeystoneReset'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.corners) return; pushHistory(); f.corners=rectCornersLocal(f); f._warpKey=null; render(); });
 on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
-on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,yaw:f.yaw,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
+on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,yaw:f.yaw,corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
 on($('fFront'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,1); });
 on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1); });
 on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
