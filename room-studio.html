@@ -445,11 +445,14 @@
             <button data-etool="sam">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
             </button>
+            <button data-etool="sub" title="選択しすぎた部分を削る">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>削る
+            </button>
           </div>
           <div class="slider" id="eraseBrushRow"><label>ブラシ径</label><input type="range" id="eraseSize" min="8" max="160" value="60"><span class="val" id="eraseSizeV">60</span></div>
           <div id="eraseSamBox" style="display:none">
             <div class="engine" id="eraseSamStatus">消したい物をクリックすると AI が範囲を推定します（初回はモデル読み込みに少し時間がかかります）</div>
-            <p class="hint" style="margin:0 0 8px">消したい物を<b>クリック</b>でAI選択（Alt/右クリックで除外）。<b>そのままドラッグ</b>すると赤ブラシになり、AIが取り切れない部分を足せます。良ければ「消す範囲に追加」。</p>
+            <p class="hint" style="margin:0 0 8px">消したい物を<b>クリック</b>でAI選択（Alt/右クリックでその点を除外）。<b>ドラッグで足す</b>／<b>Alt（右）ドラッグで削る</b>＝AIの過不足を手で補正できます。良ければ「消す範囲に追加」。広く取りすぎた所は「削る」ツールでも消せます。</p>
             <div class="row" style="margin-top:0">
               <button class="btn" id="eraseSamAdd" style="flex:1;justify-content:center">消す範囲に追加</button>
               <button class="btn" id="eraseSamResetBtn" style="flex:1;justify-content:center">やり直す</button>
@@ -522,7 +525,8 @@ const State = {
   selectedId:null,
   mode:'surface',                     // surface | furniture | erase
   surfTool:'brush',                   // brush | wand | unmask | sam | poly
-  eraseTool:'brush',                  // brush | sam
+  eraseTool:'brush',                  // brush | sam | sub
+
   edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
   poly:{points:[]},                   // in-progress polygon (face) selection
   eraseMask:null,                     // Uint8 over room
@@ -1285,8 +1289,9 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
     if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value, $('wandEdge').checked?getEdgeMap():null); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
     pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){
-    if(State.eraseTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; drag={type:'sampend',samMode:'erase',sx:p.x,sy:p.y,label}; return; }
-    drag={type:'erasepaint'}; eraseAt(p);
+    if(State.eraseTool==='sub'){ drag={type:'erasesub'}; eraseAtSub(p); return; }
+    if(State.eraseTool==='sam'){ const neg=(e.altKey||e.ctrlKey||e.button===2); drag={type:'sampend',samMode:'erase',sx:p.x,sy:p.y,label:neg?0:1,sub:neg}; return; }
+    const sub=(e.altKey||e.ctrlKey||e.button===2); drag={type:sub?'erasesub':'erasepaint'}; if(sub) eraseAtSub(p); else eraseAt(p);
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
     if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit
@@ -1298,10 +1303,10 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
 on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMouse=p;
   if(drag){ if(drag.type==='compare'){ State.compare.split=clamp(p.x/State.W,0,1); renderOverlay(); }
     else if(drag.type==='quad'){ const a=drag.layer; a.quad[drag.idx]=[clamp(p.x,0,State.W),clamp(p.y,0,State.H)]; a.dirty=true; rebuildSurface(a); render(); }
-    else if(drag.type==='sampend'){ const dx=p.x-drag.sx, dy=p.y-drag.sy; if(dx*dx+dy*dy>36){ // moved → brush stroke that supplements the AI selection
+    else if(drag.type==='sampend'){ const dx=p.x-drag.sx, dy=p.y-drag.sy; if(dx*dx+dy*dy>36){ // moved → brush stroke that supplements/trims the AI selection
         if(drag.samMode==='surface'){ const a=activeSurface(); if(a){ pushHistory('stroke'); samFlushPreview(); drag.type='paint'; paintAt({x:drag.sx,y:drag.sy}); paintAt(p); } else { drag=null; } }
-        else { samFlushPreview(); drag.type='erasepaint'; eraseAt({x:drag.sx,y:drag.sy}); eraseAt(p); } } }
-    else if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p);
+        else { samFlushPreview(); const fn=drag.sub?eraseAtSub:eraseAt; drag.type=drag.sub?'erasesub':'erasepaint'; fn({x:drag.sx,y:drag.sy}); fn(p); } } }
+    else if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p); else if(drag.type==='erasesub') eraseAtSub(p);
     else if(drag.type==='move'){ drag.layer.x=p.x-drag.offx; drag.layer.y=p.y-drag.offy; render(); }
     else if(drag.type==='scale'){ const f=selectedFurniture(); const d=Math.hypot(p.x-f.x,p.y-f.y); f.scale=clamp(drag.startScale*(d/drag.startDist),0.05,6); syncFurnitureUI(f); render(); }
   } else { renderOverlay(); }
@@ -1309,7 +1314,7 @@ on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMou
 function endDrag(e){
   if(drag && drag.type==='sampend'){ const d=drag; drag=null; handleSamClick({x:d.sx,y:d.sy}, d.label); return; } // tap (no drag) → AI click
   if(drag && (drag.type==='paint'||drag.type==='erasemask')){ const a=activeSurface(); if(a){ a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); } }
-  if(drag && drag.type==='erasepaint'){ $('runErase').disabled=false; }
+  if(drag && (drag.type==='erasepaint'||drag.type==='erasesub')){ updateRunErase(); }
   drag=null; endCoalesce(); render(); }
 on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
 on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
@@ -1321,6 +1326,10 @@ function paintAt(p){ const a=activeSurface(); if(!a) return; const r=+$('brushSi
   renderOverlay();
 }
 function eraseAt(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,p.x,p.y,r,255); stampPreview(erasePreviewCanvas,p.x,p.y,r,'rgba(187,82,57,.42)'); renderOverlay(); }
+function eraseAtSub(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,p.x,p.y,r,0); // remove from erase selection
+  const x=erasePreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); renderOverlay(); }
+function eraseMaskHasContent(){ const em=State.eraseMask; for(let i=0;i<em.length;i++) if(em[i]>0) return true; return false; }
+function updateRunErase(){ $('runErase').disabled = !eraseMaskHasContent(); }
 
 /* =========================================================================
    LAYER management
