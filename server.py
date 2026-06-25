@@ -160,6 +160,8 @@ TYPE_QUERY = {
     "table_lamp": ("テーブルランプ", INTERIOR_GENRE),
     "carpet": ("ラグ カーペット", INTERIOR_GENRE),
     "plant": ("観葉植物", None),  # 家具ジャンル外
+    "board": ("サイドボード ボード", INTERIOR_GENRE),
+    "art": ("アートポスター 絵画 ウォールアート", INTERIOR_GENRE),
 }
 
 
@@ -170,7 +172,7 @@ IKEA_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RoomStudio/1.0 (personal ro
 IKEA_TYPE_KW = {
     "chair": "チェア", "dining_table": "ダイニングテーブル", "sofa": "ソファ", "bed": "ベッド",
     "coffee_table": "コーヒーテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
-    "carpet": "ラグ", "plant": "観葉植物",
+    "carpet": "ラグ", "plant": "観葉植物", "board": "ボード", "art": "アート ポスター",
 }
 
 

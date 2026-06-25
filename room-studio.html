@@ -419,6 +419,8 @@
             <option value="table_lamp">テーブルランプ</option>
             <option value="carpet">カーペット</option>
             <option value="plant">観葉植物</option>
+            <option value="board">ボード</option>
+            <option value="art">アート</option>
           </select>
           <input type="text" class="field" id="collectTaste" placeholder="テイスト（任意・例: 北欧 / ナチュラル / ミッドセンチュリー）">
           <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
@@ -1547,7 +1549,7 @@ function addFurnitureLayer(srcCanvas, name, px, py){
    ========================================================================= */
 function copyCanvas(src){ const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; c.getContext('2d').drawImage(src,0,0); return c; }
 function addToFurniLib(canvas, name, meta){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,60), srcCanvas:canvas, link:(meta&&meta.link)||'', price:(meta&&meta.price)||0, shop:(meta&&meta.shop)||'', category:(meta&&meta.category)||'upload' }; State.furniLib.push(it); renderFurniLib(); return it; }
-const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット',plant:'観葉植物',upload:'アップロード'};
+const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット',plant:'観葉植物',board:'ボード',art:'アート',upload:'アップロード'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
   if(row) row.style.display = State.furniLib.length>0 ? 'flex' : 'none';
