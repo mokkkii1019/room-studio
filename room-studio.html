@@ -145,6 +145,20 @@
   .mat.none{display:flex; align-items:center; justify-content:center; height:69px; color:var(--muted); font-size:11px; flex-direction:column; gap:4px}
   .mat.none svg{width:18px;height:18px;stroke-width:1.7}
 
+  /* furniture library (gallery of loaded images) */
+  .furni-lib{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px}
+  .furni-item{position:relative; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; display:flex; flex-direction:column}
+  .furni-item:hover{border-color:var(--accent)}
+  .furni-item:active{cursor:grabbing}
+  .furni-item .thumb{display:block; width:100%; height:58px; background:repeating-conic-gradient(#ececec 0% 25%, #fff 0% 50%) 50% / 12px 12px}
+  .furni-item .nm{font-size:10px; text-align:center; padding:2px 3px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .furni-item .add{position:absolute; left:0; right:0; top:0; height:58px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; transition:opacity .15s; background:rgba(44,110,107,.55)}
+  .furni-item:hover .add{opacity:1}
+  .furni-item .del{position:absolute; top:3px; right:3px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:13px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
+  .furni-item:hover .del{display:flex}
+  .drop-active{outline:2px dashed var(--accent); outline-offset:-5px}
+  #canvasBox.drop-active::after{content:"ここにドロップして配置"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(44,110,107,.25); color:#fff; font-weight:700; font-size:14px; pointer-events:none; z-index:5}
+
   .toggle{display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; font-size:12.5px; margin:10px 0}
   .toggle input{display:none}
   .toggle .sw{width:36px;height:21px;border-radius:21px;background:var(--line);position:relative;transition:background .15s; flex:0 0 auto}
@@ -384,10 +398,15 @@
       <div id="panelFurniture" style="display:none">
         <button class="addbtn" id="addFurniture">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
-          家具の画像を追加
+          画像を追加（ドラッグ＆ドロップも可）
         </button>
-        <input type="file" id="fileFurniture" accept="image/*" hidden>
-        <p class="hint" style="margin-top:10px">家具やオブジェの画像を追加→ステージ上でドラッグして移動。下のツールで背景の切り抜き・色・素材・大きさを調整できます。白や単色背景の商品写真がきれいに抜けます。</p>
+        <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
+        <div class="section" id="furniLibSection" style="margin-top:12px">
+          <span class="label">家具ライブラリ</span>
+          <p class="hint" style="margin:6px 0">画像を<b>ここやステージにドラッグ＆ドロップ</b>、または「画像を追加」で読み込み。サムネを<b>クリックで部屋に配置</b>／<b>ステージへドラッグ</b>でその位置に配置できます。</p>
+          <div class="furni-lib" id="furniLib"></div>
+          <div id="furniLibEmpty" class="empty-note" style="margin-top:6px">まだ画像がありません。ここに画像をドラッグ＆ドロップしてください。</div>
+        </div>
 
         <div id="furnitureControls" style="display:none">
           <div class="section">
@@ -440,7 +459,7 @@
           </div>
           <button class="btn ghost-warn" id="fDelete" style="width:100%;justify-content:center">この家具を削除</button>
         </div>
-        <div id="furnitureEmpty" class="empty-note">家具を追加するか、レイヤーから選択してください。</div>
+        <div id="furnitureEmpty" class="empty-note">配置した家具をクリックして選択すると、ここで切り抜き・色・大きさ・回転を調整できます。</div>
       </div>
 
       <!-- ===== ERASE PANEL ===== -->
@@ -542,6 +561,7 @@ const State = {
   edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
   poly:{points:[]},                   // in-progress polygon (face) selection
   furniEyedrop:false,                 // eyedropper active for furniture recolor
+  furniLib:[], libNextId:1,           // library of loaded furniture images (staged, not yet placed)
   eraseMask:null,                     // Uint8 over room
   undo:[], redo:[], _hcKey:null, _hcTime:0,   // general history (full snapshots) + coalescing
   nextId:1,
@@ -1447,17 +1467,41 @@ function addSurfaceLayer(){
     visible:true, dirty:false, cache:null };
   State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
 }
-function addFurnitureLayer(srcCanvas, name){
+function addFurnitureLayer(srcCanvas, name, px, py){
   pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
-    srcCanvas, x:State.W/2, y:State.H/2, scale:1, rot:0, yaw:0, flip:false, opacity:1,
+    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, flip:false, opacity:1,
     bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
   layer.scale = clamp((State.W*0.4)/layer.natW, 0.08, 2);
   State.layers.push(layer); rebuildFurniture(layer); selectLayer(id); renderLayers(); render();
 }
+
+/* =========================================================================
+   FURNITURE LIBRARY — staged images you can place into the room
+   ========================================================================= */
+function copyCanvas(src){ const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; c.getContext('2d').drawImage(src,0,0); return c; }
+function addToFurniLib(canvas, name){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,40), srcCanvas:canvas }; State.furniLib.push(it); renderFurniLib(); return it; }
+function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
+function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py); toast('部屋に配置しました。ドラッグで移動できます'); }
+function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.innerHTML=''; $('furniLibEmpty').style.display=State.furniLib.length?'none':'block';
+  for(const it of State.furniLib){
+    const el=document.createElement('div'); el.className='furni-item'; el.draggable=true; el.title=it.name+' — クリックで配置 / ステージへドラッグで位置指定';
+    const cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
+    const s=Math.min(cv.width/it.srcCanvas.width, cv.height/it.srcCanvas.height), dw=it.srcCanvas.width*s, dh=it.srcCanvas.height*s;
+    x.drawImage(it.srcCanvas,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); el.appendChild(cv);
+    const add=document.createElement('div'); add.className='add'; add.textContent='＋ 配置'; el.appendChild(add);
+    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
+    const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
+    on(el,'click',()=>placeFromLib(it.id));
+    on(el,'dragstart',ev=>{ ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
+    host.appendChild(el);
+  }
+}
+function dropPosToCanvas(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; return { x:(e.clientX-rect.left)*sx, y:(e.clientY-rect.top)*sy }; }
+function imageFilesFrom(dt){ return [...(dt&&dt.files?dt.files:[])].filter(f=>f.type && f.type.startsWith('image/')); }
 function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id===id);
   if(l){ if(l.type==='surface') setMode('surface'); else setMode('furniture'); }
   syncPanels(); renderLayers(); rebuildMaskPreview(); render();
@@ -1711,7 +1755,17 @@ on($('matPerspReset'),'click',()=>{ const a=activeSurface(); if(!a||!a.perspecti
 
 // furniture panel
 on($('addFurniture'),'click',()=>$('fileFurniture').click());
-on($('fileFurniture'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} addFurnitureLayer(c, f.name.replace(/\.[^.]+$/,'')); toast('家具を追加しました。ドラッグで移動できます'); }); e.target.value=''; });
+on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.length){ setMode('furniture'); files.forEach(f=> loadImageFile(f, c=> addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')))); toast(files.length+'件をライブラリに追加しました'); } e.target.value=''; });
+/* drag & drop: image files → library (+ place if dropped on the stage); library thumbnail → place at drop point */
+['dragenter','dragover'].forEach(ev=> on(document, ev, e=>{ const t=e.dataTransfer&&e.dataTransfer.types; if(t && (t.includes&&(t.includes('Files')||t.includes('text/furni-lib')))){ e.preventDefault(); } }));
+on($('canvasBox'),'dragover',e=>{ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='copy'; $('canvasBox').classList.add('drop-active'); });
+on($('canvasBox'),'dragleave',e=>{ if(e.target===$('canvasBox')||!$('canvasBox').contains(e.relatedTarget)) $('canvasBox').classList.remove('drop-active'); });
+on($('canvasBox'),'drop',e=>{ e.preventDefault(); e.stopPropagation(); $('canvasBox').classList.remove('drop-active');
+  if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+  const pos=dropPosToCanvas(e); const libId=e.dataTransfer.getData('text/furni-lib');
+  if(libId){ placeFromLib(+libId, pos.x, pos.y); return; }
+  const files=imageFilesFrom(e.dataTransfer); files.forEach((f,i)=> loadImageFile(f, c=>{ const it=addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')); placeFromLib(it.id, pos.x+i*24, pos.y+i*24); })); });
+on(document,'drop',e=>{ const files=imageFilesFrom(e.dataTransfer); if(!files.length) return; e.preventDefault(); setMode('furniture'); files.forEach(f=> loadImageFile(f, c=> addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')))); toast(files.length+'件をライブラリに追加しました'); });
 on($('fBgRemove'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.bgRemove=e.target.checked; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fBgTol'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fBgTol'); f.bgTol=+e.target.value; $('fBgTolV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fAiCut'),'click',()=>{ const f=selectedFurniture(); if(f) aiCutFurniture(f); });
