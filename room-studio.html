@@ -1297,7 +1297,7 @@ function captureState(){
       type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
       x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners?l.corners.map(p=>p.slice()):null, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
-      material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH
+      material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH, category:l.category
     })
   };
 }
@@ -1314,7 +1314,7 @@ function restoreState(s){
       x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners?d.corners.map(p=>p.slice()):null, flip:d.flip, opacity:d.opacity,
       bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
       material:d.material, matStrength:d.matStrength, visible:d.visible, dirty:true, proc:null,
-      natW:d.natW, natH:d.natH
+      natW:d.natW, natH:d.natH, category:d.category||null
     });
   State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); });
   renderLayers(); syncPanels(); rebuildMaskPreview(); render();
@@ -1544,7 +1544,7 @@ function addFurnitureLayer(srcCanvas, name, px, py){
   pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
-    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1,
+    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1, category:null,
     bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
@@ -1568,7 +1568,7 @@ function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(
   sel.value=State.libFilter;
 }
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
-function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py); toast('部屋に配置しました。ドラッグで移動できます'); }
+function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py); const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); } toast('部屋に配置しました。ドラッグで移動できます'); }
 function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.innerHTML='';
   updateLibFilter();
   const filt=State.libFilter||'all';
@@ -1663,7 +1663,7 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
     else { sw.style.backgroundImage=`url(${(l.proc||l.srcCanvas).toDataURL()})`; sw.style.backgroundSize='cover'; }
     row.appendChild(sw);
     const nm=document.createElement('div'); nm.className='nm'; nm.textContent=l.name; row.appendChild(nm);
-    const kind=document.createElement('span'); kind.className='kind'; kind.textContent=l.type==='surface'?'表面':'家具'; row.appendChild(kind);
+    const kind=document.createElement('span'); kind.className='kind'; kind.textContent= l.type==='surface' ? '表面' : ((l.category && l.category!=='upload' && CAT_LABELS[l.category]) ? CAT_LABELS[l.category] : '家具'); row.appendChild(kind);
     const eye=document.createElement('button'); eye.className='ic eye'+(l.visible?'':' off'); eye.title='表示/非表示'; eye.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayers(); render(); });
     const up=document.createElement('button'); up.className='ic'; up.title='前面へ'; up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'; on(up,'click',ev=>{ev.stopPropagation(); moveLayer(l.id,1);});
@@ -1762,7 +1762,7 @@ function saveProject(){
       aiCut:l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null,
       x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
-      material:l.material, matStrength:l.matStrength, visible:l.visible
+      material:l.material, matStrength:l.matStrength, visible:l.visible, category:l.category
     })
   };
   const blob=new Blob([JSON.stringify(proj)],{type:'application/json'}); const url=URL.createObjectURL(blob);
@@ -1791,7 +1791,7 @@ async function loadProject(obj){
         layers.push({ id:d.id, type:'furniture', name:d.name, srcCanvas:src, aiCutCanvas:aiCut,
           x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners||null, flip:d.flip, opacity:d.opacity,
           bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
-          material:d.material, matStrength:d.matStrength, visible:d.visible,
+          material:d.material, matStrength:d.matStrength, visible:d.visible, category:d.category||null,
           dirty:true, proc:null, natW:src.width, natH:src.height });
       }
     }
@@ -1935,7 +1935,7 @@ on($('fKeystone'),'change',e=>{ const f=selectedFurniture(); if(!f) return; push
 on($('fKeystoneReset'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.corners) return; pushHistory(); f.corners=rectCornersLocal(f); f._warpKey=null; render(); });
 on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
-on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,yaw:f.yaw,corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
+on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,yaw:f.yaw,corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null,flip:f.flip,opacity:f.opacity,category:f.category,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
 on($('fFront'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,1); });
 on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1); });
 on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
