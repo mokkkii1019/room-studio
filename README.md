@@ -118,7 +118,10 @@ python server.py
   - 注意: スクレイピングは各社の利用規約・robots に抵触しうるため、**個人利用・低頻度・User-Agent明示**で運用。商用化・公開時はリスクがあるので後述の楽天APIへの切替を推奨。
 - **将来/任意: 楽天市場API（`source=rakuten`）** … `_collect_rakuten`。`RAKUTEN_APP_ID`（無料）が必要、`RAKUTEN_AFFILIATE_ID` 設定で購入リンクがアフィリエイトURLに＝**合法的にマネタイズ可能**。アプリ登録の「アプリURL」は実在検証されないメタ情報だが **localhost は弾かれる**ので GitHub リポジトリ等の公開URLを使う。登録用文面は `rakuten-application-info.md` 参照。1 QPS以下にスロットル済み。
 - 収集画像はライブラリに入り、クリック/ドラッグで配置。サムネに「購入」リンク＋価格を表示。**「リストを保存／読込」**で一覧を `.json` 化（`exportLib`/`importLib`）。
-- **収集後に背景を自動除去（順次）**（既定ON・トグルで切替）… 収集した各画像を**バックグラウンドで1件ずつ** @imgly で背景除去し、サムネを透過版に更新（`enqueueBgRemoval`/`runBgQueue`/`aiCutCanvas`）。UIはブロックしない。進捗は家具タブに表示。
+- **収集後に背景を自動除去（順次）**（方式セレクト：高速＝既定／AI／しない）… 収集した各画像を**バックグラウンドで1件ずつ**処理し、サムネを透過版に更新（`enqueueBgRemoval`/`runBgQueue`）。各処理の合間に `requestAnimationFrame`+`setTimeout(0)` で**yieldするためUIは固まらない**。
+  - **高速**（`floodCutCanvas`→`removeBg`）… 白/単色背景向け、ミリ秒で完了・非ブロッキング（IKEA商品写真の多くに最適）。
+  - **AI**（`aiCutCanvas`→@imgly）… 任意背景・高品質だが重い。WebGPU利用可能なら `device:'gpu'`＋`proxyToWorker:true` でメインスレッド負荷を軽減。
+  - 手動の「AIで背景を切り抜く」（家具選択時）も従来どおり利用可。
 - フロント: `doCollect`/`loadImageURL`(crossOrigin)/`downscaleCanvas`/`pool`(並列5)。
 
 > マネタイズ（アフィリエイト報酬）を本格的に行う段階では、規約・安定性の面から **楽天/Amazon/Yahoo等の商品API＋公式アフィリエイト**へ切替えるのが安全（スクレイピング＋自前アフィリは各社規約に抵触しやすい）。

@@ -426,7 +426,11 @@
           </select>
           <input type="text" class="field" id="collectTaste" placeholder="テイスト（任意・例: 北欧 / ナチュラル / ミッドセンチュリー）">
           <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
-          <label class="toggle" style="margin:6px 0"><input type="checkbox" id="collectAutoBg" checked><span class="sw"></span>収集後に背景を自動で消す（順次）</label>
+          <select class="field" id="collectBgMethod" title="収集した画像の背景を自動で消す方式">
+            <option value="fast" selected>収集後に背景を自動除去：高速（白背景向け・推奨）</option>
+            <option value="ai">収集後に背景を自動除去：AI（高品質・やや重い）</option>
+            <option value="none">背景は自動除去しない</option>
+          </select>
           <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
             家具店から収集
@@ -910,11 +914,24 @@ function rebuildFurniture(layer){
    Model weights are fetched on first use; the image itself never leaves the device. */
 const IMGLY_CDN='https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
 let IMGLY=null;
-/* run @imgly background removal on a canvas → returns a new canvas with alpha */
+/* fast, non-blocking background removal for white/solid-background product photos (flood from corners) */
+function floodCutCanvas(srcCanvas, tolPct){
+  const w=srcCanvas.width, h=srcCanvas.height;
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d',{willReadFrequently:true});
+  x.drawImage(srcCanvas,0,0); const img=x.getImageData(0,0,w,h);
+  removeBg(img, tolPct==null?30:tolPct); // sets alpha; erode+feather+despill
+  x.clearRect(0,0,w,h); x.putImageData(img,0,0); return c;
+}
+let IMGLY_DEVICE=null;
+async function imglyDevice(){ if(IMGLY_DEVICE!==null) return IMGLY_DEVICE; IMGLY_DEVICE='cpu';
+  try{ if(navigator.gpu && await navigator.gpu.requestAdapter()) IMGLY_DEVICE='gpu'; }catch(e){} return IMGLY_DEVICE; }
+/* run @imgly background removal on a canvas → returns a new canvas with alpha.
+   Uses WebGPU when available + worker proxy to keep the main thread responsive. */
 async function aiCutCanvas(srcCanvas){
   if(!IMGLY) IMGLY=await import(/* @vite-ignore */ IMGLY_CDN);
   const inBlob=await new Promise(res=>srcCanvas.toBlob(res,'image/png'));
-  const outBlob=await IMGLY.removeBackground(inBlob);
+  const cfg={ proxyToWorker:true }; const dev=await imglyDevice(); if(dev==='gpu') cfg.device='gpu';
+  const outBlob=await IMGLY.removeBackground(inBlob, cfg);
   const url=URL.createObjectURL(outBlob);
   const cut=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=srcCanvas.width; c.height=srcCanvas.height; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c); }; im.onerror=rej; im.src=url; });
   URL.revokeObjectURL(url); return cut;
@@ -1603,13 +1620,17 @@ function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, do
 /* ---- background queue: auto-remove backgrounds of collected items, one at a time ---- */
 const bgQueue=[]; let bgRunning=false;
 function setBgStatus(msg, kind){ const el=$('bgStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg||''; el.className='engine'+(kind==='ok'?' ok':''); }
-function enqueueBgRemoval(libItems){ for(const it of libItems){ if(it && !it._bgDone && !it._bgQueued){ it._bgQueued=true; bgQueue.push(it); } } runBgQueue(); }
-async function runBgQueue(){ if(bgRunning) return; bgRunning=true; const total0=bgQueue.length;
+function enqueueBgRemoval(libItems, method){ for(const it of libItems){ if(it && !it._bgDone && !it._bgQueued){ it._bgQueued=true; it._bgMethod=method||'fast'; bgQueue.push(it); } } runBgQueue(); }
+async function runBgQueue(){ if(bgRunning) return; bgRunning=true;
+  const yield_=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0))); // let the UI breathe between items
   while(bgQueue.length){ const it=bgQueue.shift();
     if(!State.furniLib.includes(it)){ continue; } // removed meanwhile
-    setBgStatus('背景を自動除去中… 残り '+(bgQueue.length+1)+' 件（初回はモデル読み込みあり）');
-    try{ const cut=await aiCutCanvas(it.srcCanvas); it.srcCanvas=cut; it._bgDone=true; renderFurniLib(); }
-    catch(e){ console.warn('auto bg removal failed:',e); it._bgDone=true; if(!IMGLY){ setBgStatus('背景除去に失敗（ネット接続を確認）。元画像のまま使えます'); bgRunning=false; return; } }
+    const ai = it._bgMethod==='ai';
+    setBgStatus('背景を自動除去中… 残り '+(bgQueue.length+1)+' 件'+(ai?'（AI・初回はモデル読み込みあり）':'（高速）'));
+    await yield_();
+    try{ const cut = ai ? await aiCutCanvas(it.srcCanvas) : floodCutCanvas(it.srcCanvas, 30); it.srcCanvas=cut; it._bgDone=true; renderFurniLib(); }
+    catch(e){ console.warn('auto bg removal failed:',e); it._bgDone=true; if(ai && !IMGLY){ setBgStatus('AI背景除去に失敗（ネット接続を確認）。元画像のまま使えます'); bgRunning=false; return; } }
+    await yield_();
   }
   bgRunning=false; setBgStatus('背景の自動除去が完了しました','ok'); setTimeout(()=>setBgStatus(''),4000);
 }
@@ -1634,7 +1655,7 @@ async function doCollect(){
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
-    if($('collectAutoBg').checked && added.length) enqueueBgRemoval(added); // 背景をバックグラウンドで順次除去
+    const bgM=$('collectBgMethod').value; if(bgM!=='none' && added.length) enqueueBgRemoval(added, bgM); // 背景をバックグラウンドで順次除去
   }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
   finally{ $('collectBtn').disabled=false; }
 }
