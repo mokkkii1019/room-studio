@@ -423,7 +423,12 @@
               <div class="picker-row">
                 <input type="color" id="fColor" value="#7d8aa0">
                 <span class="hexv" id="fHex">#7D8AA0</span>
+                <button class="btn" id="fEyedropBtn" title="画像から色を採取して家具に適用（スポイト）" style="margin-left:auto;padding:7px 10px">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19.5 3.5a2.5 2.5 0 0 0-3.5 0l-2 2 3.5 3.5 2-2a2.5 2.5 0 0 0 0-3.5zM13.5 7.5L4 17v3h3l9.5-9.5"/></svg>
+                  スポイト
+                </button>
               </div>
+              <p class="hint" id="fEyedropHint" style="display:none;margin:8px 0 0">スポイトON: 画像をクリックすると周りの色を採取し、この家具に適用します。もう一度押すと解除。</p>
               <div class="slider"><label>強さ</label><input type="range" id="fStrength" min="0" max="100" value="80"><span class="val" id="fStrengthV">80%</span></div>
             </div>
           </div>
@@ -535,6 +540,7 @@ const State = {
 
   edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
   poly:{points:[]},                   // in-progress polygon (face) selection
+  furniEyedrop:false,                 // eyedropper active for furniture recolor
   eraseMask:null,                     // Uint8 over room
   undo:[], redo:[], _hcKey:null, _hcTime:0,   // general history (full snapshots) + coalescing
   nextId:1,
@@ -1234,7 +1240,8 @@ function renderOverlay(){
   if(State.mode==='erase'){ octx.drawImage(erasePreviewCanvas,0,0);
     if(State.eraseTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
   // selected furniture handles
-  if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); } }
+  if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); }
+    if(State.furniEyedrop && lastMouse){ drawEyedropLoupe(lastMouse); } }
   // brush cursor — shown for brush-like tools (incl. SAM, where drag = brush); not for the eyedropper (it shows a loupe)
   if(lastMouse && State.mode!=='furniture' && !(State.mode==='surface'&&State.surfTool==='eyedropper')){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle=(State.mode==='erase')?'rgba(187,82,57,.9)':'rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.stroke();
@@ -1286,6 +1293,12 @@ function applyEyedropColor(col){ const hex=rgbToHex(col[0],col[1],col[2]);
   if(a){ pushHistory('eyedrop'); a.color=hex; a.material=null; markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('色を採取して塗りました '+hex.toUpperCase()); }
   else { toast('色を採取しました '+hex.toUpperCase()+'（表面を選ぶと塗れます）'); }
 }
+function applyEyedropColorFurniture(col){ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; }
+  const hex=rgbToHex(col[0],col[1],col[2]); pushHistory();
+  f.recolor=true; f.color=hex; $('fRecolor').checked=true; $('fRecolorBox').style.display='block';
+  $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex);
+  f.dirty=true; rebuildFurniture(f); renderLayers(); render(); toast('色を採取して家具に適用 '+hex.toUpperCase());
+}
 function drawEyedropLoupe(p){ const col=sampleStageColor(p.x,p.y,2); if(!col) return;
   const hex=rgbToHex(col[0],col[1],col[2]); const R=18, ox=p.x+28, oy=p.y-28;
   octx.beginPath(); octx.arc(ox,oy,R,0,7); octx.fillStyle=hex; octx.fill();
@@ -1323,6 +1336,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
     if(State.eraseTool==='sam'){ const neg=(e.altKey||e.ctrlKey||e.button===2); drag={type:'sampend',samMode:'erase',sx:p.x,sy:p.y,label:neg?0:1,sub:neg}; return; }
     const sub=(e.altKey||e.ctrlKey||e.button===2); drag={type:sub?'erasesub':'erasepaint'}; if(sub) eraseAtSub(p); else eraseAt(p);
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
+    if(State.furniEyedrop){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColorFurniture(col); return; }
     if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit
     let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
@@ -1424,6 +1438,7 @@ function setMode(m){ State.mode=m;
   // dock tools relevance
   document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask','sam','poly'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
   if(State.W) $('dock').style.display=(m==='erase'||State.compare.active)?'none':'flex';
+  State.furniEyedrop=false; { const fe=$('fEyedropBtn'); if(fe) fe.classList.remove('primary'); const feh=$('fEyedropHint'); if(feh) feh.style.display='none'; }
   if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':'';
   samResetPoints(); polyReset();
 }
@@ -1651,6 +1666,7 @@ on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1
 on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fColor'); f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
+on($('fEyedropBtn'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniEyedrop=!State.furniEyedrop; $('fEyedropBtn').classList.toggle('primary',State.furniEyedrop); $('fEyedropHint').style.display=State.furniEyedrop?'block':'none'; overlay.style.cursor=State.furniEyedrop?'crosshair':''; toast(State.furniEyedrop?'スポイトON: 画像をクリックで色を採取':'スポイトを解除しました'); renderOverlay(); });
 on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
 buildMats('fMatGrid',key=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }, false);
 on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fMatStrength'); f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
