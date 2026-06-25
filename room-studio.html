@@ -405,6 +405,7 @@
             <span class="label">配置</span>
             <div class="slider"><label>大きさ</label><input type="range" id="fScale" min="10" max="300" value="100"><span class="val" id="fScaleV">100%</span></div>
             <div class="slider"><label>回転</label><input type="range" id="fRot" min="-180" max="180" value="0"><span class="val" id="fRotV">0°</span></div>
+            <div class="slider"><label title="垂直軸まわりに回転して向きを変える">Z軸回転</label><input type="range" id="fYaw" min="-180" max="180" value="0"><span class="val" id="fYawV">0°</span></div>
             <div class="slider"><label>不透明度</label><input type="range" id="fOpacity" min="20" max="100" value="100"><span class="val" id="fOpacityV">100%</span></div>
             <div class="row">
               <button class="btn" id="fFlip" style="flex:1;justify-content:center">左右反転</button>
@@ -856,13 +857,15 @@ async function aiCutFurniture(layer){
   finally{ busy(false); }
 }
 /* transform helpers */
+function fYawCos(layer){ return Math.cos((layer.yaw||0)*Math.PI/180); } // Z(vertical)-axis turn → horizontal foreshorten
 function furnitureMatrixPoint(layer, lx, ly){ // local (center-origin) -> stage px
-  const fx = layer.flip? -lx: lx; const rad=layer.rot*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad);
+  const fx = (layer.flip? -lx: lx)*fYawCos(layer); const rad=layer.rot*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad);
   const sx=fx*layer.scale, sy=ly*layer.scale; return [layer.x + sx*c - sy*s, layer.y + sx*s + sy*c];
 }
 function pointToFurnitureLocal(layer, px, py){ // stage px -> local center-origin (pre-flip)
   const rad=-layer.rot*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad); const dx=px-layer.x, dy=py-layer.y;
-  let lx=(dx*c - dy*s)/layer.scale, ly=(dx*s + dy*c)/layer.scale; if(layer.flip) lx=-lx; return [lx,ly];
+  let yc=fYawCos(layer); yc = Math.abs(yc)<0.08 ? (yc<0?-0.08:0.08) : yc; // keep selectable near edge-on
+  let lx=(dx*c - dy*s)/(layer.scale*yc), ly=(dx*s + dy*c)/layer.scale; if(layer.flip) lx=-lx; return [lx,ly];
 }
 function furnitureHit(layer, px, py){
   const [lx,ly]=pointToFurnitureLocal(layer,px,py); const hw=layer.natW/2, hh=layer.natH/2;
@@ -1159,7 +1162,7 @@ function captureState(){
       perspective:l.perspective, quad:l.quad?l.quad.map(p=>p.slice()):null, visible:l.visible
     } : {
       type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
-      x:l.x, y:l.y, scale:l.scale, rot:l.rot, flip:l.flip, opacity:l.opacity,
+      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
       material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH
     })
@@ -1175,7 +1178,7 @@ function restoreState(s){
       visible:d.visible, dirty:true, cache:null
     } : {
       id:d.id, type:'furniture', name:d.name, srcCanvas:d.srcCanvas, aiCutCanvas:d.aiCutCanvas,
-      x:d.x, y:d.y, scale:d.scale, rot:d.rot, flip:d.flip, opacity:d.opacity,
+      x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, flip:d.flip, opacity:d.opacity,
       bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
       material:d.material, matStrength:d.matStrength, visible:d.visible, dirty:true, proc:null,
       natW:d.natW, natH:d.natH
@@ -1209,7 +1212,7 @@ function render(){
   sctx.drawImage(State.roomCanvas,0,0);
   for(const l of State.layers){ if(!l.visible) continue;
     if(l.type==='surface'){ if(l.dirty) rebuildSurface(l); if(l.cache) sctx.drawImage(l.cache,0,0); }
-    else { if(l.dirty||!l.proc) rebuildFurniture(l); sctx.save(); sctx.translate(l.x,l.y); sctx.rotate(l.rot*Math.PI/180); sctx.scale(l.flip?-l.scale:l.scale, l.scale); sctx.globalAlpha=l.opacity; sctx.drawImage(l.proc,-l.natW/2,-l.natH/2); sctx.restore(); sctx.globalAlpha=1; }
+    else { if(l.dirty||!l.proc) rebuildFurniture(l); sctx.save(); sctx.translate(l.x,l.y); sctx.rotate(l.rot*Math.PI/180); sctx.scale((l.flip?-1:1)*l.scale*fYawCos(l), l.scale); sctx.globalAlpha=l.opacity; sctx.drawImage(l.proc,-l.natW/2,-l.natH/2); sctx.restore(); sctx.globalAlpha=1; }
   }
   renderOverlay();
 }
@@ -1391,7 +1394,7 @@ function addFurnitureLayer(srcCanvas, name){
   pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
-    srcCanvas, x:State.W/2, y:State.H/2, scale:1, rot:0, flip:false, opacity:1,
+    srcCanvas, x:State.W/2, y:State.H/2, scale:1, rot:0, yaw:0, flip:false, opacity:1,
     bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
@@ -1449,7 +1452,7 @@ function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.displ
 }
 function syncFurnitureUI(f){ $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
   $('fAiCutClear').style.display=f.aiCutCanvas?'block':'none'; $('fAiCut').lastChild.textContent= f.aiCutCanvas?' AIで切り抜き直す':' AIで背景を切り抜く（任意背景・高品質）';
-  setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
+  setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fYaw',Math.round(f.yaw||0),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
   $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%');
 }
 function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val; const v=$(id+'V'); if(v) v.textContent= (suffix? val+suffix : val); }
@@ -1508,7 +1511,7 @@ function saveProject(){
     } : {
       type:'furniture', id:l.id, name:l.name, src:canvasToPNG(l.srcCanvas),
       aiCut:l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null,
-      x:l.x, y:l.y, scale:l.scale, rot:l.rot, flip:l.flip, opacity:l.opacity,
+      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
       material:l.material, matStrength:l.matStrength, visible:l.visible
     })
@@ -1537,7 +1540,7 @@ async function loadProject(obj){
       } else {
         const src=await loadDataURL(d.src), aiCut=d.aiCut? await loadDataURL(d.aiCut):null;
         layers.push({ id:d.id, type:'furniture', name:d.name, srcCanvas:src, aiCutCanvas:aiCut,
-          x:d.x, y:d.y, scale:d.scale, rot:d.rot, flip:d.flip, opacity:d.opacity,
+          x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, flip:d.flip, opacity:d.opacity,
           bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
           material:d.material, matStrength:d.matStrength, visible:d.visible,
           dirty:true, proc:null, natW:src.width, natH:src.height });
@@ -1658,9 +1661,10 @@ on($('fAiCut'),'click',()=>{ const f=selectedFurniture(); if(f) aiCutFurniture(f
 on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.aiCutCanvas=null; f.dirty=true; rebuildFurniture(f); syncFurnitureUI(f); renderLayers(); render(); });
 on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fScale'); f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
 on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fRot'); f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
+on($('fYaw'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fYaw'); f.yaw=+e.target.value; $('fYawV').textContent=e.target.value+'°'; render(); });
 on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
-on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
+on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,yaw:f.yaw,flip:f.flip,opacity:f.opacity,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
 on($('fFront'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,1); });
 on($('fBack'),'click',()=>{ const f=selectedFurniture(); if(f) moveLayer(f.id,-1); });
 on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
