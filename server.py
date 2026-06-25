@@ -28,11 +28,14 @@ import threading
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 from PIL import Image
 import numpy as np
 import os
+import json
+import urllib.parse
+import urllib.request
 import uvicorn
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -133,6 +136,86 @@ def inpaint(req: InpaintReq):
     if result.size != image.size:
         result = result.resize(image.size, Image.BICUBIC)
     return {"image": image_to_data_url(result)}
+
+
+# ---- ネットから家具画像を収集（Openverse / CCライセンス・APIキー不要） ----
+# 種類キー -> 検索語（英語）。フロントの選択肢と一致させる。
+TYPE_TERMS = {
+    "chair": "chair",
+    "dining_table": "dining table",
+    "sofa": "sofa couch",
+    "bed": "bed",
+    "coffee_table": "coffee table",
+    "lampshade": "lamp shade",
+    "table_lamp": "table lamp",
+    "carpet": "rug carpet",
+    "plant": "houseplant potted plant",
+}
+OPENVERSE = "https://api.openverse.org/v1/images/"
+
+
+@app.get("/collect")
+def collect(type: str, taste: str = "", count: int = 50):
+    """家具の種類＋テイストで CC 画像を検索し、プロキシURL付きの一覧を返す。"""
+    term = TYPE_TERMS.get(type, type)
+    q = (taste.strip() + " " + term).strip()
+    count = max(1, min(80, int(count)))
+    items, seen, page = [], set(), 1
+    while len(items) < count and page <= 12:
+        url = OPENVERSE + "?" + urllib.parse.urlencode({
+            "q": q, "page_size": 20, "page": page, "mature": "false",  # anonymous cap is 20/page
+        })
+        req = urllib.request.Request(url, headers={"User-Agent": "RoomStudio/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except Exception as e:  # noqa: BLE001
+            if items:
+                break
+            raise HTTPException(status_code=502, detail=f"画像検索に失敗: {e}")
+        results = data.get("results", []) or []
+        if not results:
+            break
+        for it in results:
+            iid = it.get("id")
+            if not iid or iid in seen:
+                continue
+            seen.add(iid)
+            # 原画像URL（サードパーティのホスト）をプロキシする＝Openverse側のレート制限を消費しない
+            src = it.get("url") or it.get("thumbnail")
+            if not src:
+                continue
+            items.append({
+                "id": iid,
+                "title": (it.get("title") or term)[:60],
+                "proxy": "/imgproxy?url=" + urllib.parse.quote(src, safe=""),
+                "source": it.get("foreign_landing_url") or "",
+                "license": it.get("license") or "",
+            })
+            if len(items) >= count:
+                break
+        page += 1
+    return {"query": q, "count": len(items), "items": items}
+
+
+@app.get("/imgproxy")
+def imgproxy(url: str):
+    """外部画像を同一オリジンで中継（キャンバス汚染を防ぐ）。"""
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="invalid url")
+    req = urllib.request.Request(url, headers={"User-Agent": "RoomStudio/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            ctype = r.headers.get("Content-Type", "image/jpeg")
+            if "image" not in ctype:
+                raise HTTPException(status_code=415, detail="not an image")
+            data = r.read(14 * 1024 * 1024)  # 上限 14MB
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"画像取得に失敗: {e}")
+    return Response(content=data, media_type=ctype,
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---- アプリ本体（room-studio.html）を同一オリジンで配信 ----

@@ -156,6 +156,8 @@
   .furni-item:hover .add{opacity:1}
   .furni-item .del{position:absolute; top:3px; right:3px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:13px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
   .furni-item:hover .del{display:flex}
+  .field{width:100%; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; font-size:12.5px; background:var(--panel); color:var(--ink); margin:6px 0}
+  select.field{cursor:pointer}
   .drop-active{outline:2px dashed var(--accent); outline-offset:-5px}
   #canvasBox.drop-active::after{content:"ここにドロップして配置"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(44,110,107,.25); color:#fff; font-weight:700; font-size:14px; pointer-events:none; z-index:5}
 
@@ -401,11 +403,41 @@
           画像を追加（ドラッグ＆ドロップも可）
         </button>
         <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
+
+        <div class="section" id="collectSection" style="margin-top:12px">
+          <span class="label">ネットから収集（CC画像）</span>
+          <select class="field" id="collectType">
+            <option value="chair">椅子</option>
+            <option value="dining_table">ダイニングテーブル</option>
+            <option value="sofa" selected>ソファ</option>
+            <option value="bed">ベッド</option>
+            <option value="coffee_table">ローテーブル</option>
+            <option value="lampshade">ランプシェード</option>
+            <option value="table_lamp">テーブルランプ</option>
+            <option value="carpet">カーペット</option>
+            <option value="plant">観葉植物</option>
+          </select>
+          <input type="text" class="field" id="collectTaste" placeholder="テイスト（任意・例: 北欧 / ナチュラル / ミッドセンチュリー）">
+          <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
+          <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
+            この種類の画像を収集
+          </button>
+          <div class="engine" id="collectStatus" style="display:none"></div>
+          <p class="hint" style="margin:6px 0 0">server.py 起動が必要。Openverse 経由でCCライセンス画像を取得します（商用利用時は各画像のライセンスをご確認ください）。</p>
+        </div>
+
         <div class="section" id="furniLibSection" style="margin-top:12px">
           <span class="label">家具ライブラリ</span>
-          <p class="hint" style="margin:6px 0">画像を<b>ここやステージにドラッグ＆ドロップ</b>、または「画像を追加」で読み込み。サムネを<b>クリックで部屋に配置</b>／<b>ステージへドラッグ</b>でその位置に配置できます。</p>
+          <p class="hint" style="margin:6px 0">画像を<b>ここやステージにドラッグ＆ドロップ</b>／「画像を追加」／上の「ネットから収集」で登録。サムネを<b>クリックで部屋に配置</b>／<b>ステージへドラッグ</b>でその位置に配置。「リストを保存」で一覧をファイル化できます。</p>
           <div class="furni-lib" id="furniLib"></div>
           <div id="furniLibEmpty" class="empty-note" style="margin-top:6px">まだ画像がありません。ここに画像をドラッグ＆ドロップしてください。</div>
+          <div class="row" id="libActions" style="margin-top:8px; display:none">
+            <button class="btn" id="libSave" style="flex:1;justify-content:center">リストを保存</button>
+            <button class="btn" id="libLoad" style="flex:1;justify-content:center">読込</button>
+            <button class="btn ghost-warn" id="libClear" style="justify-content:center">全消去</button>
+          </div>
+          <input type="file" id="fileLib" accept="application/json,.json" hidden>
         </div>
 
         <div id="furnitureControls" style="display:none">
@@ -1510,7 +1542,7 @@ function copyCanvas(src){ const c=document.createElement('canvas'); c.width=src.
 function addToFurniLib(canvas, name){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,40), srcCanvas:canvas }; State.furniLib.push(it); renderFurniLib(); return it; }
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
 function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py); toast('部屋に配置しました。ドラッグで移動できます'); }
-function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.innerHTML=''; $('furniLibEmpty').style.display=State.furniLib.length?'none':'block';
+function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.innerHTML=''; $('furniLibEmpty').style.display=State.furniLib.length?'none':'block'; const la=$('libActions'); if(la) la.style.display=State.furniLib.length?'flex':'none';
   for(const it of State.furniLib){
     const el=document.createElement('div'); el.className='furni-item'; el.draggable=true; el.title=it.name+' — クリックで配置 / ステージへドラッグで位置指定';
     const cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
@@ -1526,6 +1558,44 @@ function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.inne
 }
 function dropPosToCanvas(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; return { x:(e.clientX-rect.left)*sx, y:(e.clientY-rect.top)*sy }; }
 function imageFilesFrom(dt){ return [...(dt&&dt.files?dt.files:[])].filter(f=>f.type && f.type.startsWith('image/')); }
+function loadImageURL(url, cb, onerr){ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); cb(c); }catch(e){ onerr&&onerr(e); } }; im.onerror=()=>onerr&&onerr(); im.src=url; }
+function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); if(m<=maxSide) return src; const s=maxSide/m, c=document.createElement('canvas'); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); const x=c.getContext('2d'); x.imageSmoothingEnabled=true; x.drawImage(src,0,0,c.width,c.height); return c; }
+function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, done=0; const total=items.length; if(!total) return resolve();
+  function next(){ while(active<n && i<total){ const it=items[i++]; active++; Promise.resolve(fn(it)).catch(()=>{}).then(()=>{ active--; done++; if(done>=total) resolve(); else next(); }); } } next(); }); }
+
+/* ---- collect furniture images from the web (Openverse via server.py) ---- */
+function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
+async function doCollect(){
+  if(!SERVER.available) await probeServer();
+  if(!SERVER.available){ setCollectStatus('サーバー未接続。server.py を起動してください', 'err'); toast('server.py を起動してください'); return; }
+  const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value;
+  $('collectBtn').disabled=true; setCollectStatus('検索中…');
+  try{
+    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count)}), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json(); const items=j.items||[];
+    if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
+    setMode('furniture');
+    let done=0, ok=0;
+    await pool(items, 5, it=> new Promise(res=>{
+      loadImageURL(SERVER.url+it.proxy, c=>{ addToFurniLib(downscaleCanvas(c,1000), it.title); ok++; done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); },
+        ()=>{ done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); });
+    }));
+    setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
+    toast(ok+' 枚を収集しました');
+  }catch(err){ console.error('collect failed:',err); setCollectStatus('収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
+  finally{ $('collectBtn').disabled=false; }
+}
+
+/* ---- save / load the furniture library as a JSON list ---- */
+function exportLib(){ if(!State.furniLib.length){ toast('ライブラリが空です'); return; }
+  const obj={ app:'room-studio-lib', version:1, items:State.furniLib.map(it=>({ name:it.name, src:canvasToPNG(it.srcCanvas) })) };
+  const blob=new Blob([JSON.stringify(obj)],{type:'application/json'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='room-studio-furniture-library.json'; a.click(); URL.revokeObjectURL(url); toast('リストを保存しました'); }
+async function importLib(obj){ if(!obj || obj.app!=='room-studio-lib'){ toast('対応していないファイルです'); return; }
+  busy(true,'ライブラリを読み込み中…'); setMode('furniture');
+  try{ for(const it of (obj.items||[])){ const c=await loadDataURL(it.src); addToFurniLib(c, it.name); } toast('リストを読み込みました'); }
+  catch(e){ console.error(e); toast('読み込みに失敗しました'); } finally{ busy(false); } }
 function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id===id);
   if(l){ if(l.type==='surface') setMode('surface'); else setMode('furniture'); }
   syncPanels(); renderLayers(); rebuildMaskPreview(); render();
@@ -1781,6 +1851,12 @@ on($('matPerspReset'),'click',()=>{ const a=activeSurface(); if(!a||!a.perspecti
 // furniture panel
 on($('addFurniture'),'click',()=>$('fileFurniture').click());
 on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.length){ setMode('furniture'); files.forEach(f=> loadImageFile(f, c=> addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')))); toast(files.length+'件をライブラリに追加しました'); } e.target.value=''; });
+on($('collectCount'),'input',e=>{ $('collectCountV').textContent=e.target.value; });
+on($('collectBtn'),'click',doCollect);
+on($('libSave'),'click',exportLib);
+on($('libLoad'),'click',()=>$('fileLib').click());
+on($('fileLib'),'change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ let obj; try{ obj=JSON.parse(r.result); }catch(err){ toast('JSONを解析できませんでした'); return; } importLib(obj); }; r.readAsText(f); e.target.value=''; });
+on($('libClear'),'click',()=>{ if(!State.furniLib.length) return; if(!confirm('ライブラリの画像をすべて消去しますか？')) return; State.furniLib=[]; renderFurniLib(); });
 /* drag & drop: image files → library (+ place if dropped on the stage); library thumbnail → place at drop point */
 ['dragenter','dragover'].forEach(ev=> on(document, ev, e=>{ const t=e.dataTransfer&&e.dataTransfer.types; if(t && (t.includes&&(t.includes('Files')||t.includes('text/furni-lib')))){ e.preventDefault(); } }));
 on($('canvasBox'),'dragover',e=>{ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='copy'; $('canvasBox').classList.add('drop-active'); });
