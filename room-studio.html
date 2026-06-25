@@ -1402,7 +1402,12 @@ let drag=null;
 function canvasPos(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left, cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top; return {x:cx*sx, y:cy*sy}; }
 on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.pointerId); const p=canvasPos(e); lastMouse=p;
   if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
-  if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
+  if(State.mode==='surface'){
+    // clicking a placed furniture (topmost opaque overlay) selects & edits it — basic mask tools only
+    if(State.surfTool==='brush'||State.surfTool==='wand'||State.surfTool==='unmask'){
+      for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); pushHistory('fmove'+l.id); drag={type:'move',offx:p.x-l.x,offy:p.y-l.y,layer:l}; return; } }
+    }
+    const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
     if(a.perspective && a.quad){ for(let i=0;i<4;i++){ const dx=p.x-a.quad[i][0], dy=p.y-a.quad[i][1]; if(dx*dx+dy*dy<=14*14){ pushHistory('quad'+a.id+'_'+i); drag={type:'quad',idx:i,layer:a}; return; } } }
     if(State.surfTool==='eyedropper'){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColor(col); return; }
     if(State.surfTool==='poly'){ if(e.altKey||e.ctrlKey||e.button===2){ polyRemoveLast(); return; }
@@ -1418,9 +1423,11 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
     if(State.furniEyedrop){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColorFurniture(col); return; }
     if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
-    // pick topmost furniture hit
+    // pick topmost furniture hit; if none, select the topmost surface under the cursor (edit any layer by clicking it)
     let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
     if(pick){ selectLayer(pick.id); pushHistory('fmove'+pick.id); drag={type:'move',offx:p.x-pick.x,offy:p.y-pick.y,layer:pick}; }
+    else { const idx=clamp(p.y|0,0,State.H-1)*State.W+clamp(p.x|0,0,State.W-1);
+      for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='surface'&&l.visible&&l.mask&&l.mask[idx]>0){ selectLayer(l.id); break; } } }
     render();
   }
 });
