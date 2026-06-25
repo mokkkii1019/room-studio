@@ -424,6 +424,7 @@
           </select>
           <input type="text" class="field" id="collectTaste" placeholder="テイスト（任意・例: 北欧 / ナチュラル / ミッドセンチュリー）">
           <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
+          <label class="toggle" style="margin:6px 0"><input type="checkbox" id="collectAutoBg" checked><span class="sw"></span>収集後に背景を自動で消す（順次）</label>
           <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
             家具店から収集
@@ -441,6 +442,7 @@
           </div>
           <div class="furni-lib" id="furniLib"></div>
           <div id="furniLibEmpty" class="empty-note" style="margin-top:6px">まだ画像がありません。ここに画像をドラッグ＆ドロップしてください。</div>
+          <div class="engine" id="bgStatus" style="display:none;margin-top:6px"></div>
           <div class="row" id="libActions" style="margin-top:8px; display:none">
             <button class="btn" id="libSave" style="flex:1;justify-content:center">リストを保存</button>
             <button class="btn" id="libLoad" style="flex:1;justify-content:center">読込</button>
@@ -906,15 +908,19 @@ function rebuildFurniture(layer){
    Model weights are fetched on first use; the image itself never leaves the device. */
 const IMGLY_CDN='https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
 let IMGLY=null;
+/* run @imgly background removal on a canvas → returns a new canvas with alpha */
+async function aiCutCanvas(srcCanvas){
+  if(!IMGLY) IMGLY=await import(/* @vite-ignore */ IMGLY_CDN);
+  const inBlob=await new Promise(res=>srcCanvas.toBlob(res,'image/png'));
+  const outBlob=await IMGLY.removeBackground(inBlob);
+  const url=URL.createObjectURL(outBlob);
+  const cut=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=srcCanvas.width; c.height=srcCanvas.height; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c); }; im.onerror=rej; im.src=url; });
+  URL.revokeObjectURL(url); return cut;
+}
 async function aiCutFurniture(layer){
   busy(true,'AIで背景を切り抜き中…（初回はモデル読み込みで時間がかかります）');
   try{
-    if(!IMGLY) IMGLY=await import(/* @vite-ignore */ IMGLY_CDN);
-    const inBlob=await new Promise(res=>layer.srcCanvas.toBlob(res,'image/png'));
-    const outBlob=await IMGLY.removeBackground(inBlob);
-    const url=URL.createObjectURL(outBlob);
-    const cut=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=layer.srcCanvas.width; c.height=layer.srcCanvas.height; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c); }; im.onerror=rej; im.src=url; });
-    URL.revokeObjectURL(url);
+    const cut=await aiCutCanvas(layer.srcCanvas);
     pushHistory();
     layer.aiCutCanvas=cut; layer.bgRemove=false; layer.dirty=true;
     rebuildFurniture(layer); syncFurnitureUI(layer); renderLayers(); render();
@@ -1592,7 +1598,21 @@ function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); 
 function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, done=0; const total=items.length; if(!total) return resolve();
   function next(){ while(active<n && i<total){ const it=items[i++]; active++; Promise.resolve(fn(it)).catch(()=>{}).then(()=>{ active--; done++; if(done>=total) resolve(); else next(); }); } } next(); }); }
 
-/* ---- collect furniture images from the web (Openverse via server.py) ---- */
+/* ---- background queue: auto-remove backgrounds of collected items, one at a time ---- */
+const bgQueue=[]; let bgRunning=false;
+function setBgStatus(msg, kind){ const el=$('bgStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg||''; el.className='engine'+(kind==='ok'?' ok':''); }
+function enqueueBgRemoval(libItems){ for(const it of libItems){ if(it && !it._bgDone && !it._bgQueued){ it._bgQueued=true; bgQueue.push(it); } } runBgQueue(); }
+async function runBgQueue(){ if(bgRunning) return; bgRunning=true; const total0=bgQueue.length;
+  while(bgQueue.length){ const it=bgQueue.shift();
+    if(!State.furniLib.includes(it)){ continue; } // removed meanwhile
+    setBgStatus('背景を自動除去中… 残り '+(bgQueue.length+1)+' 件（初回はモデル読み込みあり）');
+    try{ const cut=await aiCutCanvas(it.srcCanvas); it.srcCanvas=cut; it._bgDone=true; renderFurniLib(); }
+    catch(e){ console.warn('auto bg removal failed:',e); it._bgDone=true; if(!IMGLY){ setBgStatus('背景除去に失敗（ネット接続を確認）。元画像のまま使えます'); bgRunning=false; return; } }
+  }
+  bgRunning=false; setBgStatus('背景の自動除去が完了しました','ok'); setTimeout(()=>setBgStatus(''),4000);
+}
+
+/* ---- collect furniture images from the web (store products via server.py) ---- */
 function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
 async function doCollect(){
   if(!SERVER.available) await probeServer();
@@ -1605,13 +1625,14 @@ async function doCollect(){
     const j=await r.json(); const items=j.items||[];
     if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
-    let done=0, ok=0;
+    let done=0, ok=0; const added=[];
     await pool(items, 5, it=> new Promise(res=>{
-      loadImageURL(SERVER.url+it.proxy, c=>{ addToFurniLib(downscaleCanvas(c,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type}); ok++; done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); },
+      loadImageURL(SERVER.url+it.proxy, c=>{ const li=addToFurniLib(downscaleCanvas(c,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type}); added.push(li); ok++; done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); },
         ()=>{ done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); });
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
+    if($('collectAutoBg').checked && added.length) enqueueBgRemoval(added); // 背景をバックグラウンドで順次除去
   }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
   finally{ $('collectBtn').disabled=false; }
 }
