@@ -163,18 +163,74 @@ TYPE_QUERY = {
 }
 
 
+# ---- IKEA 公式サイトの検索（フロントが使う商品検索JSON。APIキー不要） ----
+# 注: スクレイピングは各社規約/robots に抵触しうる。個人利用・低頻度・UA明示で運用する想定。
+IKEA_ENDPOINT = "https://sik.search.blue.cdtapps.com/jp/ja/search-result-page"
+IKEA_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RoomStudio/1.0 (personal room-preview)"
+IKEA_TYPE_KW = {
+    "chair": "チェア", "dining_table": "ダイニングテーブル", "sofa": "ソファ", "bed": "ベッド",
+    "coffee_table": "コーヒーテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
+    "carpet": "ラグ", "plant": "観葉植物",
+}
+
+
+def _collect_ikea(type_: str, taste: str, count: int):
+    kw = IKEA_TYPE_KW.get(type_, type_)
+    q = (taste.strip() + " " + kw).strip()
+    params = {"q": q, "size": max(1, min(100, count)), "types": "PRODUCT", "c": "sr", "v": "20210322"}
+    url = IKEA_ENDPOINT + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": IKEA_UA, "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=25) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    main = (((data.get("searchResultPage") or {}).get("products") or {}).get("main") or {})
+    items, seen = [], set()
+    for w in (main.get("items") or []):
+        p = w.get("product") or {}
+        pid = p.get("id") or p.get("itemNo")
+        img = p.get("mainImageUrl") or p.get("imageUrl")
+        if not pid or pid in seen or not img:
+            continue
+        seen.add(pid)
+        price = (p.get("salesPrice") or {}).get("numeral") or 0
+        items.append({
+            "id": str(pid),
+            "title": (p.get("name") or kw)[:80],
+            "proxy": "/imgproxy?url=" + urllib.parse.quote(img, safe=""),
+            "link": p.get("pipUrl") or "",
+            "price": price,
+            "shop": "IKEA",
+        })
+        if len(items) >= count:
+            break
+    return items
+
+
 @app.get("/collect")
-def collect(type: str, taste: str = "", count: int = 50, shop: str = ""):
-    """家具店（楽天市場）の商品を種類＋テイストで検索し、画像プロキシURL＋購入リンク付きで返す。"""
+def collect(type: str, taste: str = "", count: int = 50, source: str = "ikea", shop: str = ""):
+    """家具店の商品を種類＋テイストで検索し、画像プロキシURL＋商品ページリンク付きで返す。"""
+    count = max(1, min(90, int(count)))
+    try:
+        if source == "rakuten":
+            items = _collect_rakuten(type, taste, count, shop)
+        else:
+            items = _collect_ikea(type, taste, count)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"収集に失敗: {e}")
+    return {"source": source, "count": len(items), "items": items}
+
+
+def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
+    """（将来用）楽天市場 商品検索API。RAKUTEN_APP_ID が必要。"""
     if not RAKUTEN_APP_ID:
         raise HTTPException(
             status_code=503,
             detail="RAKUTEN_APP_ID 未設定。https://webservice.rakuten.co.jp/ で無料のアプリIDを取得し、"
                    "環境変数 RAKUTEN_APP_ID に設定して server.py を再起動してください。",
         )
-    kw, genre = TYPE_QUERY.get(type, (type, None))
+    kw, genre = TYPE_QUERY.get(type_, (type_, None))
     keyword = (taste.strip() + " " + kw).strip()
-    count = max(1, min(90, int(count)))
     items, seen, page = [], set(), 1
     while len(items) < count and page <= 5:  # 楽天は30件/ページ
         if page > 1:
@@ -228,7 +284,7 @@ def collect(type: str, taste: str = "", count: int = 50, shop: str = ""):
             if len(items) >= count:
                 break
         page += 1
-    return {"query": keyword, "count": len(items), "items": items}
+    return items
 
 
 @app.get("/imgproxy")
