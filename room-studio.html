@@ -636,33 +636,81 @@ function selectedFurniture(){ const l=State.layers.find(x=>x.id===State.selected
    PROCEDURAL MATERIALS  (256x256 tiles, copyright-free, offline)
    ========================================================================= */
 const MATERIALS = [
-  {key:'oak',     name:'オーク',   base:'#caa56d', draw:woodTile('#caa56d','#a07d44',6)},
-  {key:'walnut',  name:'ウォルナット', base:'#6b4a32', draw:woodTile('#6b4a32','#4a3220',7)},
-  {key:'ash',     name:'アッシュ', base:'#d9c7ab', draw:woodTile('#d9c7ab','#c0ab86',5)},
-  {key:'tile',    name:'タイル',   base:'#e7e4dd', draw:tileTile('#efece5','#c9c4b8')},
-  {key:'concrete',name:'コンクリ', base:'#b8b6b1', draw:concreteTile('#b8b6b1')},
-  {key:'linen',   name:'リネン',   base:'#d8cfc0', draw:linenTile('#d8cfc0','#c4b9a6')},
-  {key:'marble',  name:'マーブル', base:'#ecebe7', draw:marbleTile('#efeeea','#b9b7b0')},
-  {key:'terr',    name:'テラコッタ', base:'#c47a55', draw:tileTile('#c47a55','#9c5d3e')},
+  // 木目 wood
+  {key:'oak',      name:'オーク',         base:'#cdae78', draw:woodDraw('#cdae78','#9c7c46',6,11)},
+  {key:'walnut',   name:'ウォルナット',   base:'#7a5639', draw:woodDraw('#7a5639','#3f2c1d',7,22)},
+  {key:'ash',      name:'アッシュ',       base:'#ddccb2', draw:woodDraw('#ddccb2','#b39f81',5,33)},
+  {key:'teak',     name:'チーク',         base:'#a8743f', draw:woodDraw('#a8743f','#6e4724',6,44)},
+  {key:'whiteoak', name:'ホワイトオーク', base:'#e8e1d2', draw:woodDraw('#e8e1d2','#c3b69c',6,55)},
+  // 石目・大理石 stone / marble
+  {key:'marble',   name:'大理石（白）',   base:'#f1f0ec', draw:marbleDraw('#f1f0ec','#b9b6ad',66)},
+  {key:'marblegr', name:'大理石（灰）',   base:'#cfd0d1', draw:marbleDraw('#cfd0d1','#7e8186',77)},
+  {key:'travertine',name:'トラバーチン',  base:'#d8cdb8', draw:stoneDraw('#d8cdb8',88)},
+  {key:'granite',  name:'御影石',         base:'#8d8f93', draw:graniteDraw('#8d8f93',99)},
+  // 塗り壁 plaster
+  {key:'shikkui',  name:'漆喰（白）',     base:'#efece5', draw:plasterDraw('#efece5',111,18)},
+  {key:'nurigy',   name:'塗り壁（グレージュ）', base:'#cfc7ba', draw:plasterDraw('#cfc7ba',122,22)},
+  {key:'nurigray', name:'塗り壁（グレー）', base:'#b4b3ae', draw:plasterDraw('#b4b3ae',133,22)},
+  // コンクリート concrete
+  {key:'concrete', name:'コンクリート',   base:'#b7b5b0', draw:concreteDraw('#b7b5b0',144)},
+  {key:'mortar',   name:'モルタル',       base:'#9f9b93', draw:concreteDraw('#9f9b93',155)},
+  // 織物・布 fabric
+  {key:'linen',    name:'リネン',         base:'#d7cdbb', draw:fabricDraw('#d7cdbb',166,46)},
+  {key:'fabricgr', name:'ファブリック（灰）', base:'#b8b9bb', draw:fabricDraw('#b8b9bb',177,52)},
+  // タイル tile
+  {key:'subway',   name:'サブウェイタイル', base:'#efeee9', draw:tileDraw('#efeee9','#cfcabd',6,12,188)},
+  {key:'terr',     name:'テラコッタ',     base:'#c47a55', draw:tileDraw('#c47a55','#9c5d3e',4,4,199)},
 ];
 function newTile(){ const c=document.createElement('canvas'); c.width=c.height=256; return c; }
-function woodTile(base,dark,planks){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256);
-  const pw=256/planks; for(let p=0;p<planks;p++){ // plank shading
-    const g=x.createLinearGradient(p*pw,0,(p+1)*pw,0); g.addColorStop(0,shade(base,-6)); g.addColorStop(.5,shade(base,4)); g.addColorStop(1,shade(base,-8));
-    x.fillStyle=g; x.fillRect(p*pw,0,pw,256);
-    x.strokeStyle=shade(dark,-10); x.globalAlpha=.5; x.lineWidth=1; x.beginPath(); x.moveTo(p*pw,0); x.lineTo(p*pw,256); x.stroke(); x.globalAlpha=1;
-  }
-  x.strokeStyle=dark; for(let i=0;i<140;i++){ x.globalAlpha=Math.random()*.10+.03; x.lineWidth=Math.random()*1.4; const y=Math.random()*256; x.beginPath(); x.moveTo(0,y); x.bezierCurveTo(64,y+Math.random()*6-3,128,y+Math.random()*6-3,256,y+Math.random()*8-4); x.stroke(); }
-  x.globalAlpha=1; return c; }; }
-function tileTile(light,grout){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=grout; x.fillRect(0,0,256,256); const n=4, s=256/n, gap=4;
-  for(let i=0;i<n;i++)for(let j=0;j<n;j++){ const g=x.createLinearGradient(i*s,j*s,(i+1)*s,(j+1)*s); g.addColorStop(0,shade(light,5)); g.addColorStop(1,shade(light,-6)); x.fillStyle=g; x.fillRect(i*s+gap/2,j*s+gap/2,s-gap,s-gap);} return c; }; }
-function concreteTile(base){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256); const img=x.getImageData(0,0,256,256),d=img.data;
-  for(let i=0;i<d.length;i+=4){ const n=(Math.random()-.5)*26; d[i]+=n; d[i+1]+=n; d[i+2]+=n; } x.putImageData(img,0,0);
-  for(let i=0;i<30;i++){ x.globalAlpha=Math.random()*.05; x.fillStyle=Math.random()>.5?'#fff':'#000'; const r=Math.random()*60+20; x.beginPath(); x.arc(Math.random()*256,Math.random()*256,r,0,7); x.fill(); } x.globalAlpha=1; return c; }; }
-function linenTile(base,thread){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256); x.strokeStyle=thread; x.lineWidth=1;
-  for(let i=0;i<256;i+=3){ x.globalAlpha=.10+Math.random()*.06; x.beginPath(); x.moveTo(i,0); x.lineTo(i,256); x.stroke(); x.beginPath(); x.moveTo(0,i); x.lineTo(256,i); x.stroke(); } x.globalAlpha=1; return c; }; }
-function marbleTile(base,vein){ return ()=>{ const c=newTile(),x=c.getContext('2d'); x.fillStyle=base; x.fillRect(0,0,256,256); x.strokeStyle=vein;
-  for(let i=0;i<8;i++){ x.globalAlpha=.10+Math.random()*.14; x.lineWidth=Math.random()*3+.5; x.beginPath(); let px=Math.random()*256,py=0; x.moveTo(px,py); while(py<256){ px+=(Math.random()-.5)*60; py+=Math.random()*40+12; x.lineTo(px,py);} x.stroke(); } x.globalAlpha=1; return c; }; }
+/* tileable fractal value noise (seamless): coords scaled by `per` (a power of 2 ≤32) wrap at 0..1 */
+function tileNoise(seed){
+  const P=64, g=new Float32Array(P*P); let s=(seed>>>0)||1;
+  const r=()=>{ s^=s<<13; s>>>=0; s^=s>>>17; s^=s<<5; s>>>=0; return s/4294967296; };
+  for(let i=0;i<P*P;i++) g[i]=r();
+  const fade=t=>t*t*t*(t*(t*6-15)+10), lp=(a,b,t)=>a+(b-a)*t;
+  function vn(x,y,per){ if(per>P)per=P; const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const x0=((xi%per)+per)%per,y0=((yi%per)+per)%per,x1=(x0+1)%per,y1=(y0+1)%per,u=fade(xf),v=fade(yf);
+    return lp(lp(g[y0*P+x0],g[y0*P+x1],u), lp(g[y1*P+x0],g[y1*P+x1],u), v); }
+  function fbm(x,y,per,oct){ let a=1,f=1,sm=0,nm=0; for(let o=0;o<oct;o++){ sm+=a*vn(x*f,y*f,per*f); nm+=a; a*=0.5; f*=2; } return sm/nm; }
+  return {vn,fbm};
+}
+function pxTile(fn,size){ size=size||256; const c=document.createElement('canvas'); c.width=c.height=size; const x=c.getContext('2d');
+  const img=x.createImageData(size,size), d=img.data;
+  for(let py=0;py<size;py++){ const v=py/size; for(let px=0;px<size;px++){ const i=(py*size+px)*4, u=px/size, o=fn(u,v);
+    d[i]=clamp(o[0],0,255)|0; d[i+1]=clamp(o[1],0,255)|0; d[i+2]=clamp(o[2],0,255)|0; d[i+3]=255; } }
+  x.putImageData(img,0,0); return c; }
+function mix(a,b,t){ t=t<0?0:t>1?1:t; return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+
+function plasterDraw(hex,seed,amp){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), A=amp||24;
+  return pxTile((u,v)=>{ const m=(n.fbm(u*8,v*8,8,4)-0.5)*0.9 + (n.fbm(u*32,v*32,16,3)-0.5)*0.35; const l=m*A; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+function concreteDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
+  return pxTile((u,v)=>{ const l=(n.fbm(u*8,v*8,8,4)-0.5)*30 + (n.fbm(u*4,v*4,4,3)-0.5)*14 + (n.vn(u*64,v*64,64)-0.5)*9; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+function fabricDraw(hex,seed,threads){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), T=threads||48;
+  return pxTile((u,v)=>{ const wu=Math.sin(u*T*6.2831853)*0.5+0.5, wv=Math.sin(v*T*6.2831853)*0.5+0.5;
+    const over=((Math.floor(u*T)+Math.floor(v*T))&1)? wu:wv; const slub=(n.fbm(u*8,v*8,8,3)-0.5);
+    const l=(over-0.5)*15 + slub*14; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+function woodDraw(light,dark,planks,seed){ return ()=>{ const n=tileNoise(seed), cl=hex2rgb(light), cd=hex2rgb(dark);
+  return pxTile((u,v)=>{ const fp=u*planks, pi=Math.floor(fp), pf=fp-pi;
+    const tone=(n.vn(pi+0.5,7.5,planks)-0.5); const ringFreq=10+(pi%3)*2;
+    const warp=(n.fbm(u*8,v*8,8,4)-0.5);
+    let ring=Math.sin((v*ringFreq + warp*3.0)*6.2831853)*0.5+0.5; ring=Math.pow(ring,1.7);
+    const fiber=(n.fbm(u*32,v*16,32,2)-0.5)*0.12;
+    let t=0.45 - tone*0.5 + (ring-0.5)*0.30 + fiber;
+    if(pf<0.012||pf>0.988) t+=0.55;
+    return mix(cl,cd,clamp(t,0,1)*0.9); }); }; }
+function marbleDraw(hex,vein,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), vc=hex2rgb(vein);
+  return pxTile((u,v)=>{ const turb=(n.fbm(u*8,v*8,8,4)-0.5)*2; const s=Math.sin((u*4+v*4+turb*3)*3.14159265);
+    const vein_=Math.pow(1-Math.abs(s),16); const m=(n.fbm(u*4,v*4,4,3)-0.5)*9;
+    return mix([b[0]+m,b[1]+m,b[2]+m], vc, vein_*0.65); }); }; }
+function graniteDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
+  return pxTile((u,v)=>{ const l=(n.vn(u*64,v*64,64)-0.5)*44 + (n.vn(u*32,v*32,32)-0.5)*20 + (n.fbm(u*8,v*8,8,2)-0.5)*8; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+function stoneDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
+  return pxTile((u,v)=>{ const band=(n.fbm(u*8,v*16,8,4)-0.5)*22; const fine=(n.fbm(u*32,v*32,32,2)-0.5)*8;
+    const pore=Math.pow(Math.max(0,(n.vn(u*64,v*64,64)-0.62))/0.38,2)*-34; const l=band+fine+pore; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+function tileDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), gc=hex2rgb(grout), gx=0.05, gy=0.05;
+  return pxTile((u,v)=>{ const fu=(u*cols)%1, fv=(v*rows)%1; if(fu<gx||fu>1-gx||fv<gy||fv>1-gy) return gc;
+    const eu=Math.min(fu,1-fu)-gx, ev=Math.min(fv,1-fv)-gy, edge=Math.min(eu,ev), bev=clamp(edge*10,0,1);
+    const tint=(n.fbm(u*8,v*8,8,3)-0.5)*9, sh=(bev-0.75)*16; return [b[0]+sh+tint,b[1]+sh+tint,b[2]+sh+tint]; }); }; }
 function shade(hex,amt){ const [r,g,b]=hex2rgb(hex); return `rgb(${clamp(r+amt*2.55,0,255)|0},${clamp(g+amt*2.55,0,255)|0},${clamp(b+amt*2.55,0,255)|0})`; }
 // cache rendered tiles
 const tileCache={};
@@ -1729,7 +1777,12 @@ function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val;
 /* =========================================================================
    Build swatch & material UIs
    ========================================================================= */
-const PALETTE=['#F4F1EA','#E7E2D6','#CFC8B8','#A7B0A2','#7E8C7A','#516253','#D9C2A6','#C7956B','#9A5B3F','#2E3A46','#5A6B82','#1F2A33'];
+const PALETTE=[
+  '#FFFFFF','#F4F1EA','#EAE3D5','#DED3BE','#D2C4A8','#C2B393', // 白〜ベージュ
+  '#CFCABF','#B9B3A6','#9E9788','#7C766B','#57534C','#2E2B27', // グレージュ〜チャコール
+  '#DDE0D6','#BCC6B2','#93A78C','#6E8670','#4E6552','#36433A', // セージ〜深緑
+  '#CFD8DD','#9FB4C0','#6A8593','#3C5366','#233140','#A8674A', // 青〜ネイビー＋テラコッタ
+];
 function buildChips(hostId, onPick){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); }); }
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
 function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
