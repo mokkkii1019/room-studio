@@ -268,6 +268,9 @@
       <button data-tool="sam" title="AIで物体をクリック選択">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 3v6M21 3h-6M3 21v-6M3 21h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
       </button>
+      <button data-tool="poly" title="壁/床の四隅をクリックして一面を選択">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7l8-4 8 4-8 4-8-4zM4 7v10l8 4 8-4V7"/></svg>面選択
+      </button>
       <button data-tool="unmask" title="選択を消す">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>選択消し
       </button>
@@ -300,7 +303,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
           表面を追加（壁・床・天井など）
         </button>
-        <p class="hint" style="margin-top:10px">追加した表面を選び、ブラシか自動選択でその範囲を塗ってから、下で色や素材を変えます。質感や陰影は保ったまま色だけ変わります。</p>
+        <p class="hint" style="margin-top:10px">壁は<b>一面ごとに「表面を追加」</b>し、その面だけを選択して色や素材を変えると、面ごとに塗り分けられます。範囲指定は<b>面選択</b>（四隅クリック）、自動選択（角で止める）、ブラシ、AI選択から選べます。質感や陰影は保ったまま色だけ変わります。</p>
 
         <div id="surfaceControls" style="display:none">
           <div class="section">
@@ -315,12 +318,23 @@
               <button data-tool="sam">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 3v6M21 3h-6M3 21v-6M3 21h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
               </button>
+              <button data-tool="poly" title="壁/床の四隅をクリックして一面を選択">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7l8-4 8 4-8 4-8-4zM4 7v10l8 4 8-4V7"/></svg>面
+              </button>
               <button data-tool="unmask">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8"/></svg>消す
               </button>
             </div>
             <div class="slider" id="brushSizeRow"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
             <div class="slider" id="wandTolRow" style="display:none"><label>色の許容</label><input type="range" id="wandTol" min="6" max="90" value="34"><span class="val" id="wandTolV">34</span></div>
+            <label class="toggle" id="wandEdgeRow" style="display:none"><input type="checkbox" id="wandEdge" checked><span class="sw"></span>壁/床の角（境界）で止める</label>
+            <div id="polyBox" style="display:none">
+              <p class="hint" style="margin:0 0 8px">壁や床の<b>四隅を順にクリック</b>すると直線で囲み、その一面だけを選択します。<b>ダブルクリック</b>か「面を確定」で確定（Backspaceで1つ戻る）。一面ずつ色・素材を塗り分けられます。</p>
+              <div class="row" style="margin-top:0">
+                <button class="btn primary" id="polyClose" style="flex:1;justify-content:center">面を確定</button>
+                <button class="btn" id="polyReset" style="flex:1;justify-content:center">やり直す</button>
+              </div>
+            </div>
             <div id="samBox" style="display:none">
               <div class="engine" id="samStatus">物体をクリックすると AI が範囲を推定します（初回はモデル読み込みに少し時間がかかります）</div>
               <p class="hint" style="margin:0 0 8px">壁・床・家具などを<b>クリック</b>すると自動で範囲を選択。追加クリックで精度向上、<b>Alt/右クリック</b>で除外。良ければ「選択に追加」。</p>
@@ -507,8 +521,10 @@ const State = {
   layers:[],                          // ordered bottom->top
   selectedId:null,
   mode:'surface',                     // surface | furniture | erase
-  surfTool:'brush',                   // brush | wand | unmask | sam
+  surfTool:'brush',                   // brush | wand | unmask | sam | poly
   eraseTool:'brush',                  // brush | sam
+  edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
+  poly:{points:[]},                   // in-progress polygon (face) selection
   eraseMask:null,                     // Uint8 over room
   undo:[], redo:[], _hcKey:null, _hcTime:0,   // general history (full snapshots) + coalescing
   nextId:1,
@@ -521,7 +537,7 @@ const stage = $('stage'), sctx = stage.getContext('2d');
 const overlay = $('overlay'), octx = overlay.getContext('2d');
 
 function getRoomData(){ if(!State.roomData) State.roomData = State.roomCtx.getImageData(0,0,State.W,State.H); return State.roomData; }
-function invalidateRoomData(){ State.roomData=null; }
+function invalidateRoomData(){ State.roomData=null; State.edgeMap=null; }
 function activeSurface(){ const l=State.layers.find(x=>x.id===State.selectedId); return (l&&l.type==='surface')?l:null; }
 function selectedFurniture(){ const l=State.layers.find(x=>x.id===State.selectedId); return (l&&l.type==='furniture')?l:null; }
 
@@ -642,21 +658,53 @@ function boxBlurMask(src, radius){
     for(let y=0;y<h;y++){ out[y*w+x]=acc/(2*r+1); acc+=tmp[clamp(y+r+1,0,h-1)*w+x]-tmp[clamp(y-r,0,h-1)*w+x]; } }
   return out;
 }
-/* scanline flood fill on room by color similarity, adds to mask */
-function floodFill(mask, sx, sy, tolPct){
+/* scanline flood fill on room by color similarity, adds to mask.
+   If `edge` (Uint8 W×H, 1=boundary) is given, the flood will not cross strong
+   edges — keeping a selection inside a single wall/floor plane (which are
+   bounded by mostly-straight corner lines), even when neighbours share a colour. */
+function floodFill(mask, sx, sy, tolPct, edge){
   const d=getRoomData().data, w=State.W, h=State.H; sx|=0; sy|=0; if(sx<0||sy<0||sx>=w||sy>=h) return;
   const si=(sy*w+sx)*4, sr=d[si],sg=d[si+1],sb=d[si+2]; const tol=(tolPct/100)*255*1.732; const tol2=tol*tol;
+  const seed=sy*w+sx;
+  const blocked=(i)=> edge && edge[i] && i!==seed; // edges are barriers (seed always allowed)
   const visited=new Uint8Array(w*h); const stack=[sx,sy];
   while(stack.length){ const y=stack.pop(), x=stack.pop(); const idx=y*w+x; if(visited[idx]) continue;
     const p=idx*4, dr=d[p]-sr, dg=d[p+1]-sg, db=d[p+2]-sb; if(dr*dr+dg*dg+db*db>tol2) continue;
+    if(blocked(idx)) continue;
     // expand left/right on this row
-    let xl=x; while(xl>0){ const q=(idx-(x-xl)-1)*4; const a=d[q]-sr,b=d[q+1]-sg,c=d[q+2]-sb; if(a*a+b*b+c*c>tol2||visited[idx-(x-xl)-1])break; xl--; }
-    let xr=x; while(xr<w-1){ const q=(idx+(xr-x)+1)*4; const a=d[q]-sr,b=d[q+1]-sg,c=d[q+2]-sb; if(a*a+b*b+c*c>tol2||visited[idx+(xr-x)+1])break; xr++; }
+    let xl=x; while(xl>0){ const li=idx-(x-xl)-1, q=li*4; const a=d[q]-sr,b=d[q+1]-sg,c=d[q+2]-sb; if(a*a+b*b+c*c>tol2||visited[li]||blocked(li))break; xl--; }
+    let xr=x; while(xr<w-1){ const ri=idx+(xr-x)+1, q=ri*4; const a=d[q]-sr,b=d[q+1]-sg,c=d[q+2]-sb; if(a*a+b*b+c*c>tol2||visited[ri]||blocked(ri))break; xr++; }
     for(let xi=xl;xi<=xr;xi++){ const ii=y*w+xi; visited[ii]=1; mask[ii]=255;
       if(y>0 && !visited[ii-w]) stack.push(xi,y-1);
       if(y<h-1 && !visited[ii+w]) stack.push(xi,y+1);
     }
   }
+}
+/* Sobel edge map (1 where a strong gradient = likely a wall/floor boundary line). Cached. */
+const EDGE_THRESH = 34;
+function getEdgeMap(){
+  if(State.edgeMap) return State.edgeMap;
+  const W=State.W,H=State.H, d=getRoomData().data, g=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++){ const p=i*4; g[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2]; }
+  const edge=new Uint8Array(W*H);
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){ const i=y*W+x;
+    const gx=-g[i-W-1]-2*g[i-1]-g[i+W-1]+g[i-W+1]+2*g[i+1]+g[i+W+1];
+    const gy=-g[i-W-1]-2*g[i-W]-g[i-W+1]+g[i+W-1]+2*g[i+W]+g[i+W+1];
+    if(gx*gx+gy*gy > EDGE_THRESH*EDGE_THRESH) edge[i]=1;
+  }
+  State.edgeMap=edge; return edge;
+}
+function invalidateEdges(){ State.edgeMap=null; }
+/* rasterize a polygon (array of {x,y}) into a mask via even-odd scanline fill */
+function fillPolygonToMask(mask, pts){
+  if(!pts || pts.length<3) return; const W=State.W,H=State.H;
+  let minY=H,maxY=0; for(const p of pts){ if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y; }
+  minY=Math.max(0,Math.floor(minY)); maxY=Math.min(H-1,Math.ceil(maxY));
+  for(let y=minY;y<=maxY;y++){ const xs=[];
+    for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; const ay=a.y,by=b.y;
+      if((ay<=y&&by>y)||(by<=y&&ay>y)){ const t=(y-ay)/(by-ay); xs.push(a.x+t*(b.x-a.x)); } }
+    xs.sort((p,q)=>p-q);
+    for(let k=0;k+1<xs.length;k+=2){ const x0=Math.max(0,Math.ceil(xs[k])), x1=Math.min(W-1,Math.floor(xs[k+1])); for(let x=x0;x<=x1;x++) mask[y*W+x]=255; } }
 }
 
 /* =========================================================================
@@ -1170,6 +1218,7 @@ function renderOverlay(){
   // active surface mask outline (subtle), only in surface mode
   if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); }
     if(a && a.perspective && a.quad){ drawPerspectiveQuad(a.quad); }
+    if(State.surfTool==='poly'){ drawPolyInProgress(); }
     if(State.surfTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
   if(State.mode==='erase'){ octx.drawImage(erasePreviewCanvas,0,0);
     if(State.eraseTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
@@ -1196,6 +1245,22 @@ function drawPerspectiveQuad(quad){
   for(const p of quad){ octx.beginPath(); octx.arc(p[0],p[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#2C6E6B'; octx.stroke(); }
 }
 
+/* ---- polygon (face) selection: click straight-edged corners of a wall/floor ---- */
+function polyReset(){ State.poly.points=[]; renderOverlay(); }
+function polyAddPoint(p){ State.poly.points.push({x:p.x, y:p.y}); renderOverlay(); }
+function polyRemoveLast(){ State.poly.points.pop(); renderOverlay(); }
+function polyClose(){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
+  if(State.poly.points.length<3){ toast('3点以上クリックしてください'); return; }
+  pushHistory(); fillPolygonToMask(a.mask, State.poly.points); a.dirty=true; rebuildSurface(a); rebuildMaskPreview();
+  polyReset(); render(); toast('面を選択に追加しました'); }
+function drawPolyInProgress(){ const pts=State.poly.points; if(!pts.length) return;
+  if(pts.length>=3){ octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y); octx.closePath(); octx.fillStyle='rgba(44,110,107,.18)'; octx.fill(); }
+  octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y);
+  if(lastMouse) octx.lineTo(lastMouse.x,lastMouse.y);
+  octx.strokeStyle='rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.setLineDash([5,4]); octx.stroke(); octx.setLineDash([]);
+  pts.forEach((p,i)=>{ octx.beginPath(); octx.arc(p.x,p.y, i===0?7:5, 0,7); octx.fillStyle= i===0?'#2C6E6B':'#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle= i===0?'#fff':'#2C6E6B'; octx.stroke(); });
+}
+
 /* preview canvases (so painting feels instant without rebuilding masks each move) */
 const maskPreviewCanvas=document.createElement('canvas'); const erasePreviewCanvas=document.createElement('canvas');
 function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas,samPreviewCanvas]){ c.width=State.W; c.height=State.H; } }
@@ -1213,8 +1278,11 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
   if(State.mode==='surface'){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
     if(a.perspective && a.quad){ for(let i=0;i<4;i++){ const dx=p.x-a.quad[i][0], dy=p.y-a.quad[i][1]; if(dx*dx+dy*dy<=14*14){ pushHistory('quad'+a.id+'_'+i); drag={type:'quad',idx:i,layer:a}; return; } } }
+    if(State.surfTool==='poly'){ if(e.altKey||e.ctrlKey||e.button===2){ polyRemoveLast(); return; }
+      const pts=State.poly.points; if(pts.length>=3){ const dx=p.x-pts[0].x, dy=p.y-pts[0].y; if(dx*dx+dy*dy<=12*12){ polyClose(); return; } }
+      polyAddPoint(p); return; }
     if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; drag={type:'sampend',samMode:'surface',sx:p.x,sy:p.y,label}; return; }
-    if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
+    if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value, $('wandEdge').checked?getEdgeMap():null); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
     pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){
     if(State.eraseTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; drag={type:'sampend',samMode:'erase',sx:p.x,sy:p.y,label}; return; }
@@ -1245,7 +1313,7 @@ function endDrag(e){
   drag=null; endCoalesce(); render(); }
 on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
 on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
-on(overlay,'contextmenu',e=>{ if((State.mode==='surface'&&State.surfTool==='sam')||(State.mode==='erase'&&State.eraseTool==='sam')) e.preventDefault(); });
+on(overlay,'contextmenu',e=>{ if((State.mode==='surface'&&(State.surfTool==='sam'||State.surfTool==='poly'))||(State.mode==='erase'&&State.eraseTool==='sam')) e.preventDefault(); });
 
 function paintAt(p){ const a=activeSurface(); if(!a) return; const r=+$('brushSize').value/2;
   if(drag.type==='erasemask'){ stampDisc(a.mask,p.x,p.y,r,0); const x=maskPreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); }
@@ -1315,9 +1383,9 @@ function setMode(m){ State.mode=m;
   $('panelFurniture').style.display=m==='furniture'?'block':'none';
   $('panelErase').style.display=m==='erase'?'block':'none';
   // dock tools relevance
-  document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask','sam'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
+  document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask','sam','poly'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
   if(State.W) $('dock').style.display=(m==='erase'||State.compare.active)?'none':'flex';
-  samResetPoints();
+  samResetPoints(); polyReset();
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
   if(a){ $('surfColor').value=a.color; $('surfHex').textContent=a.color.toUpperCase(); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
@@ -1468,7 +1536,13 @@ on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
 on($('btnRedo'),'click',doRedo);
-on(document,'keydown',e=>{ if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
+on(document,'keydown',e=>{
+  if(State.mode==='surface'&&State.surfTool==='poly'&&State.poly.points.length){
+    if(e.key==='Enter'){ e.preventDefault(); polyClose(); return; }
+    if(e.key==='Backspace'){ e.preventDefault(); polyRemoveLast(); return; }
+    if(e.key==='Escape'){ e.preventDefault(); polyReset(); return; }
+  }
+  if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
   if(k==='z'&&!e.shiftKey){ e.preventDefault(); doUndo(); }
   else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); doRedo(); } });
 on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; }
@@ -1489,9 +1563,9 @@ document.querySelectorAll('#dock [data-tool]').forEach(b=>on(b,'click',()=>{ con
   if(t==='move'){ setMode('furniture'); return; }
   setMode('surface'); setSurfTool(t);
 }));
-function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask','sam'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
-  $('brushSizeRow').style.display=(t==='wand')?'none':'flex'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none';
-  if(t!=='sam') samResetPoints(); renderOverlay(); }
+function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask','sam','poly'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
+  $('brushSizeRow').style.display=(t==='wand'||t==='poly')?'none':'flex'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('wandEdgeRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none'; $('polyBox').style.display=(t==='poly')?'block':'none';
+  if(t!=='sam') samResetPoints(); if(t!=='poly') polyReset(); renderOverlay(); }
 function setEraseTool(t){ State.eraseTool=t; document.querySelectorAll('#eraseTools button').forEach(b=>b.classList.toggle('on',b.dataset.etool===t));
   $('eraseSamBox').style.display=(t==='sam')?'block':'none'; // brush-size row stays (drag = brush even in AI mode)
   if(t!=='sam') samResetPoints(); renderOverlay(); }
@@ -1504,6 +1578,8 @@ on($('wandTol'),'input',e=>$('wandTolV').textContent=e.target.value);
 on($('clearMask'),'click',()=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.mask=newMask(); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); });
 on($('samCommit'),'click',samCommit);
 on($('samReset'),'click',samResetPoints);
+on($('polyClose'),'click',polyClose);
+on($('polyReset'),'click',polyReset);
 buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.color=hex; a.material=null; $('surfColor').value=hex; $('surfHex').textContent=hex.toUpperCase(); markChips('colorChips',hex); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
 on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfColor'); a.color=e.target.value; a.material=null; $('surfHex').textContent=e.target.value.toUpperCase(); markChips('colorChips',e.target.value); markMats('matGrid',null); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
 on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfStrength'); a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });

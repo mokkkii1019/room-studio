@@ -38,8 +38,10 @@ python server.py
 
 1. **部屋を読み込む** … 「画像を開く」or「デモの部屋」。長辺1100pxに自動縮小。
 2. **表面（壁/床/天井）** … 「表面を追加」→ 範囲を指定 → **色** / **素材** を変更。質感・陰影は保ったまま色だけ置換。範囲指定は3通り:
+   - **面（ポリゴン）選択** … 壁/床の**四隅を順にクリック**して直線で囲み、その一面だけを選択（最初の点クリック/ダブルクリック/Enter で確定、Backspaceで戻る、Escで取消）。壁・床は直線で構成されるため、面ごとの塗り分けに最適。
    - *選択ブラシ*（縁が柔らかいソフトブラシ）
-   - *自動選択*（近い色をまとめて）
+   - *自動選択*（近い色をまとめて）。**「壁/床の角（境界）で止める」**オプション付き＝Sobelエッジを越えないフラッドで、隣の壁と同色でも一面だけ選択。
+   - **壁の塗り分け** … 壁面ごとに「表面を追加」して各面を選択すれば、面ごとに別の色・素材を適用できます。
    - **AI選択（SlimSAM）** … 壁・床・家具などを**クリック**すると物体の範囲を自動推定。追加クリックで精度を上げ、**Alt/右クリック**で不要部分を除外。「選択に追加」で確定。初回はモデルのダウンロード（数十MB・ネット接続が必要）に少し時間がかかります（2回目以降はブラウザキャッシュ）。**画像は端末内のみで処理され外部送信されません**（取得するのはモデルの重みファイルのみ）。WebGPU対応ブラウザでは高速、未対応時はCPU(WASM)で動作。
 3. **家具** … 画像を追加 → ドラッグ移動・角ハンドルで拡縮。切り抜きは2通り: *背景を自動で消す*（白/単色背景向け。エロード＋フェザー＋地色逆合成でハロー低減）か **AIで背景を切り抜く**（任意背景・U²-Net）。さらに色・素材・回転・不透明度・反転・複製・前面/背面。
 4. **消しゴム** … 消したい範囲を指定 →「この範囲を消す」。LaMa接続時はAIで、未接続時はPatchMatchで補完。範囲指定は2通り:
@@ -62,7 +64,8 @@ python server.py
 |---|---|
 | 色変換/輝度 | `rgb2hsl/hsl2rgb/lpOf` |
 | 素材生成 | `MATERIALS`, `woodTile/tileTile/...`, `buildMaterialBuffer` |
-| 選択 | `stampDisc`, `stampDiscSoft`(ソフト), `floodFill`, `boxBlurMask` |
+| 選択 | `stampDisc`, `stampDiscSoft`(ソフト), `floodFill`(エッジ境界対応), `boxBlurMask` |
+| 面/直線対応 | `fillPolygonToMask`(ポリゴン面選択), `getEdgeMap`(Sobel・壁/床の角検出), `drawPolyInProgress`, `polyClose`/`polyReset` |
 | AI選択(SAM) | `ensureSamLoaded`/`ensureSamEmbeddings`(モデル&埋め込み), `samDecode`(クリック→マスク), `samTensorToMask`, `handleSamClick`, `samCommit`/`samResetPoints`, `invalidateSam` |
 | 表面の色・素材 | `applyRecolorToImageData`, `rebuildSurface`, `buildMaterialBuffer` |
 | 遠近投影 | `computeHomography`(DLT), `buildPerspectiveMaterialBuffer`, `drawPerspectiveQuad`, `maskBBoxQuad`/`defaultFloorQuad` |
