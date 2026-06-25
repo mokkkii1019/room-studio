@@ -25,6 +25,7 @@ Room Studio — ローカル AI 補完サーバー（LaMa / CPU対応）
 import base64
 import io
 import threading
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -176,6 +177,8 @@ def collect(type: str, taste: str = "", count: int = 50, shop: str = ""):
     count = max(1, min(90, int(count)))
     items, seen, page = [], set(), 1
     while len(items) < count and page <= 5:  # 楽天は30件/ページ
+        if page > 1:
+            time.sleep(1.0)  # スロットル: API呼び出しを 1 QPS 以下に保つ（楽天の推奨/規約 第7条3項）
         params = {
             "applicationId": RAKUTEN_APP_ID, "keyword": keyword,
             "hits": 30, "page": page, "imageFlag": 1, "format": "json", "sort": "standard",
