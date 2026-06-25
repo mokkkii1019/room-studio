@@ -360,7 +360,7 @@
               </button>
             </div>
             <p class="hint" id="eyedropHint" style="display:none;margin:8px 0 0">スポイトON: 画像をクリックすると周りの色を採取し、選択中の表面に塗ります。もう一度押すと解除。先に範囲（面/自動/ブラシ）を選んでおくと、その範囲がその色で塗りつぶされます。</p>
-            <div class="slider"><label>強さ</label><input type="range" id="surfStrength" min="0" max="100" value="85"><span class="val" id="surfStrengthV">85%</span></div>
+            <div class="slider"><label>強さ</label><input type="range" id="surfStrength" min="0" max="100" value="100"><span class="val" id="surfStrengthV">100%</span></div>
             <div class="slider"><label>明るさ</label><input type="range" id="surfLight" min="-40" max="40" value="0"><span class="val" id="surfLightV">0</span></div>
             <label class="toggle"><input type="checkbox" id="keepTexture" checked><span class="sw"></span>質感・陰影を保つ</label>
           </div>
@@ -369,7 +369,7 @@
             <span class="label">素材（任意・色より優先）</span>
             <div class="mats" id="matGrid"></div>
             <input type="file" id="fileMat" accept="image/*" hidden>
-            <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="80"><span class="val" id="matStrengthV">80%</span></div>
+            <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="100"><span class="val" id="matStrengthV">100%</span></div>
             <div class="slider"><label>柄の大きさ</label><input type="range" id="matScale" min="40" max="220" value="100"><span class="val" id="matScaleV">100%</span></div>
             <label class="toggle"><input type="checkbox" id="matPersp"><span class="sw"></span>遠近に合わせる（床/壁）</label>
             <div id="matPerspBox" style="display:none">
@@ -763,7 +763,7 @@ function rebuildSurface(layer){
   let any=false; for(let i=0;i<layer.mask.length;i++){ if(layer.mask[i]>0){any=true;break;} }
   layer._hasMask=any;
   if(!any){ layer.dirty=false; return; }
-  const feather = boxBlurMask(layer.mask, 3);
+  const feather = boxBlurMask(layer.mask, 1); // minimal AA only; the selection should fully (opaquely) cover the plane
   const src=getRoomData().data;
   const out=cctx.createImageData(w,h);
   let matBuf=null;
@@ -1382,8 +1382,8 @@ function addSurfaceLayer(){
   pushHistory();
   const id=State.nextId++;
   const layer={ id, type:'surface', name:`表面 ${State.layers.filter(l=>l.type==='surface').length+1}`,
-    mask:newMask(), color:'#cfd8d4', strength:0.85, lightShift:0, keepTexture:true,
-    material:null, matStrength:0.8, matScale:100, perspective:false, quad:null,
+    mask:newMask(), color:'#cfd8d4', strength:1.0, lightShift:0, keepTexture:true,
+    material:null, matStrength:1.0, matScale:100, perspective:false, quad:null,
     visible:true, dirty:false, cache:null };
   State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
 }
