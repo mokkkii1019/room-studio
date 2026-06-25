@@ -116,6 +116,8 @@ python server.py
 - **セットアップ（無料）**: https://webservice.rakuten.co.jp/ でアプリIDを取得 → 環境変数を設定して `server.py` 起動:
   - `RAKUTEN_APP_ID`（必須）
   - `RAKUTEN_AFFILIATE_ID`（任意・設定すると購入リンクがアフィリエイトURLになる）
+  - 登録時の「**アプリURL**」は実在検証されないメタ情報。GitHubリポジトリURL・個人サイト・`http://localhost:7865` など、自分が所有/関係するURLを入れればAPIは動作する。
+  - 「アプリID」(webservice.rakuten.co.jp) と「アフィリエイトID」(affiliate.rakuten.co.jp・実掲載サイトが必要で審査あり) は別物。**画像収集だけならアプリIDのみでよい**。
 - `server.py`: `/collect`（楽天検索・30件/ページでページング・`shopCode`で店舗限定も可）＋ `/imgproxy`（商品画像を同一オリジン中継＝キャンバス非汚染で背景除去/書き出し可）。
 - 各収集画像は**購入リンク・価格・店舗名**を保持し、ライブラリのサムネに「購入」リンク＋価格を表示（= **アフィリエイト・マネタイズの土台**）。
 - **「リストを保存／読込」**で一覧（画像＋リンク＋価格）を `.json` 化（`exportLib`/`importLib`）。
