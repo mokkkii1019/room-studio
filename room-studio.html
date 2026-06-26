@@ -1735,6 +1735,30 @@ function dropPosToCanvas(e){ const rect=overlay.getBoundingClientRect(); const s
 function imageFilesFrom(dt){ return [...(dt&&dt.files?dt.files:[])].filter(f=>f.type && f.type.startsWith('image/')); }
 function loadImageURL(url, cb, onerr){ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); cb(c); }catch(e){ onerr&&onerr(e); } }; im.onerror=()=>onerr&&onerr(); im.src=url; }
 function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); if(m<=maxSide) return src; const s=maxSide/m, c=document.createElement('canvas'); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); const x=c.getContext('2d'); x.imageSmoothingEnabled=true; x.drawImage(src,0,0,c.width,c.height); return c; }
+/* 「単体（商品のみ）画像らしさ」を採点: 縁が無地で明るい＝商品写真、縁が雑然/人物多い＝ライフスタイル写真。高いほど単体らしい */
+function scoreSingleItem(cv){
+  const s=64, t=document.createElement('canvas'); t.width=s; t.height=s; const x=t.getContext('2d',{willReadFrequently:true}); x.drawImage(cv,0,0,s,s);
+  const d=x.getImageData(0,0,s,s).data, m=Math.max(2,Math.round(s*0.12));
+  let br=0,bg=0,bb=0,bn=0; const vals=[];
+  for(let y=0;y<s;y++)for(let xx=0;xx<s;xx++){ if(y<m||y>=s-m||xx<m||xx>=s-m){ const p=(y*s+xx)*4; br+=d[p];bg+=d[p+1];bb+=d[p+2]; vals.push((d[p]+d[p+1]+d[p+2])/3); bn++; } }
+  const ml=(br+bg+bb)/(3*bn); let v=0; for(const a of vals) v+=(a-ml)*(a-ml); const sd=Math.sqrt(v/bn);
+  const lightness=ml/255, uniform=1-Math.min(1,sd/55);
+  let skin=0; const tot=d.length/4;
+  for(let i=0;i<d.length;i+=4){ const R=d[i],G=d[i+1],B=d[i+2]; if(R>95&&G>40&&B>20&&R>G&&R>B&&(R-Math.min(G,B))>15&&Math.abs(R-G)>15) skin++; }
+  const skinFrac=skin/tot, skinPen=skinFrac>0.06?(skinFrac-0.06)*5:0;
+  return uniform*0.6 + lightness*0.4 - skinPen;
+}
+/* 複数候補から最も単体らしい1枚のcanvasを返す（候補1枚ならそれをそのまま） */
+function pickBestCandidate(urls){ return new Promise(async resolve=>{
+  let best=null, bestScore=-Infinity;
+  for(const u of urls){
+    const cv=await new Promise(r=>loadImageURL(u, c=>r(c), ()=>r(null)));
+    if(!cv) continue;
+    if(urls.length===1){ best=cv; break; }
+    const sc=scoreSingleItem(cv); if(sc>bestScore){ bestScore=sc; best=cv; }
+  }
+  resolve(best);
+}); }
 function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, done=0; const total=items.length; if(!total) return resolve();
   function next(){ while(active<n && i<total){ const it=items[i++]; active++; Promise.resolve(fn(it)).catch(()=>{}).then(()=>{ active--; done++; if(done>=total) resolve(); else next(); }); } } next(); }); }
 
@@ -1770,13 +1794,17 @@ async function doCollect(){
     if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
     let done=0, ok=0; const added=[];
-    await pool(items, 5, it=> new Promise(res=>{
-      loadImageURL(SERVER.url+it.proxy, c=>{ const li=addToFurniLib(downscaleCanvas(c,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type}); added.push(li); ok++; done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); },
-        ()=>{ done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res(); });
+    await pool(items, 5, it=> new Promise(async res=>{
+      const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
+      const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
+      if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type}); added.push(li); ok++; }
+      done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res();
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
-    const bgM=$('collectBgMethod').value; if(bgM!=='none' && added.length) enqueueBgRemoval(added, bgM); // 背景をバックグラウンドで順次除去
+    // ART OF BLACK はライフスタイル写真主体 → 高速版では切り抜けないので AI 背景除去に自動格上げ
+    let bgM=$('collectBgMethod').value; if(source==='artofblack' && bgM==='fast') bgM='ai';
+    if(bgM!=='none' && added.length) enqueueBgRemoval(added, bgM); // 背景をバックグラウンドで順次除去
   }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
   finally{ $('collectBtn').disabled=false; }
 }

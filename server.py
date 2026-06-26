@@ -307,14 +307,20 @@ def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
                 continue
             seen.add(code)
             imgs = it.get("mediumImageUrls") or it.get("smallImageUrls") or []
-            img = imgs[0].get("imageUrl") if imgs and isinstance(imgs[0], dict) else None
-            if not img:
+            cands = []  # 全ギャラリー画像（クライアントが最も単体らしい1枚を選ぶ）
+            for im in imgs[:3]:
+                u = im.get("imageUrl") if isinstance(im, dict) else None
+                if not u:
+                    continue
+                u = u.replace("?_ex=128x128", "?_ex=600x600").replace("?_ex=64x64", "?_ex=600x600")
+                cands.append("/imgproxy?url=" + urllib.parse.quote(u, safe=""))
+            if not cands:
                 continue
-            img = img.replace("?_ex=128x128", "?_ex=500x500").replace("?_ex=64x64", "?_ex=500x500")
             items.append({
                 "id": code,
                 "title": (it.get("itemName") or kw)[:80],
-                "proxy": "/imgproxy?url=" + urllib.parse.quote(img, safe=""),
+                "proxy": cands[0],
+                "cands": cands,
                 "link": it.get("affiliateUrl") or it.get("itemUrl") or "",
                 "price": it.get("itemPrice") or 0,
                 "shop": it.get("shopName") or "",
