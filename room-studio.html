@@ -285,7 +285,7 @@
     </div>
 
     <div class="dock" id="dock" style="display:none">
-      <button data-tool="brush" class="on" title="塗って選択">
+      <button data-tool="brush" title="塗って選択">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>選択ブラシ
       </button>
       <button data-tool="wand" title="近い色を自動で選択">
@@ -335,7 +335,7 @@
           <div class="section">
             <span class="label">選択ツール</span>
             <div class="seg" id="surfTools">
-              <button data-tool="brush" class="on">
+              <button data-tool="brush">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>ブラシ
               </button>
               <button data-tool="wand">
@@ -351,7 +351,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8"/></svg>消す
               </button>
             </div>
-            <div class="slider" id="brushSizeRow"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
+            <div class="slider" id="brushSizeRow" style="display:none"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
             <div class="slider" id="wandTolRow" style="display:none"><label>色の許容</label><input type="range" id="wandTol" min="6" max="90" value="34"><span class="val" id="wandTolV">34</span></div>
             <label class="toggle" id="wandEdgeRow" style="display:none"><input type="checkbox" id="wandEdge" checked><span class="sw"></span>壁/床の角（境界）で止める</label>
             <div id="polyBox" style="display:none">
@@ -626,7 +626,7 @@ const State = {
   layers:[],                          // ordered bottom->top
   selectedId:null,
   mode:'surface',                     // surface | furniture | erase
-  surfTool:'brush',                   // brush | wand | unmask | sam | poly
+  surfTool:null,                      // null(未選択) | brush | wand | unmask | sam | poly | eyedropper
   eraseTool:'brush',                  // brush | sam | sub
 
   edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
@@ -1515,7 +1515,7 @@ function renderOverlay(){
   if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); }
     if(State.furniEyedrop && lastMouse){ drawEyedropLoupe(lastMouse); } }
   // brush cursor — shown for brush-like tools (incl. SAM, where drag = brush); not for the eyedropper (it shows a loupe)
-  if(lastMouse && State.mode!=='furniture' && !(State.mode==='surface'&&State.surfTool==='eyedropper')){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
+  if(lastMouse && State.mode!=='furniture' && !(State.mode==='surface'&&(State.surfTool==='eyedropper'||!State.surfTool))){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle=(State.mode==='erase')?'rgba(187,82,57,.9)':'rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.stroke();
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke();
   }
@@ -1612,6 +1612,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
       polyAddPoint(p); return; }
     if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; drag={type:'sampend',samMode:'surface',sx:p.x,sy:p.y,label}; return; }
     if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value, $('wandEdge').checked?getEdgeMap():null); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
+    if(State.surfTool!=='brush' && State.surfTool!=='unmask'){ toast('上の「選択ツール」を選んでください'); return; }
     pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){
     if(State.eraseTool==='sub'){ drag={type:'erasesub'}; eraseAtSub(p); return; }
@@ -2051,7 +2052,7 @@ document.querySelectorAll('#dock [data-tool]').forEach(b=>on(b,'click',()=>{ con
   setMode('surface'); setSurfTool(t);
 }));
 function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask','sam','poly'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
-  $('brushSizeRow').style.display=(t==='wand'||t==='poly'||t==='eyedropper')?'none':'flex'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('wandEdgeRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none'; $('polyBox').style.display=(t==='poly')?'block':'none';
+  $('brushSizeRow').style.display=(t==='brush'||t==='unmask')?'flex':'none'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('wandEdgeRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none'; $('polyBox').style.display=(t==='poly')?'block':'none';
   $('eyedropBtn').classList.toggle('primary', t==='eyedropper'); $('eyedropHint').style.display=(t==='eyedropper')?'block':'none';
   overlay.style.cursor = (t==='eyedropper')?'crosshair':'';
   if(t!=='sam') samResetPoints(); if(t!=='poly') polyReset(); renderOverlay(); }
