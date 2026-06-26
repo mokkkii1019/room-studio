@@ -34,6 +34,38 @@ python server.py
 
 ---
 
+## 別のPCで動かす（ローカル）
+
+このフォルダ（`room-studio.html` / `server.py` / `requirements.txt` / `setup.bat` / `run.bat`）を**そのままコピー**（USB・ZIP・共有フォルダ等）すれば動きます。
+
+### 手軽に試す（インストール不要・基本機能のみ）
+`room-studio.html` を**ブラウザにドラッグ＆ドロップ**（またはダブルクリック）するだけ。
+- 使える: 表面の色/素材・素材抽出、家具の配置/編集、消しゴム（ブラウザ内PatchMatch）、書き出し。
+- 使えない/制限: LaMa高品質消しゴム・家具のネット収集（`server.py`が必要）。AI選択/AI背景除去・保存ダイアログ（フォルダ指定）は `file://` だと動かないことがあるため、下記サーバー起動を推奨。
+
+### フル機能（推奨・Windows）
+1. **Python 3.10以上**をインストール（https://www.python.org/ 。インストール時「Add python to PATH」にチェック）。
+2. フォルダ内の **`setup.bat` をダブルクリック**（初回のみ。CPU版PyTorch等を入れる。数分）。
+3. **`run.bat` をダブルクリック** → ブラウザで `http://127.0.0.1:7865` が開く。
+   - 家具のネット収集（IKEA）は**APIキー不要**でそのまま使えます。
+   - 楽天で収集/アフィリエイトを使う場合のみ、`run.bat` の前に環境変数 `RAKUTEN_APP_ID` を設定。
+
+### Mac / Linux
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install fastapi "uvicorn[standard]" pillow numpy opencv-python fire
+pip install --no-deps simple-lama-inpainting
+python server.py   # → http://127.0.0.1:7865
+```
+
+> 注意: `pip install -r requirements.txt` は環境によって numpy のビルドで失敗することがあります（Windowsで確認）。上記 `setup.bat` / 手動コマンドの順序（torch→各種→`--no-deps`でsimple-lama）だと安定します。
+> ネット接続: LaMaモデルの初回DL・家具のネット収集・AI選択(SAM)/AI背景除去（CDN/モデル取得）にはインターネットが必要です。色/素材/手動編集はオフラインでも動きます。
+
+### 同じLANの別端末から開きたい場合（任意）
+`server.py` 末尾の `host="127.0.0.1"` を `host="0.0.0.0"` に変更して起動 → 他端末から `http://<このPCのIP>:7865` でアクセス（ファイアウォール許可が必要）。
+
+---
+
 ## 機能の使い方
 
 1. **部屋を読み込む** … 「画像を開く」or「デモの部屋」。長辺1100pxに自動縮小。
@@ -137,7 +169,9 @@ python server.py
 
 ## ファイル
 - `room-studio.html` … アプリ本体（単一ファイル）
-- `server.py` … ローカル LaMa 補完サーバー（アプリ配信も兼任）
+- `server.py` … ローカルサーバー（LaMa補完＋家具のネット収集＋アプリ配信）
 - `requirements.txt` … サーバーの依存
+- `setup.bat` … Windows用 初回セットアップ（依存インストール）
+- `run.bat` … Windows用 起動（サーバー起動＋ブラウザを開く）
 
 *すべての処理はクライアント側、またはあなたのPC上のローカルサーバーで完結します。写真は外部に送信されません。*
