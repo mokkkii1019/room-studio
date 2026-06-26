@@ -387,6 +387,10 @@
           <div class="section">
             <span class="label">素材（任意・色より優先）</span>
             <div class="mats" id="matGrid"></div>
+            <button class="btn" id="extractMat" style="width:100%;justify-content:center;margin-top:8px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
+              画像から素材を抽出
+            </button>
             <input type="file" id="fileMat" accept="image/*" hidden>
             <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="100"><span class="val" id="matStrengthV">100%</span></div>
             <div class="slider"><label>柄の大きさ</label><input type="range" id="matScale" min="40" max="220" value="100"><span class="val" id="matScaleV">100%</span></div>
@@ -739,6 +743,24 @@ const tileCache={}, thumbCache={};
 function matTile(key){ if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); _matSize=512; const t=m?m.draw():newTile(); tileCache[key]=t; return t; }
 /* small, cheap preview for the material picker (avoids generating all full 512px tiles at load) */
 function matThumb(key){ if(thumbCache[key]) return thumbCache[key]; if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); _matSize=96; const t=m?m.draw():newTile(); _matSize=512; thumbCache[key]=t; return t; }
+/* extract a SEAMLESS tile from any photo: center-crop → half-offset wrap → feather-heal the central seam cross */
+function makeSeamless(src, S){ S=S||512;
+  const base=document.createElement('canvas'); base.width=base.height=S; const bx=base.getContext('2d',{willReadFrequently:true}); bx.imageSmoothingEnabled=true;
+  const sw=src.width, sh=src.height, m=Math.min(sw,sh); bx.drawImage(src,(sw-m)/2,(sh-m)/2,m,m,0,0,S,S);
+  const bd=bx.getImageData(0,0,S,S).data, h=S>>1, fw=Math.max(8,(S*0.18)|0);
+  const out=document.createElement('canvas'); out.width=out.height=S; const oc=out.getContext('2d');
+  const img=oc.createImageData(S,S), od=img.data;
+  const feat=d=>{ d=Math.abs(d); return d>=fw?0:(1-d/fw); };
+  for(let y=0;y<S;y++){ for(let x=0;x<S;x++){
+    const sx=(x+h)%S, sy=(y+h)%S, oi=(sy*S+sx)*4, bi=(y*S+x)*4, di=(y*S+x)*4; // off = half-offset wrap; bi = base (continuous near centre)
+    const w=Math.max(feat(x-h), feat(y-h));
+    od[di]  =bd[oi]*(1-w)+bd[bi]*w; od[di+1]=bd[oi+1]*(1-w)+bd[bi+1]*w; od[di+2]=bd[oi+2]*(1-w)+bd[bi+2]*w; od[di+3]=255;
+  }}
+  oc.putImageData(img,0,0); return out; }
+function avgHex(canvas){ const c=document.createElement('canvas'); c.width=c.height=1; const x=c.getContext('2d'); x.drawImage(canvas,0,0,1,1); const p=x.getImageData(0,0,1,1).data; return '#'+[p[0],p[1],p[2]].map(v=>('0'+v.toString(16)).slice(-2)).join(''); }
+function addExtractedMaterial(srcCanvas, name){ const tile=makeSeamless(srcCanvas,512); const key='user_'+Date.now()+'_'+((Math.abs((tile.width*31+ (name||'').length*7))|0)%9973);
+  MATERIALS.push({ key, name:(name||'取込素材').slice(0,16), base:avgHex(tile), draw:()=>tile, user:true });
+  tileCache[key]=tile; refreshMatGrids(); return key; }
 
 /* build a W×H relit-texture buffer (Uint8 RGBA) for a material + scale, lit by room luminance */
 function buildMaterialBuffer(key, scalePct){
@@ -1993,7 +2015,10 @@ on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHisto
 on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfStrength'); a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 on($('surfLight'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfLight'); a.lightShift=+e.target.value/100; $('surfLightV').textContent=e.target.value; a.dirty=true; rebuildSurface(a); render(); });
 on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.keepTexture=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
-buildMats('matGrid',key=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }, false);
+function pickSurfMat(key){ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }
+function pickFurnMat(key){ const f=selectedFurniture(); if(!f) return; pushHistory(); f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }
+function refreshMatGrids(){ buildMats('matGrid', pickSurfMat, false); buildMats('fMatGrid', pickFurnMat, false); const a=activeSurface(); if(a) markMats('matGrid',a.material); const f=selectedFurniture(); if(f) markMats('fMatGrid',f.material); }
+buildMats('matGrid', pickSurfMat, false);
 on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matStrength'); a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 on($('matScale'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matScale'); a.matScale=+e.target.value; $('matScaleV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 on($('matPersp'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.perspective=e.target.checked; if(a.perspective && !a.quad) a.quad=maskBBoxQuad(a.mask); $('matPerspBox').style.display=a.perspective?'block':'none'; a._matBufKey=null; a.dirty=true; rebuildSurface(a); render(); });
@@ -2041,10 +2066,16 @@ buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; push
 on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fColor'); f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
 on($('fEyedropBtn'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniEyedrop=!State.furniEyedrop; $('fEyedropBtn').classList.toggle('primary',State.furniEyedrop); $('fEyedropHint').style.display=State.furniEyedrop?'block':'none'; overlay.style.cursor=State.furniEyedrop?'crosshair':''; toast(State.furniEyedrop?'スポイトON: 画像をクリックで色を採取':'スポイトを解除しました'); renderOverlay(); });
 on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
-buildMats('fMatGrid',key=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }, false);
+buildMats('fMatGrid', pickFurnMat, false);
 on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fMatStrength'); f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fDelete'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
-on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; loadImageFile(file,c=>{ const key='user_'+Date.now(); MATERIALS.push({key,name:'追加',base:'#ccc',draw:()=>c}); tileCache[key]=c; const a=activeSurface(); buildMats('matGrid',k=>{ const aa=activeSurface(); if(!aa)return; aa.material=k; markMats('matGrid',k); aa.dirty=true; rebuildSurface(aa); renderLayers(); render(); },false); if(a){ a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); render(); } }); e.target.value=''; });
+on($('extractMat'),'click',()=>$('fileMat').click());
+on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; busy(true,'画像から素材を抽出中…');
+  loadImageFile(file,c=>{ try{ const name=file.name.replace(/\.[^.]+$/,''); const key=addExtractedMaterial(c, name);
+      const a=activeSurface(); if(a){ pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('画像から素材を抽出して適用しました'); }
+      else { toast('素材を抽出しました（表面を選択して適用）'); }
+    }catch(err){ console.error('extract material failed:',err); toast('素材の抽出に失敗しました'); } finally{ busy(false); } });
+  e.target.value=''; });
 
 // erase panel
 document.querySelectorAll('#eraseTools button').forEach(b=>on(b,'click',()=>setEraseTool(b.dataset.etool)));
