@@ -165,6 +165,7 @@ TYPE_QUERY = {
     "floor_lamp": ("フロアランプ スタンドライト", INTERIOR_GENRE),
     "mirror": ("鏡 ミラー", INTERIOR_GENRE),
     "shelf": ("シェルフ 棚 オープンシェルフ ラック", INTERIOR_GENRE),
+    "cushion": ("クッション ブランケット スロー", INTERIOR_GENRE),
 }
 
 
@@ -177,6 +178,7 @@ IKEA_TYPE_KW = {
     "coffee_table": "コーヒーテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
     "carpet": "ラグ カーペット", "plant": "観葉植物", "chest": "サイドボード", "art": "アート ポスター",
     "floor_lamp": "フロアランプ", "mirror": "ミラー 鏡", "shelf": "シェルフ 棚",
+    "cushion": "クッション ブランケット",
 }
 
 
