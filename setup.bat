@@ -2,7 +2,13 @@
 rem Room Studio - one-time setup (Windows). Requires Python 3.10+ installed (python on PATH).
 cd /d %~dp0
 echo === Room Studio setup ===
-python --version || (echo Python が見つかりません。https://www.python.org/ からインストールしてください & pause & exit /b 1)
+python --version
+if errorlevel 1 (
+  echo.
+  echo [NG] Python が見つかりません。https://www.python.org/ からインストールしてください。
+  echo      インストール時に「Add python.exe to PATH」に必ずチェックしてください。
+  pause & exit /b 1
+)
 echo.
 echo [1/3] CPU版 PyTorch を入れます（数百MB・数分かかります）...
 python -m pip install --disable-pip-version-check torch --index-url https://download.pytorch.org/whl/cpu
@@ -13,5 +19,11 @@ echo.
 echo [3/3] LaMa (simple-lama-inpainting) を依存なしで入れます（numpyの不要な再ビルドを回避）...
 python -m pip install --disable-pip-version-check --no-deps simple-lama-inpainting
 echo.
-echo === 完了。run.bat を実行すると起動します。 ===
+echo === インストール確認 ===
+python -c "import fastapi,uvicorn,PIL,numpy,cv2,torch,simple_lama_inpainting; print('[OK] すべての依存を読み込めました。run.bat で起動できます。')"
+if errorlevel 1 (
+  echo [NG] 依存の読み込みに失敗しました。上のエラー（赤字）を確認してください。
+  echo      よくある原因: 途中のpipエラー / ネット未接続 / 別のPythonが使われている。
+)
+echo.
 pause
