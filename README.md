@@ -78,6 +78,7 @@ python server.py
 | 消しゴム統括 | `runEraseNow`（LaMa→PatchMatchの切替）, `probeServer`, `updateEraseBadge` |
 | LaMa連携 | `serverInpaintRegion`, `dataURLToCanvas` |
 | PatchMatch | `patchMatchRegion`(async)→`runPatchMatchWorker`(Web Worker)→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`）。ワーカー組立は`getPMWorker` |
+| レイヤー並べ替え | `moveLayer`(前面/背面ボタン), `reorderLayer`(リストをドラッグ&ドロップで並べ替え) |
 | 描画/入力/レイヤー/UI | `render/renderOverlay`, ポインタ系, `addSurfaceLayer/addFurnitureLayer`, `setMode/syncPanels` |
 
 ---

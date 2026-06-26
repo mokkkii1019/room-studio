@@ -192,6 +192,10 @@
   .layers .label{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
   .layer{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; border:1px solid transparent}
   .layer.on{background:#fff; border-color:var(--line)}
+  .layer .grip{cursor:grab; color:var(--muted); font-size:13px; line-height:1; padding:0 1px; flex:0 0 auto; user-select:none}
+  .layer.dragging{opacity:.45}
+  .layer.drop-before{box-shadow:inset 0 3px 0 var(--accent)}
+  .layer.drop-after{box-shadow:inset 0 -3px 0 var(--accent)}
   .layer .swatch{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.12); flex:0 0 auto; background-size:cover}
   .layer .nm{flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .layer .kind{font-size:9.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
@@ -1787,10 +1791,25 @@ function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id
 }
 function deleteLayer(id){ const i=State.layers.findIndex(x=>x.id===id); if(i<0) return; pushHistory(); State.layers.splice(i,1); if(State.selectedId===id) State.selectedId=null; renderLayers(); syncPanels(); rebuildMaskPreview(); render(); }
 function moveLayer(id,dir){ const i=State.layers.findIndex(x=>x.id===id); const j=i+dir; if(i<0||j<0||j>=State.layers.length) return; pushHistory(); const t=State.layers[i]; State.layers[i]=State.layers[j]; State.layers[j]=t; renderLayers(); render(); }
+/* drag-reorder in the (top-first) layer list → reflects into State.layers (bottom→top) */
+function reorderLayer(draggedId, targetId, after){
+  if(draggedId===targetId) return;
+  const disp=[...State.layers].reverse(); // top-first, as shown
+  const di=disp.findIndex(l=>l.id===draggedId); if(di<0) return;
+  const [dragged]=disp.splice(di,1);
+  let ti=disp.findIndex(l=>l.id===targetId); if(ti<0){ disp.push(dragged); } else { disp.splice(after?ti+1:ti, 0, dragged); }
+  pushHistory(); State.layers=disp.reverse(); renderLayers(); render();
+}
 
 function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerCount').textContent=State.layers.length; $('layerEmpty').style.display=State.layers.length?'none':'block';
   // show top first
-  for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; const row=document.createElement('div'); row.className='layer'+(l.id===State.selectedId?' on':'');
+  for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; const row=document.createElement('div'); row.className='layer'+(l.id===State.selectedId?' on':''); row.draggable=true; row.dataset.id=l.id;
+    const grip=document.createElement('span'); grip.className='grip'; grip.textContent='⠿'; grip.title='ドラッグで並べ替え'; row.appendChild(grip);
+    on(row,'dragstart',ev=>{ ev.dataTransfer.setData('text/layer-id',String(l.id)); ev.dataTransfer.effectAllowed='move'; row.classList.add('dragging'); });
+    on(row,'dragend',ev=>{ row.classList.remove('dragging'); document.querySelectorAll('#layerList .layer').forEach(r=>r.classList.remove('drop-before','drop-after')); });
+    on(row,'dragover',ev=>{ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; const r=row.getBoundingClientRect(); const after=ev.clientY>r.top+r.height/2; row.classList.toggle('drop-after',after); row.classList.toggle('drop-before',!after); });
+    on(row,'dragleave',ev=>{ row.classList.remove('drop-before','drop-after'); });
+    on(row,'drop',ev=>{ ev.preventDefault(); const id=+ev.dataTransfer.getData('text/layer-id'); const r=row.getBoundingClientRect(); const after=ev.clientY>r.top+r.height/2; row.classList.remove('drop-before','drop-after'); reorderLayer(id,l.id,after); });
     const sw=document.createElement('div'); sw.className='swatch';
     if(l.type==='surface'){ sw.style.background=l.material? 'none':l.color; if(l.material){ sw.style.backgroundImage=`url(${matTile(l.material).toDataURL()})`; } }
     else { sw.style.backgroundImage=`url(${(l.proc||l.srcCanvas).toDataURL()})`; sw.style.backgroundSize='cover'; }
