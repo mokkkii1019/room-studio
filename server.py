@@ -168,6 +168,11 @@ _load_dotenv()
 RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APP_ID", "").strip()          # アプリケーションID（UUID）
 RAKUTEN_ACCESS_KEY = os.environ.get("RAKUTEN_ACCESS_KEY", "").strip()  # アクセスキー（新仕様で必須）
 RAKUTEN_AFFILIATE_ID = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
+# 新APIは Referer と Origin（許可されたWebサイトに一致）が必須。既定: github.com
+RAKUTEN_REFERER = os.environ.get("RAKUTEN_REFERER", "https://github.com/").strip()
+_rp = urllib.parse.urlsplit(RAKUTEN_REFERER)
+RAKUTEN_ORIGIN = os.environ.get("RAKUTEN_ORIGIN", "").strip() or (
+    f"{_rp.scheme}://{_rp.netloc}" if _rp.scheme and _rp.netloc else "https://github.com")
 RAKUTEN_ENDPOINT = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
 INTERIOR_GENRE = "100804"  # インテリア・寝具・収納（人物/風景の混入が少ない商品写真）
 
@@ -278,7 +283,8 @@ def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
         if RAKUTEN_AFFILIATE_ID:
             params["affiliateId"] = RAKUTEN_AFFILIATE_ID
         url = RAKUTEN_ENDPOINT + "?" + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={"User-Agent": "RoomStudio/1.0"})
+        # 新APIは「許可されたWebサイト」に一致する Referer と Origin が必須
+        req = urllib.request.Request(url, headers={"User-Agent": "RoomStudio/1.0", "Referer": RAKUTEN_REFERER, "Origin": RAKUTEN_ORIGIN})
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 data = json.loads(r.read().decode("utf-8"))
