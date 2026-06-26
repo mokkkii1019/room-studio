@@ -419,7 +419,7 @@
             <option value="table_lamp">テーブルランプ</option>
             <option value="carpet">カーペット</option>
             <option value="plant">観葉植物</option>
-            <option value="board">ボード</option>
+            <option value="chest">チェストボード</option>
             <option value="art">アート</option>
             <option value="floor_lamp">フロアランプ</option>
             <option value="mirror">鏡</option>
@@ -865,8 +865,8 @@ function applyRecolorToImageData(out, srcData, alphaOf, opts){
     const p=i*4; const lp=lpOf(srcData[p],srcData[p+1],srcData[p+2]);
     let R,G,B, strength;
     if(useMat){
-      const shadeF = clamp(lp/Math.max(avgL,0.05), 0.30, 1.7);
-      R=mb[p]*shadeF; G=mb[p+1]*shadeF; B=mb[p+2]*shadeF; strength=opts.matStrength;
+      // material is laid flat & fully opaque so the original wall/floor never shows through
+      R=mb[p]; G=mb[p+1]; B=mb[p+2]; strength=opts.matStrength;
     } else {
       const nl = clamp(tl + (lp-avgL)*variation + (opts.lightShift||0), 0, 1);
       const rgb=hsl2rgb(th,ts,nl); R=rgb[0];G=rgb[1];B=rgb[2]; strength=opts.strength;
@@ -1622,7 +1622,7 @@ function addFurnitureLayer(srcCanvas, name, px, py){
    ========================================================================= */
 function copyCanvas(src){ const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; c.getContext('2d').drawImage(src,0,0); return c; }
 function addToFurniLib(canvas, name, meta){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,60), srcCanvas:canvas, link:(meta&&meta.link)||'', price:(meta&&meta.price)||0, shop:(meta&&meta.shop)||'', category:(meta&&meta.category)||'upload' }; State.furniLib.push(it); renderFurniLib(); return it; }
-const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット',plant:'観葉植物',board:'ボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',upload:'アップロード'};
+const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット',plant:'観葉植物',chest:'チェストボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',upload:'アップロード'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
   if(row) row.style.display = State.furniLib.length>0 ? 'flex' : 'none';
