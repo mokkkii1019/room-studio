@@ -218,7 +218,9 @@ def collect(type: str, taste: str = "", count: int = 50, source: str = "ikea", s
     """家具店の商品を種類＋テイストで検索し、画像プロキシURL＋商品ページリンク付きで返す。"""
     count = max(1, min(90, int(count)))
     try:
-        if source == "rakuten":
+        if source == "artofblack":
+            items = _collect_rakuten(type, taste, count, "artofblack")  # ART OF BLACK 楽天店
+        elif source == "rakuten":
             items = _collect_rakuten(type, taste, count, shop)
         else:
             items = _collect_ikea(type, taste, count)
@@ -247,8 +249,8 @@ def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
             "applicationId": RAKUTEN_APP_ID, "keyword": keyword,
             "hits": 30, "page": page, "imageFlag": 1, "format": "json", "sort": "standard",
         }
-        if genre:
-            params["genreId"] = genre
+        if genre and not shop.strip():
+            params["genreId"] = genre  # 特定店舗指定時はジャンルで絞りすぎないよう外す
         if shop.strip():
             params["shopCode"] = shop.strip()
         if RAKUTEN_AFFILIATE_ID:

@@ -419,7 +419,11 @@
         <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
 
         <div class="section" id="collectSection" style="margin-top:12px">
-          <span class="label">家具店から収集（IKEA）</span>
+          <span class="label">家具店から収集</span>
+          <select class="field" id="collectSource" title="収集元の家具店を選択">
+            <option value="ikea" selected>IKEA（キー不要）</option>
+            <option value="artofblack">ART OF BLACK（楽天キー必要）</option>
+          </select>
           <select class="field" id="collectType">
             <option value="chair">椅子</option>
             <option value="dining_table">ダイニングテーブル</option>
@@ -449,7 +453,7 @@
             家具店から収集
           </button>
           <div class="engine" id="collectStatus" style="display:none"></div>
-          <p class="hint" style="margin:6px 0 0">server.py 起動が必要（APIキー不要）。IKEA公式の商品写真（白背景中心でノイズ少）を取得し、各画像に商品ページへのリンクが付きます。<br>商品情報・画像：IKEA。個人の模様替えプレビュー用途を想定しています。</p>
+          <p class="hint" style="margin:6px 0 0">server.py 起動が必要。<b>IKEA</b>はキー不要。<b>ART OF BLACK</b>は楽天店から取得するため無料の <code>RAKUTEN_APP_ID</code> 設定が必要（webservice.rakuten.co.jp）。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。</p>
         </div>
 
         <div class="section" id="furniLibSection" style="margin-top:12px">
@@ -1757,10 +1761,10 @@ function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) retur
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('サーバー未接続。server.py を起動してください', 'err'); toast('server.py を起動してください'); return; }
-  const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value;
+  const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value, source=$('collectSource').value;
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
-    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count)}), {cache:'no-store'});
+    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source}), {cache:'no-store'});
     if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
     const j=await r.json(); const items=j.items||[];
     if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }

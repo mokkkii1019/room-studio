@@ -155,9 +155,10 @@ python server.py   # → http://127.0.0.1:7865
 ### 家具店から画像を収集 ✅ 実装済み（2026-06）
 家具タブの「**家具店から収集（IKEA）**」で、**種類**（椅子/ダイニングテーブル/ソファ/ベッド/ローテーブル/ランプシェード/テーブルランプ/カーペット/観葉植物）＋**テイスト自由記述**（例: 北欧）＋**枚数**（最大80・既定50）を指定すると、家具店の**商品写真**を収集してライブラリに追加。商品写真なので人物・風景のノイズが少ない。各画像に**商品ページへのリンク・価格・店舗名**が付く。
 
-収集元は2系統（`/collect` の `source` で切替）。`server.py` の `/imgproxy` で画像を同一オリジン中継＝キャンバス非汚染（背景除去・台形補正・書き出しが可）。
+収集元は**選択式**（収集セクションの「収集元」＝`/collect` の `source`）。`server.py` の `/imgproxy` で画像を同一オリジン中継＝キャンバス非汚染（背景除去・台形補正・書き出しが可）。
 - **既定: IKEA（`source=ikea`・APIキー不要）** … IKEA公式の商品検索JSONを利用（`_collect_ikea`）。すぐ使える。
   - 注意: スクレイピングは各社の利用規約・robots に抵触しうるため、**個人利用・低頻度・User-Agent明示**で運用。商用化・公開時はリスクがあるので後述の楽天APIへの切替を推奨。
+- **ART OF BLACK（`source=artofblack`）** … 公式サイト(STORES)はボット対策が強く直接取得不可のため、**ART OF BLACKの楽天店**（`shopCode=artofblack`）を楽天API経由で取得（`_collect_rakuten`）。無料の `RAKUTEN_APP_ID` が必要。
 - **将来/任意: 楽天市場API（`source=rakuten`）** … `_collect_rakuten`。`RAKUTEN_APP_ID`（無料）が必要、`RAKUTEN_AFFILIATE_ID` 設定で購入リンクがアフィリエイトURLに＝**合法的にマネタイズ可能**。アプリ登録の「アプリURL」は実在検証されないメタ情報だが **localhost は弾かれる**ので GitHub リポジトリ等の公開URLを使う。登録用文面は `rakuten-application-info.md` 参照。1 QPS以下にスロットル済み。
 - 収集画像はライブラリに入り、クリック/ドラッグで配置。サムネに「購入」リンク＋価格を表示。**「リストを保存／読込」**で一覧を `.json` 化（`exportLib`/`importLib`）。
 - **収集後に背景を自動除去（順次）**（方式セレクト：高速＝既定／AI／しない）… 収集した各画像を**バックグラウンドで1件ずつ**処理し、サムネを透過版に更新（`enqueueBgRemoval`/`runBgQueue`）。各処理の合間に `requestAnimationFrame`+`setTimeout(0)` で**yieldするためUIは固まらない**。
