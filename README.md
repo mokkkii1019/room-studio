@@ -51,12 +51,20 @@ python server.py
    - 楽天で収集/アフィリエイトを使う場合のみ、`run.bat` の前に環境変数 `RAKUTEN_APP_ID` を設定。
 
 ### Mac / Linux
+`.bat` は Windows専用です。Mac/Linux はターミナルで `.sh` を使います。フォルダで**ターミナルを開き**:
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+bash setup.sh   # 初回のみ（.venv を作って依存をインストール）
+bash run.sh     # 起動 → http://127.0.0.1:7865 が開く
+```
+（手動で入れる場合）
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install torch
 pip install fastapi "uvicorn[standard]" pillow numpy opencv-python fire
 pip install --no-deps simple-lama-inpainting
 python server.py   # → http://127.0.0.1:7865
 ```
+> Mac には通常 `python` ではなく `python3` があります。macOS標準Pythonは pip 制限（externally-managed）が出ることがあるため、上記のように **venv（.venv）** を使うのが安全です。torch は Mac では通常の `pip install torch`（CPU index URL は付けない）。
 
 > 注意: `pip install -r requirements.txt` は環境によって numpy のビルドで失敗することがあります（Windowsで確認）。上記 `setup.bat` / 手動コマンドの順序（torch→各種→`--no-deps`でsimple-lama）だと安定します。
 > ネット接続: LaMaモデルの初回DL・家具のネット収集・AI選択(SAM)/AI背景除去（CDN/モデル取得）にはインターネットが必要です。色/素材/手動編集はオフラインでも動きます。
@@ -171,7 +179,7 @@ python server.py   # → http://127.0.0.1:7865
 - `room-studio.html` … アプリ本体（単一ファイル）
 - `server.py` … ローカルサーバー（LaMa補完＋家具のネット収集＋アプリ配信）
 - `requirements.txt` … サーバーの依存
-- `setup.bat` … Windows用 初回セットアップ（依存インストール）
-- `run.bat` … Windows用 起動（サーバー起動＋ブラウザを開く）
+- `setup.bat` / `run.bat` … Windows用 セットアップ / 起動
+- `setup.sh` / `run.sh` … Mac・Linux用 セットアップ / 起動（`bash setup.sh` → `bash run.sh`）
 
 *すべての処理はクライアント側、またはあなたのPC上のローカルサーバーで完結します。写真は外部に送信されません。*
