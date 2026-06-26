@@ -65,7 +65,7 @@ python server.py
 | 役割 | 主な関数 |
 |---|---|
 | 色変換/輝度 | `rgb2hsl/hsl2rgb/lpOf`, `rgbToHex`, `sampleStageColor`(スポイト採取), `applyEyedropColor`, `drawEyedropLoupe` |
-| 素材生成 | `MATERIALS`, `woodTile/tileTile/...`, `buildMaterialBuffer` |
+| 素材生成 | `MATERIALS`(全25種), シームレス生成 `tileNoise`/`pxTile`/`woodDraw`/`marbleDraw`/`stoneDraw`/`graniteDraw`/`tileDraw`/`brickDraw`/`plasterDraw`/`concreteDraw`/`fabricDraw`, `matTile`(512)/`matThumb`(96), `buildMaterialBuffer` |
 | 選択 | `stampDisc`, `stampDiscSoft`(ソフト), `floodFill`(エッジ境界対応), `boxBlurMask` |
 | 面/直線対応 | `fillPolygonToMask`(ポリゴン面選択), `getEdgeMap`(Sobel・壁/床の角検出), `drawPolyInProgress`, `polyClose`/`polyReset` |
 | AI選択(SAM) | `ensureSamLoaded`/`ensureSamEmbeddings`(モデル&埋め込み), `samDecode`(クリック→マスク), `samTensorToMask`, `handleSamClick`, `samCommit`/`samResetPoints`, `invalidateSam` |

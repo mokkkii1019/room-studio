@@ -638,28 +638,35 @@ function selectedFurniture(){ const l=State.layers.find(x=>x.id===State.selected
    ========================================================================= */
 const MATERIALS = [
   // 木目 wood
-  {key:'oak',      name:'オーク',         base:'#cdae78', draw:woodDraw('#cdae78','#9c7c46',6,11)},
-  {key:'walnut',   name:'ウォルナット',   base:'#7a5639', draw:woodDraw('#7a5639','#3f2c1d',7,22)},
-  {key:'ash',      name:'アッシュ',       base:'#ddccb2', draw:woodDraw('#ddccb2','#b39f81',5,33)},
-  {key:'teak',     name:'チーク',         base:'#a8743f', draw:woodDraw('#a8743f','#6e4724',6,44)},
-  {key:'whiteoak', name:'ホワイトオーク', base:'#e8e1d2', draw:woodDraw('#e8e1d2','#c3b69c',6,55)},
+  {key:'oak',      name:'オーク',         base:'#cdae78', draw:woodDraw('#d2b67f','#9c7c46',6,11)},
+  {key:'natoak',   name:'ナチュラルオーク', base:'#ddc9a6', draw:woodDraw('#e1cfae','#b59a6e',6,12)},
+  {key:'ash',      name:'アッシュ',       base:'#ddccb2', draw:woodDraw('#e0d0b8','#b39f81',5,33)},
+  {key:'walnut',   name:'ウォルナット',   base:'#7a5639', draw:woodDraw('#825c3d','#3f2c1d',7,22)},
+  {key:'teak',     name:'チーク',         base:'#a8743f', draw:woodDraw('#b07c45','#6e4724',6,44)},
+  {key:'ebony',    name:'エボニー',       base:'#463629', draw:woodDraw('#52402f','#241a12',7,77)},
   // 石目・大理石 stone / marble
-  {key:'marble',   name:'大理石（白）',   base:'#f1f0ec', draw:marbleDraw('#f1f0ec','#b9b6ad',66)},
-  {key:'marblegr', name:'大理石（灰）',   base:'#cfd0d1', draw:marbleDraw('#cfd0d1','#7e8186',77)},
-  {key:'travertine',name:'トラバーチン',  base:'#d8cdb8', draw:stoneDraw('#d8cdb8',88)},
+  {key:'marble',   name:'大理石（白）',   base:'#f1f0ec', draw:marbleDraw('#f3f2ee','#c2bdb1',66)},
+  {key:'calacatta',name:'カラカッタ',     base:'#f2f0ea', draw:marbleDraw('#f4f2ec','#8b8576',61)},
+  {key:'marblegr', name:'大理石（灰）',   base:'#cfd0d1', draw:marbleDraw('#d2d3d4','#777b80',77)},
+  {key:'travertine',name:'トラバーチン',  base:'#d8cdb8', draw:stoneDraw('#dccfb9',88)},
   {key:'granite',  name:'御影石',         base:'#8d8f93', draw:graniteDraw('#8d8f93',99)},
+  {key:'slate',    name:'スレート（石目）', base:'#54585d', draw:stoneDraw('#54585d',95)},
   // 塗り壁 plaster
-  {key:'shikkui',  name:'漆喰（白）',     base:'#efece5', draw:plasterDraw('#efece5',111,18)},
+  {key:'shikkui',  name:'漆喰（白）',     base:'#efece5', draw:plasterDraw('#efece5',111,16)},
   {key:'nurigy',   name:'塗り壁（グレージュ）', base:'#cfc7ba', draw:plasterDraw('#cfc7ba',122,22)},
   {key:'nurigray', name:'塗り壁（グレー）', base:'#b4b3ae', draw:plasterDraw('#b4b3ae',133,22)},
   // コンクリート concrete
   {key:'concrete', name:'コンクリート',   base:'#b7b5b0', draw:concreteDraw('#b7b5b0',144)},
   {key:'mortar',   name:'モルタル',       base:'#9f9b93', draw:concreteDraw('#9f9b93',155)},
-  // 織物・布 fabric
+  // 織物・布 fabric（クロス）
   {key:'linen',    name:'リネン',         base:'#d7cdbb', draw:fabricDraw('#d7cdbb',166,46)},
-  {key:'fabricgr', name:'ファブリック（灰）', base:'#b8b9bb', draw:fabricDraw('#b8b9bb',177,52)},
-  // タイル tile
+  {key:'fabricbg', name:'織物（ベージュ）', base:'#ddd3c2', draw:fabricDraw('#ddd3c2',168,40)},
+  {key:'fabricgr', name:'織物（グレー）', base:'#b8b9bb', draw:fabricDraw('#b8b9bb',177,52)},
+  // タイル・レンガ tile / brick
   {key:'subway',   name:'サブウェイタイル', base:'#efeee9', draw:tileDraw('#efeee9','#cfcabd',6,12,188)},
+  {key:'mosaic',   name:'モザイクタイル', base:'#cdd6d2', draw:tileDraw('#cdd6d2','#a9b2ad',12,12,191)},
+  {key:'stonetile',name:'石目タイル（大判）', base:'#d6d3cc', draw:stoneTileDraw('#d8d5ce','#b7b2a7',3,3,193)},
+  {key:'brick',    name:'レンガ',         base:'#b06a4f', draw:brickDraw('#b06a4f','#d8cdbb',5,9,196)},
   {key:'terr',     name:'テラコッタ',     base:'#c47a55', draw:tileDraw('#c47a55','#9c5d3e',4,4,199)},
 ];
 function newTile(){ const c=document.createElement('canvas'); c.width=c.height=256; return c; }
@@ -675,7 +682,8 @@ function tileNoise(seed){
   function fbm(x,y,per,oct){ let a=1,f=1,sm=0,nm=0; for(let o=0;o<oct;o++){ sm+=a*vn(x*f,y*f,per*f); nm+=a; a*=0.5; f*=2; } return sm/nm; }
   return {vn,fbm};
 }
-function pxTile(fn,size){ size=size||256; const c=document.createElement('canvas'); c.width=c.height=size; const x=c.getContext('2d');
+let _matSize=512; // current tile render size (512 for applied tiles, small for picker thumbnails)
+function pxTile(fn,size){ size=size||_matSize; const c=document.createElement('canvas'); c.width=c.height=size; const x=c.getContext('2d');
   const img=x.createImageData(size,size), d=img.data;
   for(let py=0;py<size;py++){ const v=py/size; for(let px=0;px<size;px++){ const i=(py*size+px)*4, u=px/size, o=fn(u,v);
     d[i]=clamp(o[0],0,255)|0; d[i+1]=clamp(o[1],0,255)|0; d[i+2]=clamp(o[2],0,255)|0; d[i+3]=255; } }
@@ -683,39 +691,54 @@ function pxTile(fn,size){ size=size||256; const c=document.createElement('canvas
 function mix(a,b,t){ t=t<0?0:t>1?1:t; return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
 
 function plasterDraw(hex,seed,amp){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), A=amp||24;
-  return pxTile((u,v)=>{ const m=(n.fbm(u*8,v*8,8,4)-0.5)*0.9 + (n.fbm(u*32,v*32,16,3)-0.5)*0.35; const l=m*A; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+  return pxTile((u,v)=>{ const m=(n.fbm(u*8,v*8,8,4)-0.5)*0.85 + (n.fbm(u*32,v*32,32,3)-0.5)*0.4 + (n.fbm(u*64,v*64,64,1)-0.5)*0.18; const l=m*A; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
 function concreteDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
-  return pxTile((u,v)=>{ const l=(n.fbm(u*8,v*8,8,4)-0.5)*30 + (n.fbm(u*4,v*4,4,3)-0.5)*14 + (n.vn(u*64,v*64,64)-0.5)*9; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+  return pxTile((u,v)=>{ const l=(n.fbm(u*8,v*8,8,4)-0.5)*30 + (n.fbm(u*4,v*4,4,3)-0.5)*15 + (n.vn(u*64,v*64,64)-0.5)*8; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
 function fabricDraw(hex,seed,threads){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), T=threads||48;
   return pxTile((u,v)=>{ const wu=Math.sin(u*T*6.2831853)*0.5+0.5, wv=Math.sin(v*T*6.2831853)*0.5+0.5;
     const over=((Math.floor(u*T)+Math.floor(v*T))&1)? wu:wv; const slub=(n.fbm(u*8,v*8,8,3)-0.5);
-    const l=(over-0.5)*15 + slub*14; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+    const l=(over-0.5)*14 + slub*13; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
 function woodDraw(light,dark,planks,seed){ return ()=>{ const n=tileNoise(seed), cl=hex2rgb(light), cd=hex2rgb(dark);
   return pxTile((u,v)=>{ const fp=u*planks, pi=Math.floor(fp), pf=fp-pi;
-    const tone=(n.vn(pi+0.5,7.5,planks)-0.5); const ringFreq=10+(pi%3)*2;
-    const warp=(n.fbm(u*8,v*8,8,4)-0.5);
-    let ring=Math.sin((v*ringFreq + warp*3.0)*6.2831853)*0.5+0.5; ring=Math.pow(ring,1.7);
-    const fiber=(n.fbm(u*32,v*16,32,2)-0.5)*0.12;
-    let t=0.45 - tone*0.5 + (ring-0.5)*0.30 + fiber;
-    if(pf<0.012||pf>0.988) t+=0.55;
-    return mix(cl,cd,clamp(t,0,1)*0.9); }); }; }
+    const tone=(n.vn(pi+0.5,7.5,planks)-0.5);
+    const wav=(n.fbm(u*16,v*8,8,3)-0.5)*0.12;                 // grain waviness
+    const lineFreq=12+(pi%4)*4;
+    let line=Math.abs(Math.sin((pf+wav)*lineFreq*Math.PI)); line=Math.pow(1-line,3.0); // dark grain lines
+    const fiber=(n.fbm(u*48,v*16,16,2)-0.5)*0.10;
+    const cross=(n.fbm(u*8,v*24,8,3)-0.5)*0.10;               // cross-grain figure
+    let t=0.4 - tone*0.55 + line*0.34 + fiber + cross;
+    if(pf<0.01||pf>0.99) t+=0.5;                              // plank seam
+    return mix(cl,cd,clamp(t,0,1)*0.92); }); }; }
 function marbleDraw(hex,vein,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), vc=hex2rgb(vein);
-  return pxTile((u,v)=>{ const turb=(n.fbm(u*8,v*8,8,4)-0.5)*2; const s=Math.sin((u*4+v*4+turb*3)*3.14159265);
-    const vein_=Math.pow(1-Math.abs(s),16); const m=(n.fbm(u*4,v*4,4,3)-0.5)*9;
-    return mix([b[0]+m,b[1]+m,b[2]+m], vc, vein_*0.65); }); }; }
+  return pxTile((u,v)=>{ const warp=(n.fbm(u*4,v*4,4,4)-0.5)*1.8;       // broad, gentle warp → flowing veins
+    const s1=Math.sin((u*4+v*6+warp*3)*Math.PI),  v1=Math.pow(1-Math.abs(s1),7);        // main veins (smooth, wavy)
+    const s2=Math.sin((u*8+v*10+warp*3.4)*Math.PI), v2=Math.pow(1-Math.abs(s2),15)*0.45;// secondary fine veins
+    const mott=(n.fbm(u*4,v*4,4,2)-0.5)*6;
+    return mix([b[0]+mott,b[1]+mott,b[2]+mott], vc, clamp(v1*0.7+v2,0,1)); }); }; }
 function graniteDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
   return pxTile((u,v)=>{ const l=(n.vn(u*64,v*64,64)-0.5)*44 + (n.vn(u*32,v*32,32)-0.5)*20 + (n.fbm(u*8,v*8,8,2)-0.5)*8; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
 function stoneDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
   return pxTile((u,v)=>{ const band=(n.fbm(u*8,v*16,8,4)-0.5)*22; const fine=(n.fbm(u*32,v*32,32,2)-0.5)*8;
     const pore=Math.pow(Math.max(0,(n.vn(u*64,v*64,64)-0.62))/0.38,2)*-34; const l=band+fine+pore; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
-function tileDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), gc=hex2rgb(grout), gx=0.05, gy=0.05;
+function tileDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), gc=hex2rgb(grout), gx=0.04, gy=0.04;
+  return pxTile((u,v)=>{ const fu=(u*cols)%1, fv=(v*rows)%1; if(fu<gx||fu>1-gx||fv<gy||fv>1-gy) return mix(gc,[0,0,0],0.0);
+    const eu=Math.min(fu,1-fu)-gx, ev=Math.min(fv,1-fv)-gy, edge=Math.min(eu,ev), bev=clamp(edge*12,0,1);
+    const tint=(n.fbm(u*16,v*16,16,3)-0.5)*8, sh=(bev-0.8)*18; return [b[0]+sh+tint,b[1]+sh+tint,b[2]+sh+tint]; }); }; }
+function brickDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), gc=hex2rgb(grout), gx=0.03, gy=0.085;
+  return pxTile((u,v)=>{ const fr=v*rows, ri=Math.floor(fr), off=(ri&1)*0.5, fu=((u*cols+off)%1+1)%1, fv=fr-ri;
+    if(fu<gx||fu>1-gx||fv<gy||fv>1-gy) return gc;
+    const tone=(n.vn(Math.floor(u*cols+off)+0.5, ri+0.5, 32)-0.5)*26;
+    const tex=(n.fbm(u*16,v*16,16,3)-0.5)*12;
+    return [b[0]+tone+tex,b[1]+tone+tex,b[2]+tone+tex]; }); }; }
+function stoneTileDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), gc=hex2rgb(grout), gx=0.018, gy=0.018;
   return pxTile((u,v)=>{ const fu=(u*cols)%1, fv=(v*rows)%1; if(fu<gx||fu>1-gx||fv<gy||fv>1-gy) return gc;
-    const eu=Math.min(fu,1-fu)-gx, ev=Math.min(fv,1-fv)-gy, edge=Math.min(eu,ev), bev=clamp(edge*10,0,1);
-    const tint=(n.fbm(u*8,v*8,8,3)-0.5)*9, sh=(bev-0.75)*16; return [b[0]+sh+tint,b[1]+sh+tint,b[2]+sh+tint]; }); }; }
+    const band=(n.fbm(u*8,v*16,8,4)-0.5)*18, fine=(n.fbm(u*32,v*32,32,2)-0.5)*8, l=band+fine; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
 function shade(hex,amt){ const [r,g,b]=hex2rgb(hex); return `rgb(${clamp(r+amt*2.55,0,255)|0},${clamp(g+amt*2.55,0,255)|0},${clamp(b+amt*2.55,0,255)|0})`; }
 // cache rendered tiles
-const tileCache={};
-function matTile(key){ if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); const t=m?m.draw():newTile(); tileCache[key]=t; return t; }
+const tileCache={}, thumbCache={};
+function matTile(key){ if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); _matSize=512; const t=m?m.draw():newTile(); tileCache[key]=t; return t; }
+/* small, cheap preview for the material picker (avoids generating all full 512px tiles at load) */
+function matThumb(key){ if(thumbCache[key]) return thumbCache[key]; if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); _matSize=96; const t=m?m.draw():newTile(); _matSize=512; thumbCache[key]=t; return t; }
 
 /* build a W×H relit-texture buffer (Uint8 RGBA) for a material + scale, lit by room luminance */
 function buildMaterialBuffer(key, scalePct){
@@ -1788,7 +1811,7 @@ function buildChips(hostId, onPick){ const host=$(hostId); host.innerHTML=''; PA
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
 function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
   const none=document.createElement('button'); none.className='mat none'; none.dataset.key=''; none.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4l16 16M20 4L4 20"/></svg>なし'; on(none,'click',()=>onPick(null)); host.appendChild(none);
-  MATERIALS.forEach(m=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key; const cv=document.createElement('canvas'); cv.width=64; cv.height=32; cv.getContext('2d').drawImage(matTile(m.key),0,0,64,32); b.appendChild(cv); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=m.name; b.appendChild(nm); on(b,'click',()=>onPick(m.key)); host.appendChild(b); });
+  MATERIALS.forEach(m=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key; const cv=document.createElement('canvas'); cv.width=64; cv.height=32; cv.getContext('2d').drawImage(matThumb(m.key),0,0,64,32); b.appendChild(cv); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=m.name; b.appendChild(nm); on(b,'click',()=>onPick(m.key)); host.appendChild(b); });
   if(includeUpload){ const up=document.createElement('button'); up.className='mat none'; up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>追加'; on(up,'click',()=>$('fileMat').click()); host.appendChild(up); }
 }
 function markMats(hostId,key){ document.querySelectorAll('#'+hostId+' .mat').forEach(m=>m.classList.toggle('on',(m.dataset.key||'')===(key||''))); }
