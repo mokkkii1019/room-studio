@@ -165,9 +165,10 @@ def _load_dotenv():
 
 
 _load_dotenv()
-RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APP_ID", "").strip()
+RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APP_ID", "").strip()          # アプリケーションID（UUID）
+RAKUTEN_ACCESS_KEY = os.environ.get("RAKUTEN_ACCESS_KEY", "").strip()  # アクセスキー（新仕様で必須）
 RAKUTEN_AFFILIATE_ID = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
-RAKUTEN_ENDPOINT = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+RAKUTEN_ENDPOINT = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
 INTERIOR_GENRE = "100804"  # インテリア・寝具・収納（人物/風景の混入が少ない商品写真）
 
 # 種類キー -> (検索キーワード, ジャンルID or None)。フロントの選択肢と一致させる。
@@ -253,12 +254,12 @@ def collect(type: str, taste: str = "", count: int = 50, source: str = "ikea", s
 
 
 def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
-    """（将来用）楽天市場 商品検索API。RAKUTEN_APP_ID が必要。"""
-    if not RAKUTEN_APP_ID:
+    """楽天市場 商品検索API（新仕様）。applicationId(UUID) と accessKey が必要。"""
+    if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY:
         raise HTTPException(
             status_code=503,
-            detail="RAKUTEN_APP_ID 未設定。https://webservice.rakuten.co.jp/ で無料のアプリIDを取得し、"
-                   "環境変数 RAKUTEN_APP_ID に設定して server.py を再起動してください。",
+            detail="RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY が必要です。https://webservice.rakuten.co.jp/ の"
+                   "アプリ一覧で「アプリケーションID」と「アクセスキー」を確認し、.env に両方設定して再起動してください。",
         )
     kw, genre = TYPE_QUERY.get(type_, (type_, None))
     keyword = (taste.strip() + " " + kw).strip()
@@ -267,7 +268,7 @@ def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
         if page > 1:
             time.sleep(1.0)  # スロットル: API呼び出しを 1 QPS 以下に保つ（楽天の推奨/規約 第7条3項）
         params = {
-            "applicationId": RAKUTEN_APP_ID, "keyword": keyword,
+            "applicationId": RAKUTEN_APP_ID, "accessKey": RAKUTEN_ACCESS_KEY, "keyword": keyword,
             "hits": 30, "page": page, "imageFlag": 1, "format": "json", "sort": "standard",
         }
         if genre and not shop.strip():
