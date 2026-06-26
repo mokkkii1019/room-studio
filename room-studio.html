@@ -138,8 +138,11 @@
 
   /* material tiles */
   .mats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
-  .mat{cursor:pointer; border-radius:8px; overflow:hidden; border:1px solid var(--line); background:#fff}
+  .mat{position:relative; cursor:pointer; border-radius:8px; overflow:hidden; border:1px solid var(--line); background:#fff}
   .mat.on{outline:2px solid var(--accent); outline-offset:2px}
+  .mat .del{position:absolute; top:2px; right:2px; width:16px; height:16px; border:0; border-radius:4px; background:rgba(0,0,0,.5); color:#fff; font-size:12px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
+  .mat:hover .del{display:flex}
+  .matgroup{grid-column:1/-1; font-size:10px; color:var(--muted); font-weight:700; letter-spacing:.06em; padding:8px 2px 1px; border-top:1px solid var(--line-2); margin-top:4px}
   .mat canvas{display:block; width:100%; height:46px; object-fit:cover}
   .mat .nm{display:block; font-size:10px; text-align:center; padding:3px 2px; color:var(--muted)}
   .mat.none{display:flex; align-items:center; justify-content:center; height:69px; color:var(--muted); font-size:11px; flex-direction:column; gap:4px}
@@ -514,6 +517,10 @@
           <div class="section">
             <span class="label">素材</span>
             <div class="mats" id="fMatGrid"></div>
+            <button class="btn" id="fExtractMat" style="width:100%;justify-content:center;margin-top:8px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
+              画像から素材を抽出
+            </button>
             <div class="slider"><label>強さ</label><input type="range" id="fMatStrength" min="0" max="100" value="80"><span class="val" id="fMatStrengthV">80%</span></div>
           </div>
           <button class="btn ghost-warn" id="fDelete" style="width:100%;justify-content:center">この家具を削除</button>
@@ -768,6 +775,9 @@ function addExtractedMaterial(srcCanvas, name){ const tile=makeSeamless(srcCanva
   const src=tile.toDataURL('image/png');
   MATERIALS.push({ key, name:(name||'取込素材').slice(0,16), base:avgHex(tile), draw:()=>tile, user:true, src });
   tileCache[key]=tile; refreshMatGrids(); saveUserMatsLocal(); return key; }
+function deleteUserMaterial(key){ const i=MATERIALS.findIndex(m=>m.key===key); if(i<0) return; MATERIALS.splice(i,1); delete tileCache[key]; delete thumbCache[key];
+  State.layers.forEach(l=>{ if(l.material===key){ l.material=null; l.dirty=true; l._matBufKey=null; if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); } });
+  saveUserMatsLocal(); refreshMatGrids(); renderLayers(); render(); toast('抽出素材を削除しました'); }
 
 /* build a W×H relit-texture buffer (Uint8 RGBA) for a material + scale, lit by room luminance */
 function buildMaterialBuffer(key, scalePct){
@@ -1839,8 +1849,16 @@ const PALETTE=[
 function buildChips(hostId, onPick){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); }); }
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
 function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
+  const mkBtn=(m)=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key;
+    const cv=document.createElement('canvas'); cv.width=64; cv.height=32; cv.getContext('2d').drawImage(matThumb(m.key),0,0,64,32); b.appendChild(cv);
+    const nm=document.createElement('span'); nm.className='nm'; nm.textContent=m.name; b.appendChild(nm);
+    on(b,'click',()=>onPick(m.key));
+    if(m.user){ const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='抽出素材を削除'; on(del,'click',ev=>{ ev.stopPropagation(); if(confirm('この抽出素材を削除しますか？')) deleteUserMaterial(m.key); }); b.appendChild(del); }
+    return b; };
   const none=document.createElement('button'); none.className='mat none'; none.dataset.key=''; none.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4l16 16M20 4L4 20"/></svg>なし'; on(none,'click',()=>onPick(null)); host.appendChild(none);
-  MATERIALS.forEach(m=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key; const cv=document.createElement('canvas'); cv.width=64; cv.height=32; cv.getContext('2d').drawImage(matThumb(m.key),0,0,64,32); b.appendChild(cv); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=m.name; b.appendChild(nm); on(b,'click',()=>onPick(m.key)); host.appendChild(b); });
+  MATERIALS.filter(m=>!m.user).forEach(m=> host.appendChild(mkBtn(m)) );
+  const users=MATERIALS.filter(m=>m.user);
+  if(users.length){ const hd=document.createElement('div'); hd.className='matgroup'; hd.textContent='抽出素材'; host.appendChild(hd); users.forEach(m=> host.appendChild(mkBtn(m)) ); }
   if(includeUpload){ const up=document.createElement('button'); up.className='mat none'; up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>追加'; on(up,'click',()=>$('fileMat').click()); host.appendChild(up); }
 }
 function markMats(hostId,key){ document.querySelectorAll('#'+hostId+' .mat').forEach(m=>m.classList.toggle('on',(m.dataset.key||'')===(key||''))); }
@@ -2079,10 +2097,13 @@ buildMats('fMatGrid', pickFurnMat, false);
 on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fMatStrength'); f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fDelete'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
 on($('extractMat'),'click',()=>$('fileMat').click());
+on($('fExtractMat'),'click',()=>$('fileMat').click());
 on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; busy(true,'画像から素材を抽出中…');
   loadImageFile(file,c=>{ try{ const name=file.name.replace(/\.[^.]+$/,''); const key=addExtractedMaterial(c, name);
-      const a=activeSurface(); if(a){ pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('画像から素材を抽出して適用しました'); }
-      else { toast('素材を抽出しました（表面を選択して適用）'); }
+      const f=selectedFurniture();
+      if(State.mode==='furniture' && f){ pushHistory(); f.material=key; markMats('fMatGrid',key); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); toast('画像から素材を抽出して家具に適用しました'); }
+      else { const a=activeSurface(); if(a){ pushHistory(); a.material=key; markMats('matGrid',key); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('画像から素材を抽出して適用しました'); }
+        else { toast('素材を抽出しました（表面か家具を選択して適用）'); } }
     }catch(err){ console.error('extract material failed:',err); toast('素材の抽出に失敗しました'); } finally{ busy(false); } });
   e.target.value=''; });
 
