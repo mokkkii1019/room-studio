@@ -758,9 +758,16 @@ function makeSeamless(src, S){ S=S||512;
   }}
   oc.putImageData(img,0,0); return out; }
 function avgHex(canvas){ const c=document.createElement('canvas'); c.width=c.height=1; const x=c.getContext('2d'); x.drawImage(canvas,0,0,1,1); const p=x.getImageData(0,0,1,1).data; return '#'+[p[0],p[1],p[2]].map(v=>('0'+v.toString(16)).slice(-2)).join(''); }
+const USERMAT_LS='roomstudio_usermats';
+function serializeUserMats(){ return MATERIALS.filter(m=>m.user).map(m=>({key:m.key,name:m.name,base:m.base,src:m.src})); }
+function saveUserMatsLocal(){ try{ localStorage.setItem(USERMAT_LS, JSON.stringify(serializeUserMats())); }catch(e){ console.warn('user material persist failed (localStorage quota?)',e); } }
+function registerUserMaterial(o){ return new Promise(res=>{ if(!o||!o.key||!o.src){ res(); return; } if(MATERIALS.some(m=>m.key===o.key)){ res(); return; }
+  loadDataURL(o.src).then(cv=>{ MATERIALS.push({key:o.key,name:o.name||'取込素材',base:o.base||avgHex(cv),draw:()=>cv,user:true,src:o.src}); tileCache[o.key]=cv; res(); }).catch(()=>res()); }); }
+async function loadUserMatsLocal(){ let arr; try{ arr=JSON.parse(localStorage.getItem(USERMAT_LS)||'[]'); }catch(e){ arr=[]; } if(!arr||!arr.length) return; for(const o of arr) await registerUserMaterial(o); refreshMatGrids(); }
 function addExtractedMaterial(srcCanvas, name){ const tile=makeSeamless(srcCanvas,512); const key='user_'+Date.now()+'_'+((Math.abs((tile.width*31+ (name||'').length*7))|0)%9973);
-  MATERIALS.push({ key, name:(name||'取込素材').slice(0,16), base:avgHex(tile), draw:()=>tile, user:true });
-  tileCache[key]=tile; refreshMatGrids(); return key; }
+  const src=tile.toDataURL('image/png');
+  MATERIALS.push({ key, name:(name||'取込素材').slice(0,16), base:avgHex(tile), draw:()=>tile, user:true, src });
+  tileCache[key]=tile; refreshMatGrids(); saveUserMatsLocal(); return key; }
 
 /* build a W×H relit-texture buffer (Uint8 RGBA) for a material + scale, lit by room luminance */
 function buildMaterialBuffer(key, scalePct){
@@ -1871,6 +1878,7 @@ function saveProject(){
   const origCv=document.createElement('canvas'); origCv.width=State.W; origCv.height=State.H; origCv.getContext('2d').putImageData(State.roomOriginal,0,0);
   const proj={
     app:'room-studio', version:1, W:State.W, H:State.H, selectedId:State.selectedId, nextId:State.nextId,
+    userMaterials:serializeUserMats(),
     roomOriginal:canvasToPNG(origCv), room:canvasToPNG(State.roomCanvas),
     layers:State.layers.map(l=> l.type==='surface' ? {
       type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
@@ -1899,6 +1907,7 @@ async function loadProject(obj){
     if(obj.roomOriginal){ const oc=await loadDataURL(obj.roomOriginal);
       State.roomOriginal=oc.getContext('2d').getImageData(0,0,oc.width,oc.height); State.compare.before=oc; }
     State.nextId=obj.nextId||State.nextId;
+    if(obj.userMaterials){ for(const o of obj.userMaterials) await registerUserMaterial(o); refreshMatGrids(); } // restore custom materials first so layer.material keys resolve
     const layers=[];
     for(const d of (obj.layers||[])){
       if(d.type==='surface'){
@@ -2089,6 +2098,7 @@ on($('runErase'),'click',()=>{ busy(true, SERVER.available?'AIで補完してい
 // init
 setMode('surface');
 probeServer();
+loadUserMatsLocal(); // restore extracted materials from previous sessions
 </script>
 </body>
 </html>
