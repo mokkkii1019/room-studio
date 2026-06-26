@@ -164,6 +164,7 @@ TYPE_QUERY = {
     "art": ("アートポスター 絵画 ウォールアート", INTERIOR_GENRE),
     "floor_lamp": ("フロアランプ スタンドライト", INTERIOR_GENRE),
     "mirror": ("鏡 ミラー", INTERIOR_GENRE),
+    "shelf": ("シェルフ 棚 オープンシェルフ ラック", INTERIOR_GENRE),
 }
 
 
@@ -174,8 +175,8 @@ IKEA_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RoomStudio/1.0 (personal ro
 IKEA_TYPE_KW = {
     "chair": "チェア", "dining_table": "ダイニングテーブル", "sofa": "ソファ", "bed": "ベッド",
     "coffee_table": "コーヒーテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
-    "carpet": "ラグ", "plant": "観葉植物", "chest": "チェスト チェストボード", "art": "アート ポスター",
-    "floor_lamp": "フロアランプ", "mirror": "ミラー 鏡",
+    "carpet": "ラグ カーペット", "plant": "観葉植物", "chest": "チェスト チェストボード", "art": "アート ポスター",
+    "floor_lamp": "フロアランプ", "mirror": "ミラー 鏡", "shelf": "シェルフ 棚",
 }
 
 
