@@ -141,9 +141,30 @@ def inpaint(req: InpaintReq):
 
 
 # ---- ネットから家具画像を収集（楽天市場 商品検索API：家具店の商品写真） ----
-# 無料の楽天アプリIDが必要: https://webservice.rakuten.co.jp/  → 環境変数で設定
-#   set RAKUTEN_APP_ID=xxxxx         （必須）
-#   set RAKUTEN_AFFILIATE_ID=xxxxx   （任意・設定すると購入リンクがアフィリエイトURLになる）
+# 設定方法は2通り（どちらでも可）:
+#   1) このフォルダの .env ファイルに記載（.env.example をコピーして作成）
+#   2) OSの環境変数に設定
+# 無料の楽天アプリID取得: https://webservice.rakuten.co.jp/
+def _load_dotenv():
+    """server.py と同じフォルダの .env を読み、未設定の環境変数だけ補完する（KEY=VALUE 形式）。"""
+    path = os.path.join(APP_DIR, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip(); v = v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except Exception as e:  # noqa: BLE001
+        print(".env の読み込みに失敗:", e)
+
+
+_load_dotenv()
 RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APP_ID", "").strip()
 RAKUTEN_AFFILIATE_ID = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
 RAKUTEN_ENDPOINT = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"

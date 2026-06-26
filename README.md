@@ -48,7 +48,7 @@ python server.py
 2. フォルダ内の **`setup.bat` をダブルクリック**（初回のみ。CPU版PyTorch等を入れる。数分）。
 3. **`run.bat` をダブルクリック** → ブラウザで `http://127.0.0.1:7865` が開く。
    - 家具のネット収集（IKEA）は**APIキー不要**でそのまま使えます。
-   - 楽天で収集/アフィリエイトを使う場合のみ、`run.bat` の前に環境変数 `RAKUTEN_APP_ID` を設定。
+   - 楽天/ART OF BLACK で収集する場合のみ、`RAKUTEN_APP_ID` を設定（**`.env.example` を `.env` にコピーして記入**するのが簡単。OS環境変数でも可）。
 
 ### Mac / Linux
 `.bat` は Windows専用です。Mac/Linux はターミナルで `.sh` を使います。フォルダで**ターミナルを開き**:
