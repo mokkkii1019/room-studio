@@ -150,6 +150,7 @@ python server.py   # → http://127.0.0.1:7865
 | PatchMatch | `patchMatchRegion`(async)→`runPatchMatchWorker`(Web Worker)→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`）。ワーカー組立は`getPMWorker` |
 | レイヤー並べ替え | `moveLayer`(前面/背面ボタン), `reorderLayer`(リストをドラッグ&ドロップで並べ替え) |
 | 表示ズーム | 右下の −／％／＋（`setZoom`/`applyZoom`）、Ctrl/⌘+ホイールで拡大縮小、はみ出し分はスクロールでパン。ポインタ座標は表示倍率に追従 |
+| モバイル対応 | レスポンシブ（≤880pxで縦積み、≤600pxでヘッダーを1行横スクロール＋タッチ最適化）。キャンバスは**2本指ピンチで拡大縮小＋パン**（`pointers`/`pinch`）。1本指は描画/選択 |
 | 選択/解除 | ツール未選択でアイテムをクリック→選択、アイテム外をクリック→選択解除（`deselectAll`） |
 | ヘルプ表示 | 各機能ラベルの ⓘ（`.info[data-tip]`）にマウスオーバー→説明をツールチップ表示（`showTip`、body直下描画でパネルにクリップされない）。常時表示の説明文は廃止 |
 | チュートリアル | ヘッダー「使い方」or 初回自動起動。スポットライト＋コーチマークで 4ステップ案内：①画像を開く→②消しゴム→③表面→④家具（`TUT_STEPS`/`tutStart`、画像読込で①→②自動進行、各ステップでタブ切替）。完了/スキップは `localStorage` 記録 |

@@ -229,9 +229,26 @@
   @keyframes sp{to{transform:rotate(360deg)}}
 
   @media (max-width:880px){
-    main{grid-template-columns:1fr; grid-template-rows:minmax(280px,52vh) 1fr}
+    main{grid-template-columns:1fr; grid-template-rows:minmax(260px,48vh) 1fr}
     .panel{border-left:0; border-top:1px solid var(--line)}
     .layers{max-height:none}
+  }
+  /* phones */
+  @media (max-width:600px){
+    header{gap:8px; padding:8px 10px}
+    .brand{margin-right:0; flex:0 0 auto}
+    .brand .tag{display:none}
+    .brand .mark{font-size:15px}
+    .h-actions{flex:1 1 0; min-width:0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none}
+    .h-actions::-webkit-scrollbar{display:none}
+    .btn{flex:0 0 auto; padding:7px 10px; white-space:nowrap}
+    main{grid-template-rows:minmax(200px,42vh) 1fr}
+    .canvas-viewport{padding:12px}
+    .scroll{padding:12px}
+    .zoom-ctl{right:10px; bottom:10px}
+    .seg button{padding:8px 4px}
+    .tab{font-size:12px; padding:9px 4px 11px}
+    .tut-box{width:auto; left:12px!important; right:12px!important; max-width:none}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
 </style>
@@ -1616,7 +1633,14 @@ function stampPreview(canvas, cx, cy, r, color){ const x=canvas.getContext('2d')
    ========================================================================= */
 let drag=null;
 function canvasPos(e){ const rect=overlay.getBoundingClientRect(); const sx=State.W/rect.width, sy=State.H/rect.height; const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left, cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top; return {x:cx*sx, y:cy*sy}; }
+// ---- multi-touch: 2本指でピンチ拡大縮小＋パン（モバイル） ----
+const pointers=new Map(); let pinch=null;
+function pinchMid(){ const ps=[...pointers.values()]; return {x:(ps[0].x+ps[1].x)/2, y:(ps[0].y+ps[1].y)/2, d:Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y)}; }
+function startPinch(){ const m=pinchMid(); pinch={d0:m.d||1, z0:State.view.zoom}; }
+function doPinch(){ const m=pinchMid(); if(!pinch) startPinch(); setZoom(pinch.z0*(m.d/pinch.d0), m.x, m.y); }
 on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.pointerId); const p=canvasPos(e); lastMouse=p;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size>=2){ drag=null; startPinch(); renderOverlay(); return; } // 2本指→ピンチ（描画はキャンセル）
   if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
   if(State.mode==='surface'){
     // 選択ツール未選択（既定）→ クリックでカーソル下のアイテムを選んで編集状態にする
@@ -1659,6 +1683,8 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   }
 });
 on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMouse=p;
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size>=2){ doPinch(); return; } // ピンチ中は描画しない
   if(drag){ if(drag.type==='compare'){ State.compare.split=clamp(p.x/State.W,0,1); renderOverlay(); }
     else if(drag.type==='quad'){ const a=drag.layer; a.quad[drag.idx]=[clamp(p.x,0,State.W),clamp(p.y,0,State.H)]; a.dirty=true; rebuildSurface(a); render(); }
     else if(drag.type==='kcorner'){ const l=drag.layer; const loc=furnitureOuterInv(l,p.x,p.y); l.corners[drag.idx]=[loc[0],loc[1]]; l._warpKey=null; render(); }
@@ -1672,6 +1698,7 @@ on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMou
   } else { renderOverlay(); }
 });
 function endDrag(e){
+  if(e && e.pointerId!=null){ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; }
   if(drag && drag.type==='sampend'){ const d=drag; drag=null; handleSamClick({x:d.sx,y:d.sy}, d.label); return; } // tap (no drag) → AI click
   if(drag && (drag.type==='paint'||drag.type==='erasemask')){ const a=activeSurface(); if(a){ a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); } }
   if(drag && (drag.type==='erasepaint'||drag.type==='erasesub')){ updateRunErase(); }
