@@ -17,6 +17,13 @@ echo "[2/3] 必要パッケージ..."
 python -m pip install fastapi "uvicorn[standard]" pillow numpy opencv-python fire
 echo "[3/3] LaMa (simple-lama-inpainting) を依存なしで..."
 python -m pip install --no-deps simple-lama-inpainting
+
+# 楽天収集（ART OF BLACK 等）用の設定ファイルを用意。.env が無ければ雛形をコピー。
+if [ ! -f .env ] && [ -f .env.example ]; then
+  cp .env.example .env
+  echo "[i] .env を作成しました。ART OF BLACK 等の楽天収集を使う場合は .env を編集して RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY を記入してください（IKEA収集は設定不要）。"
+fi
+
 echo "=== インストール確認 ==="
 python -c "import fastapi,uvicorn,PIL,numpy,cv2,torch,simple_lama_inpainting; print('[OK] すべて読み込めました。次は:  bash run.sh')" \
   || echo "[NG] 依存の読み込みに失敗しました。上のエラーを確認してください。"

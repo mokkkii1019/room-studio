@@ -19,6 +19,8 @@ echo.
 echo [3/3] LaMa (simple-lama-inpainting) を依存なしで入れます（numpyの不要な再ビルドを回避）...
 python -m pip install --disable-pip-version-check --no-deps simple-lama-inpainting
 echo.
+if not exist .env if exist .env.example ( copy .env.example .env >nul & echo [i] .env を作成しました。ART OF BLACK 等の楽天収集を使う場合は .env を編集して RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY を記入してください。 )
+echo.
 echo === インストール確認 ===
 python -c "import fastapi,uvicorn,PIL,numpy,cv2,torch,simple_lama_inpainting; print('[OK] すべての依存を読み込めました。run.bat で起動できます。')"
 if errorlevel 1 (
