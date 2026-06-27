@@ -117,6 +117,13 @@
 
   .section{margin-bottom:18px}
   .section > .label{display:block; margin-bottom:9px}
+  /* info mark + hover tooltip (replaces inline help text) */
+  .info{display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; margin-left:6px;
+    border-radius:50%; border:1px solid var(--line); color:var(--muted); font-size:9px; font-weight:700; font-style:normal;
+    text-transform:none; letter-spacing:0; cursor:help; vertical-align:middle; user-select:none}
+  .info:hover{color:var(--accent); border-color:var(--accent)}
+  .tip{position:fixed; display:none; background:#23262a; color:#fff; padding:8px 10px; border-radius:8px;
+    font-size:11.5px; font-weight:400; line-height:1.55; max-width:262px; box-shadow:var(--shadow); z-index:1000; pointer-events:none}
   .hint{font-size:11.5px; color:var(--muted); margin:0 0 10px}
 
   .row{display:flex; align-items:center; gap:9px; margin-bottom:10px}
@@ -341,11 +348,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
           表面を追加（壁・床・天井など）
         </button>
-        <p class="hint" style="margin-top:10px">壁は<b>一面ごとに「表面を追加」</b>し、その面だけを選択して色や素材を変えると、面ごとに塗り分けられます。範囲指定は<b>面選択</b>（四隅クリック）、自動選択（角で止める）、ブラシ、AI選択から選べます。質感や陰影は保ったまま色だけ変わります。</p>
-
         <div id="surfaceControls" style="display:none">
           <div class="section">
-            <span class="label">選択ツール</span>
+            <span class="label">選択ツール<span class="info" data-tip="壁は一面ごとに「表面を追加」し、その面だけを選択して色・素材を変えると面ごとに塗り分けられます。範囲指定は 面選択(四隅クリック)/自動選択(角で止める)/ブラシ/AI選択 から。質感や陰影は保ったまま色だけ変わります。">i</span></span>
             <div class="seg" id="surfTools">
               <button data-tool="brush">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>ブラシ
@@ -367,7 +372,7 @@
             <div class="slider" id="wandTolRow" style="display:none"><label>色の許容</label><input type="range" id="wandTol" min="6" max="90" value="34"><span class="val" id="wandTolV">34</span></div>
             <label class="toggle" id="wandEdgeRow" style="display:none"><input type="checkbox" id="wandEdge" checked><span class="sw"></span>壁/床の角（境界）で止める</label>
             <div id="polyBox" style="display:none">
-              <p class="hint" style="margin:0 0 8px">壁や床の<b>四隅を順にクリック</b>すると直線で囲み、その一面だけを選択します。<b>ダブルクリック</b>か「面を確定」で確定（Backspaceで1つ戻る）。一面ずつ色・素材を塗り分けられます。</p>
+              <div class="label" style="margin:0 0 6px">面選択<span class="info" data-tip="壁や床の四隅を順にクリックすると直線で囲み、その一面だけを選択します。ダブルクリックか「面を確定」で確定（Backspaceで1つ戻る）。一面ずつ色・素材を塗り分けられます。">i</span></div>
               <div class="row" style="margin-top:0">
                 <button class="btn primary" id="polyClose" style="flex:1;justify-content:center">面を確定</button>
                 <button class="btn" id="polyReset" style="flex:1;justify-content:center">やり直す</button>
@@ -375,7 +380,7 @@
             </div>
             <div id="samBox" style="display:none">
               <div class="engine" id="samStatus">物体をクリックすると AI が範囲を推定します（初回はモデル読み込みに少し時間がかかります）</div>
-              <p class="hint" style="margin:0 0 8px">壁・床・家具などを<b>クリック</b>すると自動で範囲を選択。追加クリックで精度向上、<b>Alt/右クリック</b>で除外。良ければ「選択に追加」。</p>
+              <div class="label" style="margin:0 0 6px">AI選択<span class="info" data-tip="壁・床・家具などをクリックすると自動で範囲を選択。追加クリックで精度向上、Alt/右クリックで除外。良ければ「選択に追加」。">i</span></div>
               <div class="row" style="margin-top:0">
                 <button class="btn primary" id="samCommit" style="flex:1;justify-content:center">選択に追加</button>
                 <button class="btn" id="samReset" style="flex:1;justify-content:center">やり直す</button>
@@ -413,9 +418,8 @@
             <input type="file" id="fileMat" accept="image/*" hidden>
             <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="100"><span class="val" id="matStrengthV">100%</span></div>
             <div class="slider"><label>柄の大きさ</label><input type="range" id="matScale" min="40" max="220" value="100"><span class="val" id="matScaleV">100%</span></div>
-            <label class="toggle"><input type="checkbox" id="matPersp"><span class="sw"></span>遠近に合わせる（床/壁）</label>
+            <label class="toggle"><input type="checkbox" id="matPersp"><span class="sw"></span>遠近に合わせる（床/壁）<span class="info" data-tip="ステージ上の4つの角を床（または壁）の四隅にドラッグして合わせると、柄がパースに沿って投影されます。">i</span></label>
             <div id="matPerspBox" style="display:none">
-              <p class="hint" style="margin:0 0 6px">ステージ上の<b>4つの角</b>を、床（または壁）の四隅にドラッグして合わせると、柄がパースに沿って投影されます。</p>
               <button class="btn" id="matPerspReset" style="width:100%;justify-content:center">四隅を選択範囲に合わせる</button>
             </div>
           </div>
@@ -431,7 +435,7 @@
         <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
 
         <div class="section" id="collectSection" style="margin-top:12px">
-          <span class="label">家具店から収集</span>
+          <span class="label">家具店から収集<span class="info" data-tip="server.py 起動が必要。IKEAはキー不要。ART OF BLACK は楽天店から取得するため RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY（無料・webservice.rakuten.co.jp）の設定が必要。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。">i</span></span>
           <select class="field" id="collectSource" title="収集元の家具店を選択">
             <option value="ikea" selected>IKEA（キー不要）</option>
             <option value="artofblack">ART OF BLACK（楽天キー必要）</option>
@@ -465,12 +469,10 @@
             家具店から収集
           </button>
           <div class="engine" id="collectStatus" style="display:none"></div>
-          <p class="hint" style="margin:6px 0 0">server.py 起動が必要。<b>IKEA</b>はキー不要。<b>ART OF BLACK</b>は楽天店から取得するため <code>RAKUTEN_APP_ID</code> と <code>RAKUTEN_ACCESS_KEY</code>（無料・webservice.rakuten.co.jp）の設定が必要。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。</p>
         </div>
 
         <div class="section" id="furniLibSection" style="margin-top:12px">
-          <span class="label">家具ライブラリ</span>
-          <p class="hint" style="margin:6px 0">画像を<b>ここやステージにドラッグ＆ドロップ</b>／「画像を追加」／上の「ネットから収集」で登録。サムネを<b>クリックで部屋に配置</b>／<b>ステージへドラッグ</b>でその位置に配置。「リストを保存」で一覧をファイル化できます。</p>
+          <span class="label">家具ライブラリ<span class="info" data-tip="画像をここやステージにドラッグ＆ドロップ／「画像を追加」／「家具店から収集」で登録。サムネをクリックで部屋に配置／ステージへドラッグでその位置に配置。「リストを保存」で一覧をファイル化できます。">i</span></span>
           <div class="row" id="libFilterRow" style="display:none; margin:6px 0 0; align-items:center">
             <label style="font-size:11.5px;color:var(--muted);min-width:auto">表示</label>
             <select class="field" id="libFilter" style="margin:0;flex:1"></select>
@@ -488,7 +490,7 @@
 
         <div id="furnitureControls" style="display:none">
           <div class="section">
-            <span class="label">切り抜き</span>
+            <span class="label">切り抜き<span class="info" data-tip="複雑な背景の写真でもきれいに抜けます。初回のみモデルのダウンロード（数十MB・ネット接続が必要）が走ります。画像は端末内で処理されます。">i</span></span>
             <label class="toggle"><input type="checkbox" id="fBgRemove"><span class="sw"></span>背景を自動で消す（白・単色向け）</label>
             <div class="slider" id="fBgTolRow" style="display:none"><label>許容</label><input type="range" id="fBgTol" min="6" max="80" value="30"><span class="val" id="fBgTolV">30</span></div>
             <button class="btn" id="fAiCut" style="width:100%;justify-content:center;margin-top:8px">
@@ -496,16 +498,14 @@
               AIで背景を切り抜く（任意背景・高品質）
             </button>
             <button class="btn ghost-warn" id="fAiCutClear" style="width:100%;justify-content:center;margin-top:6px;display:none">AI切り抜きを解除</button>
-            <p class="hint" style="margin:6px 0 0">複雑な背景の写真でもきれいに抜けます。初回のみモデルのダウンロード（数十MB・ネット接続が必要）が走ります。画像は端末内で処理されます。</p>
           </div>
           <div class="section">
             <span class="label">配置</span>
             <div class="slider"><label>大きさ</label><input type="range" id="fScale" min="10" max="300" value="100"><span class="val" id="fScaleV">100%</span></div>
             <div class="slider"><label>回転</label><input type="range" id="fRot" min="-180" max="180" value="0"><span class="val" id="fRotV">0°</span></div>
             <div class="slider"><label title="垂直軸まわりに回転して向きを変える">Z軸回転</label><input type="range" id="fYaw" min="-180" max="180" value="0"><span class="val" id="fYawV">0°</span></div>
-            <label class="toggle"><input type="checkbox" id="fKeystone"><span class="sw"></span>台形補正（四隅を自由に変形）</label>
+            <label class="toggle"><input type="checkbox" id="fKeystone"><span class="sw"></span>台形補正（四隅を自由に変形）<span class="info" data-tip="ステージ上の家具の四隅ハンドルをドラッグして台形に変形できます（床・ラグや斜めの壁に合わせる）。移動・拡大・回転も可能。">i</span></label>
             <div id="fKeystoneBox" style="display:none">
-              <p class="hint" style="margin:0 0 6px">ステージ上の家具の<b>四隅ハンドルをドラッグ</b>して台形に変形できます（床・ラグや斜めの壁に合わせる）。移動・拡大・回転は引き続き可能。</p>
               <button class="btn" id="fKeystoneReset" style="width:100%;justify-content:center">四隅をリセット（長方形に戻す）</button>
             </div>
             <div class="slider"><label>不透明度</label><input type="range" id="fOpacity" min="20" max="100" value="100"><span class="val" id="fOpacityV">100%</span></div>
@@ -552,9 +552,8 @@
       <!-- ===== ERASE PANEL ===== -->
       <div id="panelErase" style="display:none">
         <div class="engine" id="eraseEngine">○ ブラウザ内補完（PatchMatch）で動作中 — サーバー未接続</div>
-        <p class="hint">消したいもの（散らかった小物・コンセント・壁の写真など）を<b>赤ブラシ</b>か<b>AI選択</b>で指定し、「この範囲を消す」を押すと周囲から自然に埋め直します。<b>AI選択</b>はクリックで物体を自動選択・ドラッグで赤ブラシ補完。<b>LaMaサーバー起動時</b>はPhotoshopの「コンテンツに応じた塗りつぶし」相当の品質、未起動でもブラウザ内補完で動きます。</p>
         <div class="section erase-scope">
-          <span class="label">選択方法</span>
+          <span class="label">選択方法<span class="info" data-tip="消したいもの（小物・コンセント・壁の写真など）を赤ブラシかAI選択で指定し「この範囲を消す」を押すと周囲から自然に埋め直します。AI選択はクリックで自動選択・ドラッグで赤ブラシ補完。LaMaサーバー起動時は高品質、未起動でもブラウザ内補完で動作。仕上がりが甘い時は範囲を少し広めに塗り直すと改善します。">i</span></span>
           <div class="seg warn" id="eraseTools">
             <button data-etool="brush" class="on">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>ブラシ
@@ -569,7 +568,7 @@
           <div class="slider" id="eraseBrushRow"><label>ブラシ径</label><input type="range" id="eraseSize" min="8" max="160" value="60"><span class="val" id="eraseSizeV">60</span></div>
           <div id="eraseSamBox" style="display:none">
             <div class="engine" id="eraseSamStatus">消したい物をクリックすると AI が範囲を推定します（初回はモデル読み込みに少し時間がかかります）</div>
-            <p class="hint" style="margin:0 0 8px">消したい物を<b>クリック</b>でAI選択（Alt/右クリックでその点を除外）。<b>ドラッグで足す</b>／<b>Alt（右）ドラッグで削る</b>＝AIの過不足を手で補正できます。良ければ「消す範囲に追加」。広く取りすぎた所は「削る」ツールでも消せます。</p>
+            <div class="label" style="margin:0 0 6px">AI選択<span class="info" data-tip="消したい物をクリックでAI選択（Alt/右クリックで除外）。ドラッグで足す／Alt（右）ドラッグで削る＝AIの過不足を手で補正。良ければ「消す範囲に追加」。広く取りすぎた所は「削る」ツールでも消せます。">i</span></div>
             <div class="row" style="margin-top:0">
               <button class="btn" id="eraseSamAdd" style="flex:1;justify-content:center">消す範囲に追加</button>
               <button class="btn" id="eraseSamResetBtn" style="flex:1;justify-content:center">やり直す</button>
@@ -584,7 +583,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7M3 21h18"/></svg>
           この範囲を消す
         </button>
-        <p class="hint" style="margin-top:12px">仕上がりが甘い時は、範囲を少し広めに塗り直すと改善します。大きな物・複雑な柄ほどLaMaサーバーが有利です。</p>
       </div>
     </div>
 
@@ -2213,6 +2211,18 @@ on($('eraseSize'),'input',e=>{ $('eraseSizeV').textContent=e.target.value; rende
 on($('eraseClear'),'click',()=>{ State.eraseMask=newMask(); erasePreviewClear(); samResetPoints(); $('runErase').disabled=true; render(); });
 on($('eraseRecheck'),'click',async()=>{ updateEraseBadge(); await probeServer(); toast(SERVER.available?'AI補完エンジンに接続しました':'サーバーは見つかりませんでした'); });
 on($('runErase'),'click',()=>{ busy(true, SERVER.available?'AIで補完しています…':'周囲から補完しています…'); setTimeout(async()=>{ try{ await runEraseNow(); }catch(err){ console.error(err); toast('補完に失敗しました'); } busy(false); },30); });
+
+// info-mark tooltips (hover an ⓘ to read the help text; positioned in <body> so it is never clipped)
+const tipEl=document.createElement('div'); tipEl.className='tip'; document.body.appendChild(tipEl);
+function showTip(t){ const txt=t.getAttribute('data-tip'); if(!txt) return; tipEl.textContent=txt; tipEl.style.display='block';
+  const r=t.getBoundingClientRect(), tw=tipEl.offsetWidth, th=tipEl.offsetHeight;
+  let left=Math.max(8, Math.min(r.left+r.width/2-tw/2, innerWidth-tw-8));
+  let top=r.top-th-8; if(top<8) top=r.bottom+8;
+  tipEl.style.left=left+'px'; tipEl.style.top=top+'px'; }
+function hideTip(){ tipEl.style.display='none'; }
+document.addEventListener('mouseover',e=>{ const i=e.target.closest&&e.target.closest('.info'); if(i) showTip(i); });
+document.addEventListener('mouseout',e=>{ const i=e.target.closest&&e.target.closest('.info'); if(i) hideTip(); });
+document.addEventListener('click',e=>{ const i=e.target.closest&&e.target.closest('.info'); if(i){ (tipEl.style.display==='block'?hideTip():showTip(i)); } }); // tap on touch
 
 // zoom controls
 on($('zoomIn'),'click',()=>setZoom(State.view.zoom*1.25));

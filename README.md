@@ -121,6 +121,7 @@ python server.py   # → http://127.0.0.1:7865
 | レイヤー並べ替え | `moveLayer`(前面/背面ボタン), `reorderLayer`(リストをドラッグ&ドロップで並べ替え) |
 | 表示ズーム | 右下の −／％／＋（`setZoom`/`applyZoom`）、Ctrl/⌘+ホイールで拡大縮小、はみ出し分はスクロールでパン。ポインタ座標は表示倍率に追従 |
 | 選択/解除 | ツール未選択でアイテムをクリック→選択、アイテム外をクリック→選択解除（`deselectAll`） |
+| ヘルプ表示 | 各機能ラベルの ⓘ（`.info[data-tip]`）にマウスオーバー→説明をツールチップ表示（`showTip`、body直下描画でパネルにクリップされない）。常時表示の説明文は廃止 |
 | 描画/入力/レイヤー/UI | `render/renderOverlay`, ポインタ系, `addSurfaceLayer/addFurnitureLayer`, `setMode/syncPanels` |
 
 ---
