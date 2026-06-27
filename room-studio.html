@@ -233,10 +233,6 @@
     <span class="tag">買う前に、塗って・置いて・消して試す</span>
   </div>
   <div class="h-actions">
-    <button class="btn" id="btnDemo" title="サンプルの部屋で試す">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-8 9 8M5 10v10h14V10"/></svg>
-      デモの部屋
-    </button>
     <button class="btn" id="btnOpen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
       画像を開く
@@ -283,7 +279,7 @@
     <div class="empty-hint" id="emptyHint">
       <div class="label">START</div>
       <p style="font-size:15px;color:#e7eaec;margin:.5em 0">部屋の写真を読み込んでください</p>
-      <p>上の「画像を開く」、または「デモの部屋」でまず触ってみましょう。<br>写真はこの端末の中だけで処理され、どこにも送信されません。</p>
+      <p>上の「画像を開く」から部屋の写真を読み込んでください。<br>写真はこの端末の中だけで処理され、どこにも送信されません。</p>
     </div>
 
     <div class="zoom-ctl" id="zoomCtl" style="display:none">
@@ -2044,106 +2040,10 @@ async function loadProject(obj){
   finally{ busy(false); }
 }
 
-/* Demo room (procedural, so you can try without uploading) */
-function buildDemoRoom(){
-  const w=1100,h=740, c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d');
-  const L=(a,b,t)=>a+(b-a)*t;
-  const poly=(p,fill)=>{ x.beginPath(); x.moveTo(p[0][0],p[0][1]); for(let i=1;i<p.length;i++) x.lineTo(p[i][0],p[i][1]); x.closePath(); if(fill){x.fillStyle=fill;x.fill();} };
-  const clipPoly=(p,fn)=>{ x.save(); x.beginPath(); x.moveTo(p[0][0],p[0][1]); for(let i=1;i<p.length;i++) x.lineTo(p[i][0],p[i][1]); x.closePath(); x.clip(); fn(); x.restore(); };
-  // one-point perspective room box: back wall rect + ceiling/floor/side-wall trapezoids to the canvas edges
-  const bw=w*0.60, bh=h*0.54, bx0=(w-bw)/2, bx1=bx0+bw, by0=h*0.15, by1=by0+bh;
-  const FL=[[0,h],[w,h],[bx1,by1],[bx0,by1]];      // floor
-  const CE=[[0,0],[w,0],[bx1,by0],[bx0,by0]];      // ceiling
-  const LW=[[0,0],[bx0,by0],[bx0,by1],[0,h]];      // left wall
-  const RW=[[w,0],[bx1,by0],[bx1,by1],[w,h]];      // right wall
-
-  // ---- ceiling ----
-  let g=x.createLinearGradient(0,0,0,by0); g.addColorStop(0,'#f6f4f0'); g.addColorStop(1,'#eae6df'); poly(CE,g);
-  // ---- left wall (away from window → cooler/darker) ----
-  g=x.createLinearGradient(0,0,bx0,0); g.addColorStop(0,'#d3ccc0'); g.addColorStop(1,'#e0dace'); poly(LW,g);
-  // ---- right wall (slightly lit) ----
-  g=x.createLinearGradient(bx1,0,w,0); g.addColorStop(0,'#e8e2d7'); g.addColorStop(1,'#dcd5c9'); poly(RW,g);
-  // ---- back wall ----
-  g=x.createLinearGradient(0,by0,0,by1); g.addColorStop(0,'#efe9df'); g.addColorStop(1,'#e2dccf'); x.fillStyle=g; x.fillRect(bx0,by0,bw,bh);
-
-  // ---- perspective oak floor: planks running to the vanishing point ----
-  const N=15, oak=['#caa97a','#c4a373','#cfb182','#bf9d6b','#c8a877','#b99669','#d0b184'];
-  clipPoly(FL,()=>{
-    for(let i=0;i<N;i++){ const t0=i/N,t1=(i+1)/N;
-      poly([[t0*w,h],[t1*w,h],[L(bx0,bx1,t1),by1],[L(bx0,bx1,t0),by1]], oak[i%oak.length]); }
-    // lengthwise plank seams (converge to VP) + subtle grain streaks
-    x.lineWidth=1.4; x.strokeStyle='rgba(74,50,26,.40)';
-    for(let i=0;i<=N;i++){ const t=i/N; x.beginPath(); x.moveTo(t*w,h); x.lineTo(L(bx0,bx1,t),by1); x.stroke(); }
-    x.lineWidth=.8; x.strokeStyle='rgba(60,40,22,.12)';
-    for(let i=0;i<N;i++){ const t=(i+0.5)/N; x.beginPath(); x.moveTo(t*w,h); x.lineTo(L(bx0,bx1,t),by1); x.stroke(); }
-    // board cross-seams (equal-depth lines, denser toward the back)
-    x.lineWidth=1.2; x.strokeStyle='rgba(70,46,24,.22)';
-    for(let r=1;r<7;r++){ const t=Math.pow(r/7,1.7); const yy=L(h,by1,t); x.beginPath(); x.moveTo(L(0,bx0,t),yy); x.lineTo(L(w,bx1,t),yy); x.stroke(); }
-    // depth shading: darker far, warm sheen near front
-    g=x.createLinearGradient(0,by1,0,h); g.addColorStop(0,'rgba(50,32,14,.30)'); g.addColorStop(.55,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(255,238,205,.12)'); x.fillStyle=g; x.fillRect(0,by1,w,h-by1);
-  });
-
-  // ---- baseboards ----
-  x.fillStyle='#f3efe8'; x.fillRect(bx0,by1-12,bw,12);                                   // back wall base
-  x.strokeStyle='#f3efe8'; x.lineWidth=10; x.beginPath(); x.moveTo(0,h); x.lineTo(bx0,by1); x.moveTo(w,h); x.lineTo(bx1,by1); x.stroke(); // side bases
-
-  // ---- corner / edge ambient occlusion (soft) ----
-  const ao=(x0,y0,x1,y1,a)=>{ g=x.createLinearGradient(x0,y0,x1,y1); g.addColorStop(0,'rgba(40,32,22,'+a+')'); g.addColorStop(1,'rgba(40,32,22,0)'); x.fillStyle=g; };
-  clipPoly(LW,()=>{ ao(bx0,0,bx0-60,0,.18); x.fillRect(0,0,bx0,h); });   // inner left corner
-  clipPoly(RW,()=>{ ao(bx1,0,bx1+60,0,.16); x.fillRect(bx1,0,w-bx1,h); });
-  // wall→ceiling and wall→floor soft shade on back wall
-  g=x.createLinearGradient(0,by0,0,by0+70); g.addColorStop(0,'rgba(40,32,22,.14)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(bx0,by0,bw,70);
-
-  // ---- window on back wall (right of center) with sky + mullions ----
-  const wx=bx0+bw*0.50, wy=by0+bh*0.16, wW=bw*0.40, wH=bh*0.56;
-  g=x.createLinearGradient(0,wy,0,wy+wH); g.addColorStop(0,'#bcdcef'); g.addColorStop(.55,'#d8ecf5'); g.addColorStop(1,'#eef7fa'); x.fillStyle=g; x.fillRect(wx,wy,wW,wH);
-  // distant soft scenery
-  x.fillStyle='rgba(150,180,150,.35)'; x.fillRect(wx,wy+wH*0.62,wW,wH*0.38);
-  x.fillStyle='rgba(120,160,130,.30)'; x.beginPath(); x.moveTo(wx,wy+wH*0.66); x.lineTo(wx+wW*0.4,wy+wH*0.5); x.lineTo(wx+wW*0.7,wy+wH*0.66); x.closePath(); x.fill();
-  // frame + mullions
-  x.strokeStyle='#fbfaf7'; x.lineWidth=12; x.strokeRect(wx,wy,wW,wH);
-  x.lineWidth=7; x.beginPath(); x.moveTo(wx+wW/2,wy); x.lineTo(wx+wW/2,wy+wH); x.moveTo(wx,wy+wH/2); x.lineTo(wx+wW,wy+wH/2); x.stroke();
-  // outer casing
-  x.lineWidth=3; x.strokeStyle='rgba(120,110,95,.35)'; x.strokeRect(wx-7,wy-7,wW+14,wH+14);
-
-  // ---- daylight spilling from the window onto floor + wall glow ----
-  x.save(); x.globalCompositeOperation='lighter';
-  g=x.createLinearGradient(wx,wy,wx-120,h); g.addColorStop(0,'rgba(255,250,225,.22)'); g.addColorStop(1,'rgba(255,250,225,0)');
-  clipPoly(FL,()=>{ x.fillStyle=g; poly([[bx0+bw*0.18,by1],[bx1,by1],[w*0.92,h],[w*0.12,h]]); x.fill(); });
-  g=x.createRadialGradient(wx+wW/2,wy+wH/2,20,wx+wW/2,wy+wH/2,wW*1.2); g.addColorStop(0,'rgba(255,250,228,.16)'); g.addColorStop(1,'rgba(255,250,228,0)'); x.fillStyle=g; x.fillRect(bx0,by0,bw,bh);
-  x.restore();
-
-  // ---- framed art on the back wall (left of window) — an erase target ----
-  const ax=bx0+bw*0.10, ay=by0+bh*0.24, aw=bw*0.22, ah=bh*0.30;
-  x.fillStyle='rgba(0,0,0,.12)'; x.fillRect(ax+5,ay+7,aw,ah);                 // drop shadow
-  x.fillStyle='#6f6450'; x.fillRect(ax,ay,aw,ah);                            // frame
-  g=x.createLinearGradient(ax,ay,ax+aw,ay+ah); g.addColorStop(0,'#cbb6a0'); g.addColorStop(.5,'#b58e7a'); g.addColorStop(1,'#9fb0a6'); x.fillStyle=g; x.fillRect(ax+8,ay+8,aw-16,ah-16);
-
-  // ---- potted plant on the floor (left) — an erase target / scale context ----
-  const px=w*0.20, py=h*0.80;
-  x.save(); x.globalCompositeOperation='multiply'; g=x.createRadialGradient(px,py+34,8,px,py+34,90); g.addColorStop(0,'rgba(0,0,0,.28)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.beginPath(); x.ellipse(px,py+34,90,26,0,0,7); x.fill(); x.restore(); // contact shadow
-  g=x.createLinearGradient(px-34,0,px+34,0); g.addColorStop(0,'#9a7448'); g.addColorStop(.5,'#b98a55'); g.addColorStop(1,'#84603a'); x.fillStyle=g;
-  x.beginPath(); x.moveTo(px-34,py-30); x.lineTo(px+34,py-30); x.lineTo(px+26,py+34); x.lineTo(px-26,py+34); x.closePath(); x.fill();
-  x.fillStyle='#6f5232'; x.beginPath(); x.ellipse(px,py-30,34,9,0,0,7); x.fill();
-  // foliage (layered leaves)
-  for(const lf of [['#3f6b3c',1],['#4f7d48',0.8],['#5d8f54',0.6]]){
-    x.fillStyle=lf[0];
-    for(let i=0;i<7;i++){ const a=(i/6-0.5)*2.2; const len=L(80,150,lf[1]); x.save(); x.translate(px,py-34); x.rotate(a); x.beginPath(); x.ellipse(0,-len/2,13,len/2,0,0,7); x.fill(); x.restore(); }
-  }
-
-  // ---- global polish: soft vignette + faint film grain ----
-  g=x.createRadialGradient(w/2,h*0.45,h*0.35,w/2,h*0.5,w*0.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(20,16,10,.16)'); x.fillStyle=g; x.fillRect(0,0,w,h);
-  const nz=document.createElement('canvas'); nz.width=nz.height=200; const nx=nz.getContext('2d'); const id=nx.createImageData(200,200);
-  for(let i=0;i<id.data.length;i+=4){ const v=120+Math.random()*135|0; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; } nx.putImageData(id,0,0);
-  x.save(); x.globalAlpha=0.05; x.globalCompositeOperation='overlay'; for(let yy=0;yy<h;yy+=200)for(let xx=0;xx<w;xx+=200) x.drawImage(nz,xx,yy); x.restore();
-  return c;
-}
-
 /* =========================================================================
    WIRING — events
    ========================================================================= */
 // header
-on($('btnDemo'),'click',()=>{ setupRoomFromCanvas(buildDemoRoom()); addSurfaceLayer(); clearHistory(); toast('デモの部屋を読み込みました'); });
 on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
