@@ -83,20 +83,6 @@
   }
   .empty-hint .label{color:#9aa0a4}
 
-  /* floating tool dock on the stage */
-  .dock{
-    position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
-    display:flex; gap:4px; background:rgba(24,26,29,.82); backdrop-filter:blur(8px);
-    border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:5px; box-shadow:var(--shadow);
-  }
-  .dock button{
-    border:0; background:transparent; color:#d6dadd; border-radius:7px; padding:8px 10px;
-    font-size:12px; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:54px;
-  }
-  .dock button svg{width:18px;height:18px;stroke-width:1.7}
-  .dock button:hover{background:rgba(255,255,255,.08); color:#fff}
-  .dock button.on{background:var(--accent); color:#fff}
-  .dock .sep{width:1px; background:rgba(255,255,255,.12); margin:4px 2px}
   .zoom-note{position:absolute; right:14px; bottom:16px; color:#80878c; font-size:11px}
 
   /* ---------- right panel ---------- */
@@ -300,27 +286,6 @@
       <p>上の「画像を開く」、または「デモの部屋」でまず触ってみましょう。<br>写真はこの端末の中だけで処理され、どこにも送信されません。</p>
     </div>
 
-    <div class="dock" id="dock" style="display:none">
-      <button data-tool="brush" title="塗って選択">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>選択ブラシ
-      </button>
-      <button data-tool="wand" title="近い色を自動で選択">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 4V2m0 16v2M9 6L7.5 4.5M22.5 9.5L21 8M4 13l9 9 7-7-9-9-7 7z"/></svg>自動選択
-      </button>
-      <button data-tool="sam" title="AIで物体をクリック選択">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 3v6M21 3h-6M3 21v-6M3 21h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
-      </button>
-      <button data-tool="poly" title="壁/床の四隅をクリックして一面を選択">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7l8-4 8 4-8 4-8-4zM4 7v10l8 4 8-4V7"/></svg>面選択
-      </button>
-      <button data-tool="unmask" title="選択を消す">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>選択消し
-      </button>
-      <div class="sep"></div>
-      <button data-tool="move" title="家具を動かす">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>移動
-      </button>
-    </div>
     <div class="zoom-ctl" id="zoomCtl" style="display:none">
       <button id="zoomOut" title="縮小">−</button>
       <button id="zoomReset" title="全体表示にリセット"><span id="zoomLabel">100%</span></button>
@@ -1923,9 +1888,6 @@ function setMode(m){ State.mode=m;
   $('panelSurface').style.display=m==='surface'?'block':'none';
   $('panelFurniture').style.display=m==='furniture'?'block':'none';
   $('panelErase').style.display=m==='erase'?'block':'none';
-  // dock tools relevance
-  document.querySelectorAll('#dock [data-tool]').forEach(b=>{ const t=b.dataset.tool; const showInSurface=['brush','wand','unmask','sam','poly'].includes(t); const showInFurn=t==='move'; b.style.display=(m==='surface'&&showInSurface)||(m==='furniture'&&showInFurn)?'flex':'none'; });
-  if(State.W) $('dock').style.display=(m==='erase'||State.compare.active)?'none':'flex';
   State.furniEyedrop=false; { const fe=$('fEyedropBtn'); if(fe) fe.classList.remove('primary'); const feh=$('fEyedropHint'); if(feh) feh.style.display='none'; }
   State.furniErase=false; { const eb=$('fEraseToggle'); if(eb) eb.classList.remove('primary'); const ebx=$('fEraseBox'); if(ebx) ebx.style.display='none'; }
   if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':'';
@@ -1993,7 +1955,7 @@ function setupRoomFromCanvas(srcCanvas){
   State.compare.active=false; State.compare.split=0.5; $('btnCompare').classList.remove('primary');
   invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory();
   resizePreviews(); erasePreviewClear();
-  $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomCtl').style.display='flex';
+  $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('zoomCtl').style.display='flex';
   State.view.zoom=1; applyZoom();
   setMode('surface'); // 新しい部屋を読み込んだら表面タブの綺麗な状態に戻す（家具タブのまま取り残されない）
   renderLayers(); syncPanels(); render();
@@ -2133,7 +2095,6 @@ on(document,'keydown',e=>{
   else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); doRedo(); } });
 on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; }
   State.compare.active=!State.compare.active; $('btnCompare').classList.toggle('primary',State.compare.active);
-  $('dock').style.display=(State.compare.active||State.mode==='erase')?'none':'flex';
   overlay.style.cursor=State.compare.active?'ew-resize':'';
   toast(State.compare.active?'スライダーをドラッグして編集前/後を比較':'比較を終了しました'); renderOverlay(); });
 on($('btnExport'),'click',async()=>{ if(!State.W){toast('先に部屋を読み込んでください');return;} if(State.compare.active){ State.compare.active=false; $('btnCompare').classList.remove('primary'); overlay.style.cursor=''; } render(); const blob=dataURLToBlob(stage.toDataURL('image/png')); if(await saveBlob(blob, 'room-studio.png', 'image/png')) toast('PNGを書き出しました'); });
@@ -2144,12 +2105,7 @@ on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべ
 
 // tabs
 document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
-// dock
-document.querySelectorAll('#dock [data-tool]').forEach(b=>on(b,'click',()=>{ const t=b.dataset.tool;
-  if(t==='move'){ setMode('furniture'); return; }
-  setMode('surface'); setSurfTool(t);
-}));
-function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button, #dock [data-tool]').forEach(b=>{ if(['brush','wand','unmask','sam','poly'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
+function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button').forEach(b=>{ if(['brush','wand','unmask','sam','poly'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
   $('brushSizeRow').style.display=(t==='brush'||t==='unmask')?'flex':'none'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('wandEdgeRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none'; $('polyBox').style.display=(t==='poly')?'block':'none';
   $('eyedropBtn').classList.toggle('primary', t==='eyedropper'); $('eyedropHint').style.display=(t==='eyedropper')?'block':'none';
   overlay.style.cursor = (t==='eyedropper')?'crosshair':'';
