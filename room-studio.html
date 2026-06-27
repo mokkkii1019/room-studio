@@ -66,11 +66,17 @@
   .stage-wrap{
     position:relative; background:
       radial-gradient(120% 120% at 50% 0%, var(--stage) 0%, var(--stage-2) 100%);
-    display:flex; align-items:center; justify-content:center; padding:26px; min-width:0; overflow:hidden;
+    min-width:0; overflow:hidden;
   }
-  .canvas-box{position:relative; box-shadow:0 18px 50px rgba(0,0,0,.42); border-radius:6px; overflow:hidden; background:#111}
-  #stage,#overlay{display:block; max-width:100%; max-height:100%}
+  .canvas-viewport{position:absolute; inset:0; overflow:auto; display:flex; padding:26px}
+  .canvas-box{position:relative; margin:auto; box-shadow:0 18px 50px rgba(0,0,0,.42); border-radius:6px; overflow:hidden; background:#111; flex:0 0 auto}
+  #stage,#overlay{display:block; width:100%; height:100%}
   #overlay{position:absolute; inset:0; touch-action:none}
+  .zoom-ctl{position:absolute; right:14px; bottom:14px; display:flex; align-items:center; gap:2px;
+    background:rgba(24,26,29,.82); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.08); border-radius:9px; padding:4px; box-shadow:var(--shadow); z-index:6}
+  .zoom-ctl button{border:0; background:transparent; color:#d6dadd; border-radius:6px; padding:5px 9px; font-size:14px; line-height:1; cursor:pointer}
+  .zoom-ctl button:hover{background:rgba(255,255,255,.10); color:#fff}
+  .zoom-ctl #zoomLabel{font-size:12px; min-width:46px; text-align:center; display:inline-block}
   .empty-hint{
     position:absolute; color:#cfd3d6; text-align:center; max-width:340px; pointer-events:none;
   }
@@ -274,9 +280,11 @@
 <main>
   <!-- STAGE -->
   <section class="stage-wrap">
-    <div class="canvas-box" id="canvasBox" style="display:none">
-      <canvas id="stage"></canvas>
-      <canvas id="overlay"></canvas>
+    <div class="canvas-viewport" id="canvasViewport">
+      <div class="canvas-box" id="canvasBox" style="display:none">
+        <canvas id="stage"></canvas>
+        <canvas id="overlay"></canvas>
+      </div>
     </div>
     <div class="empty-hint" id="emptyHint">
       <div class="label">START</div>
@@ -305,7 +313,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>移動
       </button>
     </div>
-    <div class="zoom-note" id="zoomNote" style="display:none"></div>
+    <div class="zoom-ctl" id="zoomCtl" style="display:none">
+      <button id="zoomOut" title="縮小">−</button>
+      <button id="zoomReset" title="全体表示にリセット"><span id="zoomLabel">100%</span></button>
+      <button id="zoomIn" title="拡大">＋</button>
+    </div>
   </section>
 
   <!-- PANEL -->
@@ -631,6 +643,7 @@ const State = {
   selectedId:null,
   mode:'surface',                     // surface | furniture | erase
   surfTool:null,                      // null(未選択) | brush | wand | unmask | sam | poly | eyedropper
+  view:{zoom:1},                      // 部屋画像の表示ズーム（1=全体フィット）
   eraseTool:'brush',                  // brush | sam | sub
 
   edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
@@ -1609,7 +1622,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
       for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); return; } }
       const idx=clamp(p.y|0,0,State.H-1)*State.W+clamp(p.x|0,0,State.W-1);
       for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='surface'&&l.visible&&l.mask&&l.mask[idx]>0){ selectLayer(l.id); return; } }
-      return; // 何も無い所をクリック → 何もしない
+      deselectAll(); return; // 何も無い所（アイテム外）をクリック → 選択解除
     }
     // clicking a placed furniture (topmost opaque overlay) selects & edits it — basic mask tools only
     if(State.surfTool==='brush'||State.surfTool==='wand'||State.surfTool==='unmask'){
@@ -1636,8 +1649,9 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
     // pick topmost furniture hit; if none, select the topmost surface under the cursor (edit any layer by clicking it)
     let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
     if(pick){ selectLayer(pick.id); pushHistory('fmove'+pick.id); drag={type:'move',offx:p.x-pick.x,offy:p.y-pick.y,layer:pick}; }
-    else { const idx=clamp(p.y|0,0,State.H-1)*State.W+clamp(p.x|0,0,State.W-1);
-      for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='surface'&&l.visible&&l.mask&&l.mask[idx]>0){ selectLayer(l.id); break; } } }
+    else { const idx=clamp(p.y|0,0,State.H-1)*State.W+clamp(p.x|0,0,State.W-1); let sf=null;
+      for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='surface'&&l.visible&&l.mask&&l.mask[idx]>0){ sf=l; break; } }
+      if(sf) selectLayer(sf.id); else deselectAll(); }
     render();
   }
 });
@@ -1829,6 +1843,7 @@ function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id
   if(l){ if(l.type==='surface') setMode('surface'); else setMode('furniture'); }
   syncPanels(); renderLayers(); rebuildMaskPreview(); render();
 }
+function deselectAll(){ if(State.selectedId===null) return; State.selectedId=null; syncPanels(); renderLayers(); rebuildMaskPreview(); render(); }
 function deleteLayer(id){ const i=State.layers.findIndex(x=>x.id===id); if(i<0) return; pushHistory(); State.layers.splice(i,1); if(State.selectedId===id) State.selectedId=null; renderLayers(); syncPanels(); rebuildMaskPreview(); render(); }
 function moveLayer(id,dir){ const i=State.layers.findIndex(x=>x.id===id); const j=i+dir; if(i<0||j<0||j>=State.layers.length) return; pushHistory(); const t=State.layers[i]; State.layers[i]=State.layers[j]; State.layers[j]=t; renderLayers(); render(); }
 /* drag-reorder in the (top-first) layer list → reflects into State.layers (bottom→top) */
@@ -1926,6 +1941,16 @@ function markMats(hostId,key){ document.querySelectorAll('#'+hostId+' .mat').for
 /* =========================================================================
    ROOM loading
    ========================================================================= */
+/* ---- 部屋画像のズーム（拡大・縮小して編集しやすく） ---- */
+function fitSize(){ const vp=$('canvasViewport'); const pad=52; const availW=Math.max(40,vp.clientWidth-pad), availH=Math.max(40,vp.clientHeight-pad); const ar=State.W/State.H; let w=availW, h=availW/ar; if(h>availH){ h=availH; w=availH*ar; } return {w,h}; }
+function updateZoomLabel(){ const z=$('zoomLabel'); if(z) z.textContent=Math.round(State.view.zoom*100)+'%'; }
+function applyZoom(){ if(!State.W) return; const f=fitSize(), z=State.view.zoom; const box=$('canvasBox'); box.style.width=Math.round(f.w*z)+'px'; box.style.height=Math.round(f.h*z)+'px'; updateZoomLabel(); }
+function setZoom(z, ax, ay){ if(!State.W) return; z=clamp(z,0.25,8); const box=$('canvasBox'), vp=$('canvasViewport'), r=box.getBoundingClientRect();
+  const cax=ax!=null?ax:r.left+r.width/2, cay=ay!=null?ay:r.top+r.height/2;
+  const fx=clamp((cax-r.left)/r.width,0,1), fy=clamp((cay-r.top)/r.height,0,1);
+  State.view.zoom=z; applyZoom();
+  const tx=box.offsetLeft+fx*box.offsetWidth, ty=box.offsetTop+fy*box.offsetHeight, vpr=vp.getBoundingClientRect();
+  vp.scrollLeft=tx-(cax-vpr.left); vp.scrollTop=ty-(cay-vpr.top); }
 function setupRoomFromCanvas(srcCanvas){
   let w=srcCanvas.width,h=srcCanvas.height; const sc=Math.min(1, MAXSIDE/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
   State.W=w; State.H=h; stage.width=w; stage.height=h; overlay.width=w; overlay.height=h;
@@ -1936,8 +1961,8 @@ function setupRoomFromCanvas(srcCanvas){
   State.compare.active=false; State.compare.split=0.5; $('btnCompare').classList.remove('primary');
   invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory();
   resizePreviews(); erasePreviewClear();
-  $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomNote').style.display='block';
-  $('zoomNote').textContent=`${w} × ${h}px`;
+  $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('dock').style.display='flex'; $('zoomCtl').style.display='flex';
+  State.view.zoom=1; applyZoom();
   setMode('surface'); // 新しい部屋を読み込んだら表面タブの綺麗な状態に戻す（家具タブのまま取り残されない）
   renderLayers(); syncPanels(); render();
 }
@@ -2188,6 +2213,13 @@ on($('eraseSize'),'input',e=>{ $('eraseSizeV').textContent=e.target.value; rende
 on($('eraseClear'),'click',()=>{ State.eraseMask=newMask(); erasePreviewClear(); samResetPoints(); $('runErase').disabled=true; render(); });
 on($('eraseRecheck'),'click',async()=>{ updateEraseBadge(); await probeServer(); toast(SERVER.available?'AI補完エンジンに接続しました':'サーバーは見つかりませんでした'); });
 on($('runErase'),'click',()=>{ busy(true, SERVER.available?'AIで補完しています…':'周囲から補完しています…'); setTimeout(async()=>{ try{ await runEraseNow(); }catch(err){ console.error(err); toast('補完に失敗しました'); } busy(false); },30); });
+
+// zoom controls
+on($('zoomIn'),'click',()=>setZoom(State.view.zoom*1.25));
+on($('zoomOut'),'click',()=>setZoom(State.view.zoom/1.25));
+on($('zoomReset'),'click',()=>setZoom(1));
+$('canvasViewport').addEventListener('wheel',e=>{ if(!State.W) return; if(e.ctrlKey||e.metaKey){ e.preventDefault(); setZoom(State.view.zoom*Math.exp(-e.deltaY*0.0015), e.clientX, e.clientY); } }, {passive:false});
+window.addEventListener('resize',()=>{ if(State.W) applyZoom(); });
 
 // init
 setMode('surface');

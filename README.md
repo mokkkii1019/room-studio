@@ -119,6 +119,8 @@ python server.py   # → http://127.0.0.1:7865
 | LaMa連携 | `serverInpaintRegion`, `dataURLToCanvas` |
 | PatchMatch | `patchMatchRegion`(async)→`runPatchMatchWorker`(Web Worker)→`patchMatchComplete`→`pmComplete`（`pmDownRGB/pmValidSrc/pmDist`）。ワーカー組立は`getPMWorker` |
 | レイヤー並べ替え | `moveLayer`(前面/背面ボタン), `reorderLayer`(リストをドラッグ&ドロップで並べ替え) |
+| 表示ズーム | 右下の −／％／＋（`setZoom`/`applyZoom`）、Ctrl/⌘+ホイールで拡大縮小、はみ出し分はスクロールでパン。ポインタ座標は表示倍率に追従 |
+| 選択/解除 | ツール未選択でアイテムをクリック→選択、アイテム外をクリック→選択解除（`deselectAll`） |
 | 描画/入力/レイヤー/UI | `render/renderOverlay`, ポインタ系, `addSurfaceLayer/addFurnitureLayer`, `setMode/syncPanels` |
 
 ---
