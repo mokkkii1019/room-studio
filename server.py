@@ -195,6 +195,40 @@ TYPE_QUERY = {
     "cushion": ("クッション ブランケット スロー", INTERIOR_GENRE),
 }
 
+# 種類キー -> タイトルに「いずれか」を含む必要がある語（関係ないカテゴリの混入を除去）。
+TYPE_MATCH = {
+    "chair": ["椅子", "チェア", "いす", "chair", "スツール", "stool", "アームチェア"],
+    "dining_table": ["ダイニングテーブル", "ダイニング", "dining"],
+    "sofa": ["ソファ", "ソファー", "sofa", "カウチ", "couch", "ラブソファ"],
+    "bed": ["ベッド", "bed", "ベットフレーム", "ベッドフレーム"],
+    "coffee_table": ["ローテーブル", "コーヒーテーブル", "センターテーブル", "リビングテーブル", "coffee table"],
+    "lampshade": ["ランプシェード", "シェード", "lampshade", "ペンダントライト", "ペンダントランプ"],
+    "table_lamp": ["テーブルランプ", "デスクランプ", "テーブルライト", "table lamp", "デスクライト"],
+    "carpet": ["ラグ", "カーペット", "rug", "絨毯", "じゅうたん", "ラグマット"],
+    "plant": ["観葉植物", "フェイクグリーン", "人工観葉", "造花", "グリーン", "plant", "ボタニカル"],
+    "chest": ["サイドボード", "キャビネット", "チェスト", "sideboard", "cabinet", "収納棚"],
+    "art": ["アート", "ポスター", "絵画", "ウォール", "パネル", "art", "poster", "ファブリックパネル"],
+    "floor_lamp": ["フロアランプ", "フロアライト", "スタンドライト", "floor lamp", "フロアスタンド"],
+    "mirror": ["ミラー", "鏡", "mirror", "姿見"],
+    "shelf": ["シェルフ", "棚", "ラック", "shelf", "rack", "ウォールシェルフ", "本棚"],
+    "cushion": ["クッション", "ブランケット", "スロー", "cushion", "blanket", "throw", "ひざ掛け", "膝掛け", "ピロー", "枕"],
+}
+# どの種類でも除外したいアクセサリ/部品系の語（本体ではない）。
+TYPE_EXCLUDE = ["カバー", "ケース", "リペア", "交換用", "替えカバー", "脚のみ", "脚単品", "パーツ", "ステッカー", "シール"]
+
+
+def _relevant(title, type_):
+    """商品名が指定カテゴリに合致するか（混入除去）。"""
+    t = (title or "").lower()
+    if not t:
+        return False
+    if any(x.lower() in t for x in TYPE_EXCLUDE):
+        return False
+    inc = TYPE_MATCH.get(type_)
+    if not inc:
+        return True
+    return any(k.lower() in t for k in inc)
+
 
 # ---- IKEA 公式サイトの検索（フロントが使う商品検索JSON。APIキー不要） ----
 # 注: スクレイピングは各社規約/robots に抵触しうる。個人利用・低頻度・UA明示で運用する想定。
@@ -212,7 +246,7 @@ IKEA_TYPE_KW = {
 def _collect_ikea(type_: str, taste: str, count: int):
     kw = IKEA_TYPE_KW.get(type_, type_)
     q = (taste.strip() + " " + kw).strip()
-    params = {"q": q, "size": max(1, min(100, count)), "types": "PRODUCT", "c": "sr", "v": "20210322"}
+    params = {"q": q, "size": max(1, min(100, count * 2)), "types": "PRODUCT", "c": "sr", "v": "20210322"}
     url = IKEA_ENDPOINT + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": IKEA_UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=25) as r:
@@ -226,10 +260,14 @@ def _collect_ikea(type_: str, taste: str, count: int):
         if not pid or pid in seen or not img:
             continue
         seen.add(pid)
+        # IKEAは品名(EKTORP等)に種類が出ないため typeName/説明も合わせて関連判定
+        desc = " ".join(str(p.get(k) or "") for k in ("name", "typeName", "itemMeasureReferenceText", "mainImageAlt"))
+        if not _relevant(desc, type_):
+            continue
         price = (p.get("salesPrice") or {}).get("numeral") or 0
         items.append({
             "id": str(pid),
-            "title": (p.get("name") or kw)[:80],
+            "title": ((p.get("name") or "") + " " + (p.get("typeName") or "")).strip()[:80] or kw,
             "proxy": "/imgproxy?url=" + urllib.parse.quote(img, safe=""),
             "link": p.get("pipUrl") or "",
             "price": price,
@@ -306,6 +344,8 @@ def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
             if not code or code in seen:
                 continue
             seen.add(code)
+            if not _relevant(it.get("itemName"), type_):  # 関係ないカテゴリの混入を除去
+                continue
             imgs = it.get("mediumImageUrls") or it.get("smallImageUrls") or []
             cands = []  # 全ギャラリー画像（クライアントが最も単体らしい1枚を選ぶ）
             for im in imgs[:3]:

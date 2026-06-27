@@ -163,6 +163,8 @@ python server.py   # → http://127.0.0.1:7865
   - 注意: スクレイピングは各社の利用規約・robots に抵触しうるため、**個人利用・低頻度・User-Agent明示**で運用。商用化・公開時はリスクがあるので後述の楽天APIへの切替を推奨。
 - **ART OF BLACK（`source=artofblack`）** … 公式サイト(STORES)はボット対策が強く直接取得不可のため、**ART OF BLACKの楽天店**（`shopCode=artofblack`）を楽天API経由で取得（`_collect_rakuten`）。楽天の新API（`openapi.rakuten.co.jp/ichibams/...20260401`）を使用し、**`RAKUTEN_APP_ID`（UUID）＋`RAKUTEN_ACCESS_KEY`** が必要。サーバーは「許可されたWebサイト」に一致する **Referer/Origin ヘッダ**を付与（既定 `https://github.com/`、`RAKUTEN_REFERER` で変更可）。同店はライフスタイル写真主体のため、各商品の複数画像から**最も単体（無地背景）らしい1枚をクライアントが自動選択**（`scoreSingleItem`：縁の無地さ＋明るさ＋人物ペナルティ）し、`source=artofblack` のときは背景除去を**AIに自動格上げ**。
 - **将来/任意: 楽天市場API（`source=rakuten`）** … `_collect_rakuten`。`RAKUTEN_APP_ID`（無料）が必要、`RAKUTEN_AFFILIATE_ID` 設定で購入リンクがアフィリエイトURLに＝**合法的にマネタイズ可能**。アプリ登録の「アプリURL」は実在検証されないメタ情報だが **localhost は弾かれる**ので GitHub リポジトリ等の公開URLを使う。登録用文面は `rakuten-application-info.md` 参照。1 QPS以下にスロットル済み。
+- **関連度フィルタ**（`_relevant`/`TYPE_MATCH`/`TYPE_EXCLUDE`）: 商品名が選択カテゴリの語を含むものだけ採用し、無関係カテゴリ・部品/カバー類の混入を除去（IKEAは品名に種類が出ないため typeName/説明も判定に使用）。
+- **家具の手動背景消し**: 自動削除後に残る背景を、家具タブ「切り抜き」→「手動で背景を消す（ブラシ）」で家具の上をドラッグして透明化（Alt/右ドラッグで復元）。家具画像空間の `eraseMask` に保持し `rebuildFurniture` で適用、Undo・複製・保存に対応。
 - 収集画像はライブラリに入り、クリック/ドラッグで配置。サムネに「購入」リンク＋価格を表示。**「リストを保存／読込」**で一覧を `.json` 化（`exportLib`/`importLib`）。
 - **収集後に背景を自動除去（順次）**（方式セレクト：高速＝既定／AI／しない）… 収集した各画像を**バックグラウンドで1件ずつ**処理し、サムネを透過版に更新（`enqueueBgRemoval`/`runBgQueue`）。各処理の合間に `requestAnimationFrame`+`setTimeout(0)` で**yieldするためUIは固まらない**。
   - **高速**（`floodCutCanvas`→`removeBg`）… 白/単色背景向け、ミリ秒で完了・非ブロッキング（IKEA商品写真の多くに最適）。
