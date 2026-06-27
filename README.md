@@ -76,13 +76,14 @@ python server.py   # → http://127.0.0.1:7865
 
 ## インターネットに公開する（Vercel）
 
-不特定多数に使ってもらうための公開デプロイ。フロント（`room-studio.html`）は静的配信、`/collect`・`/imgproxy`・`/health` は **Vercel Python サーバーレス関数**（`api/` 配下・標準ライブラリのみ）として動く。重い LaMa(`/inpaint`)は公開では使わず、消しゴムは**ブラウザ内 PatchMatch** に自動フォールバックする（無料・完全動作）。
+不特定多数に使ってもらうための公開デプロイ。**Vercel の FastAPI ランタイム**で単一の関数（`api/index.py`）が HTML 配信＋`/health`・`/collect`・`/imgproxy` を担当する。重い LaMa(`/inpaint`)は公開では使わず、消しゴムは**ブラウザ内 PatchMatch** に自動フォールバックする（無料・完全動作）。
 
 **構成（このリポジトリに同梱済み）**
-- `api/_collect_core.py` … 収集/画像リレーの共有ロジック（`server.py` と Vercel が共用）
-- `api/collect.py` / `api/imgproxy.py` / `api/health.py` … サーバーレス関数
-- `vercel.json` … `/`→`room-studio.html`、`/collect|imgproxy|health`→`/api/*` の rewrite と関数設定
-- `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env` 等を配信対象から除外。ルートの `requirements.txt` は空（Pythonランタイム有効化用）
+- `api/index.py` … FastAPI アプリ（`app`）。Vercel が**単一の Serverless Function**としてデプロイし、全リクエストを処理（HTML・/health・/collect・/imgproxy）
+- `api/_collect_core.py` … 収集/画像リレーの共有ロジック（`server.py` と Vercel が共用・標準ライブラリのみ）
+- `requirements.txt` … `fastapi`（**Vercel の Python ランタイム有効化に必須**。これが無いと関数が検出されない）
+- `vercel.json` … 関数の `maxDuration` 設定（rewrite は不要＝FastAPI が全ルートを処理）
+- `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env` 等を配信対象から除外
 - `/imgproxy` は公開時の悪用防止のため **IKEA/楽天の画像ホストのみ許可**（`IMG_HOST_SUFFIXES`）
 
 **手順**

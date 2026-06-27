@@ -184,7 +184,7 @@ def _collect_rakuten(type_, taste, count, shop=""):
     kw, genre = TYPE_QUERY.get(type_, (type_, None))
     keyword = (taste.strip() + " " + kw).strip()
     items, seen, page = [], set(), 1
-    while len(items) < count and page <= 4:  # 30 items/page; capped for serverless time limits
+    while len(items) < count and page <= 3:  # 30 items/page; capped for serverless time limits
         if page > 1:
             time.sleep(1.0)  # throttle to <= 1 QPS (Rakuten guideline)
         params = {
@@ -201,7 +201,7 @@ def _collect_rakuten(type_, taste, count, shop=""):
         req = urllib.request.Request(url, headers={
             "User-Agent": "RoomStudio/1.0", "Referer": RAKUTEN_REFERER, "Origin": RAKUTEN_ORIGIN})
         try:
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "ignore")[:200]

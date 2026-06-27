@@ -1,4 +1,1 @@
-# Vercel serverless functions (api/*.py) use ONLY the Python standard library.
-# This file intentionally lists no dependencies — its presence is what enables
-# Vercel's Python runtime so /api/*.py are built as Serverless Functions.
-# Local LaMa dev-server dependencies live in requirements-local.txt.
+fastapi
