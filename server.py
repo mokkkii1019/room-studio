@@ -24,6 +24,7 @@ Room Studio — ローカル AI 補完サーバー（LaMa / CPU対応）
 
 import base64
 import io
+import re
 import threading
 import time
 
@@ -217,6 +218,16 @@ TYPE_MATCH = {
 TYPE_EXCLUDE = ["カバー", "ケース", "リペア", "交換用", "替えカバー", "脚のみ", "脚単品", "パーツ", "ステッカー", "シール"]
 
 
+def _numbered_variants(url, maxn):
+    """画像URL末尾の連番（…-1.jpg / …-21a.jpg 等）を 1..maxn の素直な連番に振り直したURL列を返す。
+    楽天の代表画像は -1,-2,-3 とは限らない（-21a 等のことも）ため、主要画像になりやすい小さい連番を補完する。"""
+    m = re.match(r'^(.*[^\d])(\d+)([a-zA-Z]*)(\.\w+)(\?.*)?$', url)
+    if not m:
+        return []
+    pre, _num, _sfx, ext, q = m.group(1), m.group(2), m.group(3), m.group(4), (m.group(5) or "")
+    return [f"{pre}{n}{ext}{q}" for n in range(1, maxn + 1)]
+
+
 def _relevant(title, type_):
     """商品名が指定カテゴリに合致するか（混入除去）。"""
     t = (title or "").lower()
@@ -347,15 +358,23 @@ def _collect_rakuten(type_: str, taste: str, count: int, shop: str = ""):
             if not _relevant(it.get("itemName"), type_):  # 関係ないカテゴリの混入を除去
                 continue
             imgs = it.get("mediumImageUrls") or it.get("smallImageUrls") or []
-            cands = []  # 全ギャラリー画像（クライアントが最も単体らしい1枚を選ぶ）
+            raw = []
             for im in imgs[:3]:
                 u = im.get("imageUrl") if isinstance(im, dict) else None
-                if not u:
-                    continue
-                u = u.replace("?_ex=128x128", "?_ex=600x600").replace("?_ex=64x64", "?_ex=600x600")
-                cands.append("/imgproxy?url=" + urllib.parse.quote(u, safe=""))
-            if not cands:
+                if u:
+                    raw.append(u.replace("?_ex=128x128", "?_ex=600x600").replace("?_ex=64x64", "?_ex=600x600"))
+            if not raw:
                 continue
+            # Item Search は先頭3枚しか返さない。商品ページには連番画像(-1,-2,…)が多数あり、
+            # その中に「単体・正面」の使いやすい1枚があることが多いので連番URLを補完して候補に加える。
+            merged, seen_u = [], set()
+            for u in raw + _numbered_variants(raw[0], 9):
+                k = u.split("?")[0]
+                if k in seen_u:
+                    continue
+                seen_u.add(k)
+                merged.append(u)
+            cands = ["/imgproxy?url=" + urllib.parse.quote(u, safe="") for u in merged[:10]]  # クライアントが最良の1枚を選ぶ
             items.append({
                 "id": code,
                 "title": (it.get("itemName") or kw)[:80],

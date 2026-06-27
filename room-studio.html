@@ -1792,20 +1792,23 @@ function scoreSingleItem(cv){
   for(let y=0;y<s;y++)for(let xx=0;xx<s;xx++){ if(y<m||y>=s-m||xx<m||xx>=s-m){ const p=(y*s+xx)*4; br+=d[p];bg+=d[p+1];bb+=d[p+2]; vals.push((d[p]+d[p+1]+d[p+2])/3); bn++; } }
   const ml=(br+bg+bb)/(3*bn); let v=0; for(const a of vals) v+=(a-ml)*(a-ml); const sd=Math.sqrt(v/bn);
   const lightness=ml/255, uniform=1-Math.min(1,sd/55);
+  // center detail: 商品が中央にある単体・正面写真は中央のコントラストが高く縁は無地
+  let cm=0,cn=0; const cvals=[], c0=Math.round(s*0.3), c1=Math.round(s*0.7);
+  for(let y=c0;y<c1;y++)for(let xx=c0;xx<c1;xx++){ const p=(y*s+xx)*4; const g=(d[p]+d[p+1]+d[p+2])/3; cvals.push(g); cm+=g; cn++; }
+  cm/=Math.max(1,cn); let cvar=0; for(const a of cvals) cvar+=(a-cm)*(a-cm); const csd=Math.sqrt(cvar/Math.max(1,cn));
+  const centerDetail=Math.min(1,csd/35);
   let skin=0; const tot=d.length/4;
   for(let i=0;i<d.length;i+=4){ const R=d[i],G=d[i+1],B=d[i+2]; if(R>95&&G>40&&B>20&&R>G&&R>B&&(R-Math.min(G,B))>15&&Math.abs(R-G)>15) skin++; }
   const skinFrac=skin/tot, skinPen=skinFrac>0.06?(skinFrac-0.06)*5:0;
-  return uniform*0.6 + lightness*0.4 - skinPen;
+  return uniform*0.5 + lightness*0.25 + centerDetail*0.25 - skinPen;
 }
-/* 複数候補から最も単体らしい1枚のcanvasを返す（候補1枚ならそれをそのまま） */
+/* 複数候補（先頭3枚＋連番補完）から最も単体・正面らしい1枚のcanvasを返す。404はスキップ。 */
 function pickBestCandidate(urls){ return new Promise(async resolve=>{
-  let best=null, bestScore=-Infinity;
-  for(const u of urls){
-    const cv=await new Promise(r=>loadImageURL(u, c=>r(c), ()=>r(null)));
-    if(!cv) continue;
-    if(urls.length===1){ best=cv; break; }
-    const sc=scoreSingleItem(cv); if(sc>bestScore){ bestScore=sc; best=cv; }
-  }
+  const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(u, c=>r(c), ()=>r(null)))));
+  const valid=cvs.filter(Boolean);
+  if(valid.length<=1){ resolve(valid[0]||null); return; }
+  let best=valid[0], bestScore=-Infinity;
+  for(const cv of valid){ const sc=scoreSingleItem(cv); if(sc>bestScore){ bestScore=sc; best=cv; } }
   resolve(best);
 }); }
 function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, done=0; const total=items.length; if(!total) return resolve();
