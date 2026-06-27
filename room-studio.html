@@ -111,6 +111,16 @@
   .info:hover{color:var(--accent); border-color:var(--accent)}
   .tip{position:fixed; display:none; background:#23262a; color:#fff; padding:8px 10px; border-radius:8px;
     font-size:11.5px; font-weight:400; line-height:1.55; max-width:262px; box-shadow:var(--shadow); z-index:1000; pointer-events:none}
+  /* step-by-step tutorial (spotlight + coachmark) */
+  .tut-hole{position:fixed; display:none; border-radius:10px; box-shadow:0 0 0 9999px rgba(12,14,17,.62); z-index:3000; pointer-events:none; transition:left .25s,top .25s,width .25s,height .25s}
+  .tut-box{position:fixed; display:none; width:300px; background:#fff; color:#23262a; border-radius:12px; padding:15px 16px 13px; box-shadow:0 16px 50px rgba(0,0,0,.42); z-index:3001}
+  .tut-box h4{margin:0 0 6px; font-size:14px; font-weight:700}
+  .tut-box p{margin:0 0 12px; font-size:12.5px; line-height:1.65; color:#454b50}
+  .tut-box .trow{display:flex; align-items:center; justify-content:space-between; gap:8px}
+  .tut-step{font-size:11px; color:#9aa0a4; font-weight:600; margin-bottom:4px}
+  .tut-box button{border:0; border-radius:7px; padding:7px 15px; font-size:12.5px; font-weight:600; cursor:pointer}
+  .tut-next{background:var(--accent); color:#fff}
+  .tut-skip{background:transparent; color:#9aa0a4}
   .hint{font-size:11.5px; color:var(--muted); margin:0 0 10px}
 
   .row{display:flex; align-items:center; gap:9px; margin-bottom:10px}
@@ -233,6 +243,10 @@
     <span class="tag">買う前に、塗って・置いて・消して試す</span>
   </div>
   <div class="h-actions">
+    <button class="btn" id="btnTutorial" title="使い方をステップで案内">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg>
+      使い方
+    </button>
     <button class="btn" id="btnOpen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
       画像を開く
@@ -1955,6 +1969,7 @@ function setupRoomFromCanvas(srcCanvas){
   State.view.zoom=1; applyZoom();
   setMode('surface'); // 新しい部屋を読み込んだら表面タブの綺麗な状態に戻す（家具タブのまま取り残されない）
   renderLayers(); syncPanels(); render();
+  if(tut.active && TUT_STEPS[tut.step] && TUT_STEPS[tut.step].awaitImage) tutNext(); // 画像を開いたら次のステップへ
 }
 function loadImageFile(file, cb){ const img=new Image(); img.onload=()=>{ const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext('2d').drawImage(img,0,0); cb(c); URL.revokeObjectURL(img.src); }; img.onerror=()=>toast('画像を読み込めませんでした'); img.src=URL.createObjectURL(file); }
 
@@ -2190,10 +2205,37 @@ on($('zoomReset'),'click',()=>setZoom(1));
 $('canvasViewport').addEventListener('wheel',e=>{ if(!State.W) return; if(e.ctrlKey||e.metaKey){ e.preventDefault(); setZoom(State.view.zoom*Math.exp(-e.deltaY*0.0015), e.clientX, e.clientY); } }, {passive:false});
 window.addEventListener('resize',()=>{ if(State.W) applyZoom(); });
 
+// ---- step-by-step tutorial ----
+const TUT_STEPS=[
+  { target:'btnOpen', title:'① 画像を開く', body:'まずは部屋の写真を読み込みます。「画像を開く」から写真を選んでください（写真は端末内だけで処理されます）。', awaitImage:true },
+  { target:'tabErase', title:'② 消しゴムで不要なものを消す', body:'写真に写った不要なもの（小物・コンセント・貼り紙など）を消します。赤ブラシかAI選択で囲み、「この範囲を消す」を押すと周囲から自然に埋まります。', mode:'erase' },
+  { target:'tabSurface', title:'③ 表面に色や素材を重ねる', body:'壁や床に色や素材を重ねます。「表面を追加」→ 範囲を選択（面/自動/ブラシ/AI）→ 色や素材を適用。質感や陰影は保ったまま変わります。', mode:'surface' },
+  { target:'tabFurniture', title:'④ 家具を配置する', body:'好きな家具を置きます。「画像を追加」や「家具店から収集」で家具を用意し、サムネをクリック／ステージへドラッグで配置。クリックで選択して移動・拡大・回転できます。', mode:'furniture' },
+];
+const tut={active:false, step:0, hole:null, box:null};
+function ensureTutEls(){ if(tut.hole) return; tut.hole=document.createElement('div'); tut.hole.className='tut-hole'; tut.box=document.createElement('div'); tut.box.className='tut-box'; document.body.append(tut.hole, tut.box); }
+function tutStart(){ ensureTutEls(); tut.active=true; tut.step=0; applyTutStep(); }
+function applyTutStep(){ const s=TUT_STEPS[tut.step]; if(!s){ tutEnd(); return; } if(s.mode && State.W) setMode(s.mode); positionTut(); }
+function tutNext(){ tut.step++; if(tut.step>=TUT_STEPS.length){ tutEnd(); return; } applyTutStep(); }
+function tutEnd(){ tut.active=false; if(tut.hole) tut.hole.style.display='none'; if(tut.box) tut.box.style.display='none'; try{ localStorage.setItem('roomstudio_tut_done','1'); }catch(e){} }
+function positionTut(){ if(!tut.active) return; const s=TUT_STEPS[tut.step], el=$(s.target); if(!el) return; const r=el.getBoundingClientRect(), pad=8;
+  tut.hole.style.display='block'; tut.hole.style.left=(r.left-pad)+'px'; tut.hole.style.top=(r.top-pad)+'px'; tut.hole.style.width=(r.width+pad*2)+'px'; tut.hole.style.height=(r.height+pad*2)+'px';
+  const last=tut.step===TUT_STEPS.length-1;
+  tut.box.innerHTML='<div class="tut-step">ステップ '+(tut.step+1)+' / '+TUT_STEPS.length+'</div><h4>'+s.title+'</h4><p>'+s.body+'</p><div class="trow"><button class="tut-skip">スキップ</button><button class="tut-next">'+(last?'完了':'次へ')+'</button></div>';
+  tut.box.querySelector('.tut-next').onclick=tutNext; tut.box.querySelector('.tut-skip').onclick=tutEnd;
+  tut.box.style.display='block'; const bw=tut.box.offsetWidth, bh=tut.box.offsetHeight;
+  let left=Math.min(r.left, innerWidth-bw-12); left=Math.max(12,left);
+  let top=r.bottom+12; if(top+bh>innerHeight-12) top=r.top-bh-12; top=Math.max(12,top);
+  tut.box.style.left=left+'px'; tut.box.style.top=top+'px';
+}
+on($('btnTutorial'),'click',tutStart);
+window.addEventListener('resize',()=>{ if(tut.active) positionTut(); });
+
 // init
 setMode('surface');
 probeServer();
 loadUserMatsLocal(); // restore extracted materials from previous sessions
+if(!localStorage.getItem('roomstudio_tut_done')) setTimeout(tutStart, 500); // first-visit auto-start
 </script>
 </body>
 </html>
