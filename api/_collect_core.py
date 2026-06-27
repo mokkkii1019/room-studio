@@ -175,12 +175,18 @@ def _collect_ikea(type_, taste, count):
     return items
 
 
-def _collect_rakuten(type_, taste, count, shop=""):
-    """Rakuten Ichiba Item Search (new API). Needs applicationId(UUID) + accessKey."""
+def _collect_rakuten(type_, taste, count, shop="", referer=None):
+    """Rakuten Ichiba Item Search (new API). Needs applicationId(UUID) + accessKey.
+    The new API requires Referer/Origin matching a registered 'allowed website'.
+    `referer` (the request's own origin) is preferred so a public deployment works
+    without a RAKUTEN_REFERER env var; falls back to the env value for local dev."""
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY:
         raise CollectError(503,
             "RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY が必要です。https://webservice.rakuten.co.jp/ の"
             "アプリ一覧で「アプリケーションID」と「アクセスキー」を確認し設定してください。")
+    ref = (referer or RAKUTEN_REFERER)
+    _u = urllib.parse.urlsplit(ref)
+    origin = f"{_u.scheme}://{_u.netloc}" if _u.scheme and _u.netloc else RAKUTEN_ORIGIN
     kw, genre = TYPE_QUERY.get(type_, (type_, None))
     keyword = (taste.strip() + " " + kw).strip()
     items, seen, page = [], set(), 1
@@ -199,7 +205,7 @@ def _collect_rakuten(type_, taste, count, shop=""):
             params["affiliateId"] = RAKUTEN_AFFILIATE_ID
         url = RAKUTEN_ENDPOINT + "?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={
-            "User-Agent": "RoomStudio/1.0", "Referer": RAKUTEN_REFERER, "Origin": RAKUTEN_ORIGIN})
+            "User-Agent": "RoomStudio/1.0", "Referer": ref, "Origin": origin})
         try:
             with urllib.request.urlopen(req, timeout=8) as r:
                 data = json.loads(r.read().decode("utf-8"))
@@ -254,14 +260,15 @@ def _collect_rakuten(type_, taste, count, shop=""):
     return items
 
 
-def collect(type_, taste="", count=50, source="ikea", shop=""):
-    """Dispatch a collection request. Returns the response dict. Raises CollectError."""
+def collect(type_, taste="", count=50, source="ikea", shop="", referer=None):
+    """Dispatch a collection request. Returns the response dict. Raises CollectError.
+    `referer` (the request's own origin) lets the Rakuten call match the deployed domain."""
     count = max(1, min(90, int(count)))
     try:
         if source == "artofblack":
-            items = _collect_rakuten(type_, taste, count, "artofblack")
+            items = _collect_rakuten(type_, taste, count, "artofblack", referer)
         elif source == "rakuten":
-            items = _collect_rakuten(type_, taste, count, shop)
+            items = _collect_rakuten(type_, taste, count, shop, referer)
         else:
             items = _collect_ikea(type_, taste, count)
     except CollectError:

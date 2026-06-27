@@ -228,6 +228,12 @@
   .spin{width:18px;height:18px;border:2.5px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:sp .7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
 
+  .maker-list{max-height:200px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:3px; background:var(--panel)}
+  .maker-list label{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:12.5px; cursor:pointer}
+  .maker-list label:hover{background:var(--panel-2)}
+  .maker-list input{width:16px; height:16px; flex:0 0 auto; accent-color:var(--accent)}
+  .maker-list .mk-empty{padding:10px; color:var(--muted); font-size:12px; text-align:center}
+
   @media (max-width:880px){
     main{grid-template-columns:1fr; grid-template-rows:minmax(260px,48vh) 1fr}
     .panel{border-left:0; border-top:1px solid var(--line)}
@@ -429,10 +435,22 @@
 
         <div class="section" id="collectSection" style="margin-top:12px">
           <span class="label">家具店から収集<span class="info" data-tip="server.py 起動が必要。IKEAはキー不要。ART OF BLACK は楽天店から取得するため RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY（無料・webservice.rakuten.co.jp）の設定が必要。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。">i</span></span>
-          <select class="field" id="collectSource" title="収集元の家具店を選択">
+          <select class="field" id="collectSource" title="収集元を選択">
             <option value="ikea" selected>IKEA（キー不要）</option>
-            <option value="artofblack">ART OF BLACK（楽天キー必要）</option>
+            <option value="makers">楽天 家具メーカー（複数選択・楽天キー必要）</option>
           </select>
+          <div id="makerBox" style="display:none">
+            <div class="row" style="margin:6px 0 4px; align-items:center; gap:8px">
+              <input type="text" class="field" id="makerFilter" placeholder="メーカーを検索（あいうえお順）" style="margin:0;flex:1">
+            </div>
+            <div class="row" style="margin:0 0 6px; align-items:center; gap:8px">
+              <button class="btn" id="makerAll" style="flex:0 0 auto;padding:5px 10px">全選択</button>
+              <button class="btn" id="makerNone" style="flex:0 0 auto;padding:5px 10px">全解除</button>
+              <span id="makerCount" style="margin-left:auto;font-size:11px;color:var(--muted)">0社選択</span>
+            </div>
+            <div class="maker-list" id="makerList"></div>
+            <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">選択した各メーカーから、枚数をメーカー数で按分して収集します。</p>
+          </div>
           <select class="field" id="collectType">
             <option value="chair">椅子</option>
             <option value="dining_table">ダイニングテーブル</option>
@@ -649,6 +667,7 @@ const State = {
   poly:{points:[]},                   // in-progress polygon (face) selection
   furniEyedrop:false,                 // eyedropper active for furniture recolor
   furniErase:false,                   // manual background-erase brush active for selected furniture
+  makers:new Set(),                   // selected Rakuten furniture-maker shopCodes (multi-collect)
   furniLib:[], libNextId:1, libFilter:'all',  // library of loaded furniture images (staged) + category filter
   eraseMask:null,                     // Uint8 over room
   undo:[], redo:[], _hcKey:null, _hcTime:0,   // general history (full snapshots) + coalescing
@@ -1837,28 +1856,83 @@ async function runBgQueue(){ if(bgRunning) return; bgRunning=true;
 
 /* ---- collect furniture images from the web (store products via server.py) ---- */
 function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
+/* 楽天市場の家具メーカー（shopCode は実APIで実在確認済み）。あいうえお順に表示。 */
+const MAKERS=[
+  {code:'irisplaza-r', name:'アイリスオーヤマ', kana:'あいりすおーやま'},
+  {code:'artofblack',  name:'ART OF BLACK',     kana:'あーとおぶぶらっく'},
+  {code:'ease-space',  name:'イーズスペース（寝具）', kana:'いーずすぺーす'},
+  {code:'isseiki',     name:'ISSEIKI',          kana:'いっせいき'},
+  {code:'intelogue',   name:'インテローグ',      kana:'いんてろーぐ'},
+  {code:'air-rhizome', name:'エア・リゾーム',    kana:'えありぞーむ'},
+  {code:'emoor',       name:'エムール',          kana:'えむーる'},
+  {code:'kagu350',     name:'家具350',           kana:'かぐ350'},
+  {code:'kagunosato',  name:'家具の里',          kana:'かぐのさと'},
+  {code:'auc-qualial', name:'クオリアル',        kana:'くおりある'},
+  {code:'e-kurashi',   name:'くらしのeショップ（山善）', kana:'くらしのいーしょっぷ'},
+  {code:'gekiyasukaguya', name:'インテリアのゲキカグ', kana:'げきかぐ'},
+  {code:'rack-kan',    name:'収納宅配館',        kana:'しゅうのうたくはいかん'},
+  {code:'storage-g',   name:'Storage（ストレージ）', kana:'すとれーじ'},
+  {code:'tansu',       name:'タンスのゲン',      kana:'たんすのげん'},
+  {code:'teria',       name:'Teria（テリア）',    kana:'てりあ'},
+  {code:'dinos',       name:'ディノス',          kana:'でぃのす'},
+  {code:'netkagu-banban', name:'ネット家具BANBAN', kana:'ねっとかぐばんばん'},
+  {code:'risopale',    name:'FINE KAGU',         kana:'ふぁいんかぐ'},
+  {code:'t-interior',  name:'Branchpoint',       kana:'ぶらんちぽいんと'},
+  {code:'bon-kagu',    name:'ぼん家具（BONBON）', kana:'ぼんぼん'},
+  {code:'mutuki',      name:'MUTUKI',            kana:'むつき'},
+  {code:'dondon',      name:'モダンデコ',        kana:'もだんでこ'},
+  {code:'alamode',     name:'ヤマソロ',          kana:'やまそろ'},
+  {code:'rcmdin',      name:'リコメン堂インテリア館', kana:'りこめんどう'},
+  {code:'low-ya',      name:'LOWYA（ロウヤ）',    kana:'ろうや'},
+  {code:'ymworld',     name:'ワイエムワールド',  kana:'わいえむわーるど'},
+].sort((a,b)=>a.kana.localeCompare(b.kana,'ja'));
+function updateMakerCount(){ const el=$('makerCount'); if(el) el.textContent=State.makers.size+'社選択'; }
+function renderMakers(filter){
+  const host=$('makerList'); if(!host) return; host.innerHTML=''; const f=(filter||'').trim().toLowerCase();
+  const list=MAKERS.filter(m=> !f || m.name.toLowerCase().includes(f) || m.kana.includes(f) || m.code.includes(f));
+  if(!list.length){ host.innerHTML='<div class="mk-empty">該当するメーカーがありません</div>'; return; }
+  for(const m of list){ const lb=document.createElement('label');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.value=m.code; cb.checked=State.makers.has(m.code);
+    on(cb,'change',()=>{ if(cb.checked) State.makers.add(m.code); else State.makers.delete(m.code); updateMakerCount(); });
+    const sp=document.createElement('span'); sp.textContent=m.name;
+    lb.appendChild(cb); lb.appendChild(sp); host.appendChild(lb); }
+}
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
   const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value, source=$('collectSource').value;
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
-    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source}), {cache:'no-store'});
-    if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
-    const j=await r.json(); const items=j.items||[];
-    if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
+    let items=[];
+    if(source==='makers'){
+      const sel=MAKERS.filter(m=>State.makers.has(m.code));
+      if(!sel.length){ setCollectStatus('家具メーカーを1社以上選択してください','err'); $('collectBtn').disabled=false; return; }
+      const per=Math.max(1, Math.floor(count/sel.length)); let lastErr='';
+      for(let i=0;i<sel.length;i++){ setCollectStatus(`メーカー ${i+1}/${sel.length}：${sel[i].name} を収集中…（各${per}枚）`);
+        try{
+          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), source:'rakuten', shop:sel[i].code}), {cache:'no-store'});
+          if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
+          const j=await r.json(); (j.items||[]).forEach(it=>{ it.shop=it.shop||sel[i].name; items.push(it); });
+        }catch(e){ lastErr=String(e&&e.message||e); }
+      }
+      if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
+    } else {
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source}), {cache:'no-store'});
+      if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
+      const j=await r.json(); items=j.items||[];
+      if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
+    }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
     let done=0, ok=0; const added=[];
     await pool(items, 5, it=> new Promise(async res=>{
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
       const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
       if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type}); added.push(li); ok++; }
-      done++; setCollectStatus(`取得中… ${done}/${items.length}（成功 ${ok}）`); res();
+      done++; setCollectStatus(`画像処理中… ${done}/${items.length}（成功 ${ok}）`); res();
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
-    // ART OF BLACK はライフスタイル写真主体 → 高速版では切り抜けないので AI 背景除去に自動格上げ
-    let bgM=$('collectBgMethod').value; if(source==='artofblack' && bgM==='fast') bgM='ai';
+    const bgM=$('collectBgMethod').value;
     if(bgM!=='none' && added.length) enqueueBgRemoval(added, bgM); // 背景をバックグラウンドで順次除去
   }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
   finally{ $('collectBtn').disabled=false; }
@@ -2151,6 +2225,10 @@ on($('addFurniture'),'click',()=>$('fileFurniture').click());
 on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.length){ setMode('furniture'); files.forEach(f=> loadImageFile(f, c=> addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')))); toast(files.length+'件をライブラリに追加しました'); } e.target.value=''; });
 on($('collectCount'),'input',e=>{ $('collectCountV').textContent=e.target.value; });
 on($('collectBtn'),'click',doCollect);
+on($('collectSource'),'change',e=>{ const isMakers=e.target.value==='makers'; $('makerBox').style.display=isMakers?'block':'none'; if(isMakers && !$('makerList').children.length) renderMakers(); });
+on($('makerFilter'),'input',e=>renderMakers(e.target.value));
+on($('makerAll'),'click',()=>{ MAKERS.forEach(m=>State.makers.add(m.code)); renderMakers($('makerFilter').value); updateMakerCount(); });
+on($('makerNone'),'click',()=>{ State.makers.clear(); renderMakers($('makerFilter').value); updateMakerCount(); });
 on($('libSave'),'click',exportLib);
 on($('libLoad'),'click',()=>$('fileLib').click());
 on($('fileLib'),'change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ let obj; try{ obj=JSON.parse(r.result); }catch(err){ toast('JSONを解析できませんでした'); return; } importLib(obj); }; r.readAsText(f); e.target.value=''; });

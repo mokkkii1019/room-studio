@@ -93,10 +93,10 @@ python server.py   # → http://127.0.0.1:7865
    - `RAKUTEN_APP_ID`（楽天アプリID／UUID）
    - `RAKUTEN_ACCESS_KEY`（アクセスキー）
    - `RAKUTEN_AFFILIATE_ID`（任意・購入リンクをアフィリエイト化）
-   - `RAKUTEN_REFERER`（後述。初回は空でも可）
+   - ※ `RAKUTEN_REFERER` は**不要**（サーバーがリクエスト元ドメインから自動生成）。
 4. **Deploy**。発行ドメイン（例 `room-studio-xxxx.vercel.app`）が出る。
-5. **楽天の「許可されたWebサイト」にそのドメインを追加**し（`http(s)://` は付けない＝`room-studio-xxxx.vercel.app`）、Vercel の `RAKUTEN_REFERER=https://room-studio-xxxx.vercel.app/` を設定して **Redeploy**（新APIは Referer/Origin 一致が必須）。
-6. 完了。`https://<ドメイン>/` で誰でも利用可。IKEA収集はキー不要、ART OF BLACK収集は上記キーで動作。
+5. **楽天の「許可されたWebサイト」にそのドメインを追加**（`http(s)://` は付けない＝`room-studio-xxxx.vercel.app`）。新APIは Referer/Origin 一致が必須で、サーバーは**自身のドメインを自動送出**するため、ドメイン登録だけでOK（再デプロイ不要・反映は登録後すぐ）。
+6. 完了。`https://<ドメイン>/` で誰でも利用可。IKEA収集はキー不要、楽天家具メーカー収集は上記キー＋ドメイン登録で動作。
 
 > **ローカル開発は不変**: 引き続き `python server.py`（または `run.bat`/`run.sh`）で高品質 LaMa 込みの全機能が使える。収集ロジックは `api/_collect_core.py` に一本化済みで二重管理は不要。
 >
@@ -193,7 +193,7 @@ python server.py   # → http://127.0.0.1:7865
 収集元は**選択式**（収集セクションの「収集元」＝`/collect` の `source`）。`server.py` の `/imgproxy` で画像を同一オリジン中継＝キャンバス非汚染（背景除去・台形補正・書き出しが可）。
 - **既定: IKEA（`source=ikea`・APIキー不要）** … IKEA公式の商品検索JSONを利用（`_collect_ikea`）。すぐ使える。
   - 注意: スクレイピングは各社の利用規約・robots に抵触しうるため、**個人利用・低頻度・User-Agent明示**で運用。商用化・公開時はリスクがあるので後述の楽天APIへの切替を推奨。
-- **ART OF BLACK（`source=artofblack`）** … 公式サイト(STORES)はボット対策が強く直接取得不可のため、**ART OF BLACKの楽天店**（`shopCode=artofblack`）を楽天API経由で取得（`_collect_rakuten`）。楽天の新API（`openapi.rakuten.co.jp/ichibams/...20260401`）を使用し、**`RAKUTEN_APP_ID`（UUID）＋`RAKUTEN_ACCESS_KEY`** が必要。サーバーは「許可されたWebサイト」に一致する **Referer/Origin ヘッダ**を付与（既定 `https://github.com/`、`RAKUTEN_REFERER` で変更可）。同店はライフスタイル写真主体のため、**候補画像を拡張**（Item Search は先頭3枚のみ→`_numbered_variants` で連番URL `-1..-9` を補完し最大10枚）し、その中から**最も単体・正面・無地背景らしい1枚をクライアントが自動選択**（`scoreSingleItem`：縁の無地さ＋明るさ＋中央のコントラスト＋人物ペナルティ）。`source=artofblack` では背景除去を**AIに自動格上げ**。それでもクリーンな商品写真が無い場合は「手動で背景を消す」で仕上げ。
+- **楽天 家具メーカー（`source=rakuten`＋`shop=<shopCode>`）** … フロントの **MAKERS**（あいうえお順・実APIで実在確認した家具店27社：タンスのゲン/LOWYA/モダンデコ/ニトリ系/アイリスオーヤマ/ディノス/エムール/ART OF BLACK 等）から**複数選択**でき、**枚数をメーカー数で按分**して各社から収集（`doCollect` が `per=floor(count/n)` で各 `shopCode` を順次取得しマージ）。楽天の新API（`openapi.rakuten.co.jp/ichibams/...20260401`）を使用し **`RAKUTEN_APP_ID`（UUID）＋`RAKUTEN_ACCESS_KEY`** が必要。**Referer/Origin はリクエスト元ドメインから自動生成**（公開時は `RAKUTEN_REFERER` 不要／ローカルは env で指定）。同店はライフスタイル写真主体のため、**候補画像を拡張**（Item Search は先頭3枚のみ→`_numbered_variants` で連番URL `-1..-9` を補完し最大10枚）し、その中から**最も単体・正面・無地背景らしい1枚をクライアントが自動選択**（`scoreSingleItem`：縁の無地さ＋明るさ＋中央のコントラスト＋人物ペナルティ）。`source=artofblack` では背景除去を**AIに自動格上げ**。それでもクリーンな商品写真が無い場合は「手動で背景を消す」で仕上げ。
 - **将来/任意: 楽天市場API（`source=rakuten`）** … `_collect_rakuten`。`RAKUTEN_APP_ID`（無料）が必要、`RAKUTEN_AFFILIATE_ID` 設定で購入リンクがアフィリエイトURLに＝**合法的にマネタイズ可能**。アプリ登録の「アプリURL」は実在検証されないメタ情報だが **localhost は弾かれる**ので GitHub リポジトリ等の公開URLを使う。登録用文面は `rakuten-application-info.md` 参照。1 QPS以下にスロットル済み。
 - **関連度フィルタ**（`_relevant`/`TYPE_MATCH`/`TYPE_EXCLUDE`）: 商品名が選択カテゴリの語を含むものだけ採用し、無関係カテゴリ・部品/カバー類の混入を除去（IKEAは品名に種類が出ないため typeName/説明も判定に使用）。
 - **家具の手動背景消し**: 自動削除後に残る背景を、家具タブ「切り抜き」→「手動で背景を消す（ブラシ）」で家具の上をドラッグして透明化（Alt/右ドラッグで復元）。家具画像空間の `eraseMask` に保持し `rebuildFurniture` で適用、Undo・複製・保存に対応。

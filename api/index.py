@@ -6,7 +6,7 @@ shared stdlib core. The heavy LaMa /inpaint is NOT here (the browser falls back 
 PatchMatch on the hosted site). Local dev still uses server.py (LaMa included)."""
 import os
 import sys
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -22,9 +22,15 @@ def health():
 
 
 @app.get("/collect")
-def collect(type: str = "", taste: str = "", count: int = 50, source: str = "ikea", shop: str = ""):
+def collect(request: Request, type: str = "", taste: str = "", count: int = 50, source: str = "ikea", shop: str = ""):
+    # Rakuten requires Referer/Origin matching a registered site → use the request's own domain
+    host = request.headers.get("host", "")
+    referer = None
+    if host and "localhost" not in host and "127.0.0.1" not in host:
+        proto = request.headers.get("x-forwarded-proto", "https")
+        referer = f"{proto}://{host}/"
     try:
-        return core.collect(type, taste, count, source, shop)
+        return core.collect(type, taste, count, source, shop, referer)
     except core.CollectError as e:
         raise HTTPException(status_code=e.status, detail=e.detail)
 
