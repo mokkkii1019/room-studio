@@ -82,7 +82,7 @@ python server.py   # → http://127.0.0.1:7865
 - `api/index.py` … FastAPI アプリ（`app`）。Vercel が**単一の Serverless Function**としてデプロイし、全リクエストを処理（HTML・/health・/collect・/imgproxy）
 - `api/_collect_core.py` … 収集/画像リレーの共有ロジック（`server.py` と Vercel が共用・標準ライブラリのみ）
 - `requirements.txt` … `fastapi`（**Vercel の Python ランタイム有効化に必須**。これが無いと関数が検出されない）
-- `vercel.json` … 関数の `maxDuration` 設定（rewrite は不要＝FastAPI が全ルートを処理）
+- `vercel.json` は**不要**（ゼロ設定。FastAPI プリセットが `api/index.py` の `app` を自動検出し全ルートを処理）。関数の最大実行時間を延ばしたい場合のみ Vercel の Project Settings → Functions で設定
 - `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env` 等を配信対象から除外
 - `/imgproxy` は公開時の悪用防止のため **IKEA/楽天の画像ホストのみ許可**（`IMG_HOST_SUFFIXES`）
 

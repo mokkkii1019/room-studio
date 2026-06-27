@@ -201,7 +201,7 @@ def _collect_rakuten(type_, taste, count, shop=""):
         req = urllib.request.Request(url, headers={
             "User-Agent": "RoomStudio/1.0", "Referer": RAKUTEN_REFERER, "Origin": RAKUTEN_ORIGIN})
         try:
-            with urllib.request.urlopen(req, timeout=10) as r:
+            with urllib.request.urlopen(req, timeout=8) as r:
                 data = json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "ignore")[:200]
