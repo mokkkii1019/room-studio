@@ -1,0 +1,19 @@
+# Keep the serverless build lean and safe.
+# CRITICAL: exclude the heavy local requirements + dev server so Vercel does NOT
+# try to install torch/PIL/etc for the (stdlib-only) /api functions.
+server.py
+requirements.txt
+.env
+.env.example
+setup.bat
+setup.sh
+run.bat
+run.sh
+*.md
+.gitignore
+.gitattributes
+__pycache__/
+api/__pycache__/
+.venv/
+venv/
+node_modules/

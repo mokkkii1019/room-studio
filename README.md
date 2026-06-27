@@ -74,6 +74,35 @@ python server.py   # → http://127.0.0.1:7865
 
 ---
 
+## インターネットに公開する（Vercel）
+
+不特定多数に使ってもらうための公開デプロイ。フロント（`room-studio.html`）は静的配信、`/collect`・`/imgproxy`・`/health` は **Vercel Python サーバーレス関数**（`api/` 配下・標準ライブラリのみ）として動く。重い LaMa(`/inpaint`)は公開では使わず、消しゴムは**ブラウザ内 PatchMatch** に自動フォールバックする（無料・完全動作）。
+
+**構成（このリポジトリに同梱済み）**
+- `api/_collect_core.py` … 収集/画像リレーの共有ロジック（`server.py` と Vercel が共用）
+- `api/collect.py` / `api/imgproxy.py` / `api/health.py` … サーバーレス関数
+- `vercel.json` … `/`→`room-studio.html`、`/collect|imgproxy|health`→`/api/*` の rewrite と関数設定
+- `.vercelignore` … `server.py`・`requirements.txt`（重い依存）・`.env` 等を配信対象から除外
+- `/imgproxy` は公開時の悪用防止のため **IKEA/楽天の画像ホストのみ許可**（`IMG_HOST_SUFFIXES`）
+
+**手順**
+1. リポジトリを GitHub に push（例: `https://github.com/mokkkii1019/room-studio`）。
+2. [vercel.com](https://vercel.com) で **Add New → Project → Import**（Framework Preset は **Other**）。
+3. **Environment Variables** を設定（Production/Preview 両方）:
+   - `RAKUTEN_APP_ID`（楽天アプリID／UUID）
+   - `RAKUTEN_ACCESS_KEY`（アクセスキー）
+   - `RAKUTEN_AFFILIATE_ID`（任意・購入リンクをアフィリエイト化）
+   - `RAKUTEN_REFERER`（後述。初回は空でも可）
+4. **Deploy**。発行ドメイン（例 `room-studio-xxxx.vercel.app`）が出る。
+5. **楽天の「許可されたWebサイト」にそのドメインを追加**し（`http(s)://` は付けない＝`room-studio-xxxx.vercel.app`）、Vercel の `RAKUTEN_REFERER=https://room-studio-xxxx.vercel.app/` を設定して **Redeploy**（新APIは Referer/Origin 一致が必須）。
+6. 完了。`https://<ドメイン>/` で誰でも利用可。IKEA収集はキー不要、ART OF BLACK収集は上記キーで動作。
+
+> **ローカル開発は不変**: 引き続き `python server.py`（または `run.bat`/`run.sh`）で高品質 LaMa 込みの全機能が使える。収集ロジックは `api/_collect_core.py` に一本化済みで二重管理は不要。
+>
+> **次フェーズ（マネタイズ土台）**: Supabase 認証＋プロジェクト/家具ライブラリのクラウド保存、無料枠制限、Stripe 課金。アフィリエイト導線（楽天）は実装済み。
+
+---
+
 ## 機能の使い方
 
 1. **部屋を読み込む** … 「画像を開く」or「デモの部屋」。長辺1100pxに自動縮小。

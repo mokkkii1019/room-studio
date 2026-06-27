@@ -1160,17 +1160,18 @@ function buildWarpCanvas(l){
 /* =========================================================================
    INPAINT — LaMa local server (best, CPU-friendly) with in-browser PatchMatch fallback
    ========================================================================= */
-const SERVER = { available:false, url:'' };
+// available = API（収集/画像リレー）に到達できるか。 inpaint = 高品質LaMaが使えるか（公開版は無し→PatchMatch）。
+const SERVER = { available:false, url:'', inpaint:false };
 async function probeServer(){
   const cands = ['', 'http://127.0.0.1:7865', 'http://localhost:7865'];
   for(const base of cands){
-    try{ const r=await fetch(base+'/health',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(j&&j.inpaint){ SERVER.available=true; SERVER.url=base; updateEraseBadge(); return; } } }catch(e){}
+    try{ const r=await fetch(base+'/health',{cache:'no-store'}); if(r.ok){ const j=await r.json(); SERVER.available=true; SERVER.url=base; SERVER.inpaint=!!(j&&j.inpaint); updateEraseBadge(); return; } }catch(e){}
   }
-  SERVER.available=false; updateEraseBadge();
+  SERVER.available=false; SERVER.inpaint=false; updateEraseBadge();
 }
 function updateEraseBadge(){ const b=$('eraseEngine'); if(!b) return;
-  if(SERVER.available){ b.textContent='● AI補完エンジン（LaMa）に接続済み — 高品質'; b.className='engine ok'; }
-  else { b.textContent='○ ブラウザ内補完（PatchMatch）で動作中 — サーバー未接続'; b.className='engine'; }
+  if(SERVER.inpaint){ b.textContent='● AI補完エンジン（LaMa）に接続済み — 高品質'; b.className='engine ok'; }
+  else { b.textContent='○ ブラウザ内補完（PatchMatch）で動作中'; b.className='engine'; }
 }
 function dataURLToCanvas(url, w, h){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(im,0,0,w,h); res(c); }; im.onerror=rej; im.src=url; }); }
 function dilate(mask,w,h,r){ if(r<=0) return mask; const out=new Uint8Array(w*h); for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let v=0; for(let dy=-r;dy<=r&&!v;dy++)for(let dx=-r;dx<=r;dx++){ const xx=clamp(x+dx,0,w-1),yy=clamp(y+dy,0,h-1); if(mask[yy*w+xx]){v=1;break;} } out[y*w+x]=v; } return out; }
@@ -1195,7 +1196,7 @@ async function runEraseNow(){
 
   let filled;   // ImageData (rw×rh) with the hole filled
   let usedFallback=false;
-  if(SERVER.available){
+  if(SERVER.inpaint){   // 高品質LaMa（ローカルサーバー時のみ）。公開版はPatchMatch。
     try{ filled = await serverInpaintRegion(minx,miny,rw,rh); }
     catch(err){ console.error('LaMa server failed:',err); filled = await patchMatchRegion(minx,miny,rw,rh); usedFallback=true; }
   } else {
@@ -1811,7 +1812,7 @@ async function runBgQueue(){ if(bgRunning) return; bgRunning=true;
 function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
 async function doCollect(){
   if(!SERVER.available) await probeServer();
-  if(!SERVER.available){ setCollectStatus('サーバー未接続。server.py を起動してください', 'err'); toast('server.py を起動してください'); return; }
+  if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
   const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value, source=$('collectSource').value;
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
@@ -2183,8 +2184,8 @@ on($('eraseSamAdd'),'click',samCommit);
 on($('eraseSamResetBtn'),'click',samResetPoints);
 on($('eraseSize'),'input',e=>{ $('eraseSizeV').textContent=e.target.value; renderOverlay(); });
 on($('eraseClear'),'click',()=>{ State.eraseMask=newMask(); erasePreviewClear(); samResetPoints(); $('runErase').disabled=true; render(); });
-on($('eraseRecheck'),'click',async()=>{ updateEraseBadge(); await probeServer(); toast(SERVER.available?'AI補完エンジンに接続しました':'サーバーは見つかりませんでした'); });
-on($('runErase'),'click',()=>{ busy(true, SERVER.available?'AIで補完しています…':'周囲から補完しています…'); setTimeout(async()=>{ try{ await runEraseNow(); }catch(err){ console.error(err); toast('補完に失敗しました'); } busy(false); },30); });
+on($('eraseRecheck'),'click',async()=>{ await probeServer(); toast(SERVER.inpaint?'AI補完エンジン（LaMa）に接続しました':'ブラウザ内補完（PatchMatch）で動作中'); });
+on($('runErase'),'click',()=>{ busy(true, SERVER.inpaint?'AIで補完しています…':'周囲から補完しています…'); setTimeout(async()=>{ try{ await runEraseNow(); }catch(err){ console.error(err); toast('補完に失敗しました'); } busy(false); },30); });
 
 // info-mark tooltips (hover an ⓘ to read the help text; positioned in <body> so it is never clipped)
 const tipEl=document.createElement('div'); tipEl.className='tip'; document.body.appendChild(tipEl);
