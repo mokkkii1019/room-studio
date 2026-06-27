@@ -18,7 +18,7 @@
 ### B. 消しゴムを最高品質にする（LaMa・CPUでOK）
 ```bash
 # 1) 依存をインストール
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 # GPUが無いPCは、軽量なCPU版torchを先に入れると快適:
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 
@@ -36,7 +36,7 @@ python server.py
 
 ## 別のPCで動かす（ローカル）
 
-このフォルダ（`room-studio.html` / `server.py` / `requirements.txt` / `setup.bat` / `run.bat`）を**そのままコピー**（USB・ZIP・共有フォルダ等）すれば動きます。
+このフォルダ（`room-studio.html` / `server.py` / `requirements-local.txt` / `setup.bat` / `run.bat`）を**そのままコピー**（USB・ZIP・共有フォルダ等）すれば動きます。
 
 ### 手軽に試す（インストール不要・基本機能のみ）
 `room-studio.html` を**ブラウザにドラッグ＆ドロップ**（またはダブルクリック）するだけ。
@@ -66,7 +66,7 @@ python server.py   # → http://127.0.0.1:7865
 ```
 > Mac には通常 `python` ではなく `python3` があります。macOS標準Pythonは pip 制限（externally-managed）が出ることがあるため、上記のように **venv（.venv）** を使うのが安全です。torch は Mac では通常の `pip install torch`（CPU index URL は付けない）。
 
-> 注意: `pip install -r requirements.txt` は環境によって numpy のビルドで失敗することがあります（Windowsで確認）。上記 `setup.bat` / 手動コマンドの順序（torch→各種→`--no-deps`でsimple-lama）だと安定します。
+> 注意: `pip install -r requirements-local.txt` は環境によって numpy のビルドで失敗することがあります（Windowsで確認）。上記 `setup.bat` / 手動コマンドの順序（torch→各種→`--no-deps`でsimple-lama）だと安定します。
 > ネット接続: LaMaモデルの初回DL・家具のネット収集・AI選択(SAM)/AI背景除去（CDN/モデル取得）にはインターネットが必要です。色/素材/手動編集はオフラインでも動きます。
 
 ### 同じLANの別端末から開きたい場合（任意）
@@ -82,7 +82,7 @@ python server.py   # → http://127.0.0.1:7865
 - `api/_collect_core.py` … 収集/画像リレーの共有ロジック（`server.py` と Vercel が共用）
 - `api/collect.py` / `api/imgproxy.py` / `api/health.py` … サーバーレス関数
 - `vercel.json` … `/`→`room-studio.html`、`/collect|imgproxy|health`→`/api/*` の rewrite と関数設定
-- `.vercelignore` … `server.py`・`requirements.txt`（重い依存）・`.env` 等を配信対象から除外
+- `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env` 等を配信対象から除外。ルートの `requirements.txt` は空（Pythonランタイム有効化用）
 - `/imgproxy` は公開時の悪用防止のため **IKEA/楽天の画像ホストのみ許可**（`IMG_HOST_SUFFIXES`）
 
 **手順**
@@ -214,7 +214,7 @@ python server.py   # → http://127.0.0.1:7865
 ## ファイル
 - `room-studio.html` … アプリ本体（単一ファイル）
 - `server.py` … ローカルサーバー（LaMa補完＋家具のネット収集＋アプリ配信）
-- `requirements.txt` … サーバーの依存
+- `requirements-local.txt` … ローカルLaMaサーバーの依存（重い）。`requirements.txt`（ルート）はVercel用の空ファイル
 - `setup.bat` / `run.bat` … Windows用 セットアップ / 起動
 - `setup.sh` / `run.sh` … Mac・Linux用 セットアップ / 起動（`bash setup.sh` → `bash run.sh`）
 

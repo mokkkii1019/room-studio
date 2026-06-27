@@ -7,7 +7,7 @@ Room Studio — ローカル AI 補完サーバー（LaMa / CPU対応）
 ローカルサーバーです。GPU が無くても CPU で動きます（初回はモデルを自動ダウンロード）。
 
 使い方:
-    pip install -r requirements.txt
+    pip install -r requirements-local.txt
     # GPUが無いPCでは、軽量なCPU版torchを先に入れると速くて容量も小さいです:
     #   pip install torch --index-url https://download.pytorch.org/whl/cpu
     python server.py

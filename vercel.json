@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/*.py": { "maxDuration": 30 }
+    "api/collect.py": { "maxDuration": 30 },
+    "api/imgproxy.py": { "maxDuration": 20 },
+    "api/health.py": { "maxDuration": 10 }
   },
   "rewrites": [
     { "source": "/", "destination": "/room-studio.html" },
