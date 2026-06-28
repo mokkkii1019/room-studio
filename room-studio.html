@@ -166,10 +166,10 @@
   .mat.none svg{width:18px;height:18px;stroke-width:1.7}
 
   /* furniture library (gallery of loaded images) */
-  .furni-lib{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px}
+  .furni-lib{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px}
   .furni-lib .lib-cat{grid-column:1/-1; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px; padding-top:8px; border-top:1px solid var(--line)}
   .furni-lib .lib-cat:first-child{margin-top:0; padding-top:0; border-top:0}
-  .furni-item{position:relative; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; display:flex; flex-direction:column}
+  .furni-item{position:relative; min-width:0; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; display:flex; flex-direction:column}
   .furni-item:hover{border-color:var(--accent)}
   .furni-item:active{cursor:grabbing}
   .furni-item .thumb{display:block; width:100%; height:58px; background:repeating-conic-gradient(#ececec 0% 25%, #fff 0% 50%) 50% / 12px 12px}
@@ -180,7 +180,7 @@
   .furni-item:hover .del{display:flex}
   .furni-item .buy{position:absolute; top:3px; left:3px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-decoration:none; display:none; z-index:2}
   .furni-item:hover .buy{display:block}
-  .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px}
+  .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .field{width:100%; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; font-size:12.5px; background:var(--panel); color:var(--ink); margin:6px 0}
   select.field{cursor:pointer}
   .drop-active{outline:2px dashed var(--accent); outline-offset:-5px}
