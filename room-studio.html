@@ -578,14 +578,18 @@
             </div>
           </div>
           <div class="section">
-            <span class="label">素材</span>
-            <div class="mats" id="fMatGrid"></div>
-            <button class="btn" id="fExtractMat" style="width:100%;justify-content:center;margin-top:8px">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
-              画像から素材を抽出
+            <button class="group-head toggle" type="button" data-target="fMatBody">
+              <span class="tg">−</span><span>素材</span>
             </button>
-            <div id="fMatConfig" style="display:none">
-              <div class="slider"><label>強さ</label><input type="range" id="fMatStrength" min="0" max="100" value="80"><span class="val" id="fMatStrengthV">80%</span></div>
+            <div class="group-body" id="fMatBody">
+              <div class="mats" id="fMatGrid"></div>
+              <button class="btn" id="fExtractMat" style="width:100%;justify-content:center;margin-top:8px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
+                画像から素材を抽出
+              </button>
+              <div id="fMatConfig" style="display:none">
+                <div class="slider"><label>強さ</label><input type="range" id="fMatStrength" min="0" max="100" value="80"><span class="val" id="fMatStrengthV">80%</span></div>
+              </div>
             </div>
           </div>
           <button class="btn ghost-warn" id="fDelete" style="width:100%;justify-content:center">この家具を削除</button>
@@ -605,22 +609,18 @@
             <button data-etool="sam">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
             </button>
-            <button data-etool="sub" title="選択しすぎた部分を削る">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>削る
-            </button>
           </div>
-          <div class="slider" id="eraseBrushRow"><label>ブラシ径</label><input type="range" id="eraseSize" min="8" max="160" value="60"><span class="val" id="eraseSizeV">60</span></div>
+          <div id="eraseBrushBox">
+            <div class="slider" id="eraseBrushRow"><label>ブラシ径</label><input type="range" id="eraseSize" min="8" max="160" value="60"><span class="val" id="eraseSizeV">60</span></div>
+            <button class="btn" id="eraseSubToggle" style="width:100%;justify-content:center">削る（選択しすぎた所を消す）</button>
+          </div>
           <div id="eraseSamBox" style="display:none">
             <div class="engine" id="eraseSamStatus">消したい物をクリックすると AI が範囲を推定します（初回はモデル読み込みに少し時間がかかります）</div>
-            <div class="label" style="margin:0 0 6px">AI選択<span class="info" data-tip="消したい物をクリックでAI選択（Alt/右クリックで除外）。ドラッグで足す／Alt（右）ドラッグで削る＝AIの過不足を手で補正。良ければ「消す範囲に追加」。広く取りすぎた所は「削る」ツールでも消せます。">i</span></div>
+            <div class="label" style="margin:0 0 6px">AI選択<span class="info" data-tip="消したい物をクリックでAI選択（Alt/右クリックで除外）。ドラッグで足す／Alt（右）ドラッグで削る＝AIの過不足を手で補正。良ければ「消す範囲に追加」。">i</span></div>
             <div class="row" style="margin-top:0">
               <button class="btn" id="eraseSamAdd" style="flex:1;justify-content:center">消す範囲に追加</button>
               <button class="btn" id="eraseSamResetBtn" style="flex:1;justify-content:center">やり直す</button>
             </div>
-          </div>
-          <div class="row">
-            <button class="btn" id="eraseClear" style="flex:1;justify-content:center">塗りをクリア</button>
-            <button class="btn" id="eraseRecheck" style="flex:1;justify-content:center">接続を再確認</button>
           </div>
         </div>
         <button class="run-erase" id="runErase" disabled>
@@ -704,7 +704,8 @@ const State = {
   mode:'surface',                     // surface | furniture | erase
   surfTool:null,                      // null(未選択) | brush | wand | unmask | sam | poly | eyedropper
   view:{zoom:1},                      // 部屋画像の表示ズーム（1=全体フィット）
-  eraseTool:'brush',                  // brush | sam | sub
+  eraseTool:'brush',                  // brush | sam
+  eraseSub:false,                     // ブラシの「削る」モード（ONで塗った所を選択から消す）
 
   edgeMap:null,                       // cached Sobel edge map (walls/floors are straight-edged)
   poly:{points:[]},                   // in-progress polygon (face) selection
@@ -1727,9 +1728,8 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
     if(State.surfTool!=='brush' && State.surfTool!=='unmask'){ toast('上の「選択ツール」を選んでください'); return; }
     pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){
-    if(State.eraseTool==='sub'){ drag={type:'erasesub'}; eraseAtSub(p); return; }
     if(State.eraseTool==='sam'){ const neg=(e.altKey||e.ctrlKey||e.button===2); drag={type:'sampend',samMode:'erase',sx:p.x,sy:p.y,label:neg?0:1,sub:neg}; return; }
-    const sub=(e.altKey||e.ctrlKey||e.button===2); drag={type:sub?'erasesub':'erasepaint'}; if(sub) eraseAtSub(p); else eraseAt(p);
+    const sub=State.eraseSub || (e.altKey||e.ctrlKey||e.button===2); drag={type:sub?'erasesub':'erasepaint'}; if(sub) eraseAtSub(p); else eraseAt(p);
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
     if(State.furniEyedrop){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColorFurniture(col); return; }
     if(State.furniErase){ if(!f){ toast('家具を選択してください'); return; } const restore=(e.altKey||e.button===2); pushHistory('ferase'+f.id); drag={type:'ferase',layer:f,restore}; eraseFurnitureAt(f,p.x,p.y,restore); return; }
@@ -2352,7 +2352,8 @@ function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools
   overlay.style.cursor = (t==='eyedropper')?'crosshair':'';
   if(t!=='sam') samResetPoints(); if(t!=='poly') polyReset(); renderOverlay(); }
 function setEraseTool(t){ State.eraseTool=t; document.querySelectorAll('#eraseTools button').forEach(b=>b.classList.toggle('on',b.dataset.etool===t));
-  $('eraseSamBox').style.display=(t==='sam')?'block':'none'; // brush-size row stays (drag = brush even in AI mode)
+  $('eraseSamBox').style.display=(t==='sam')?'block':'none';
+  $('eraseBrushBox').style.display=(t==='sam')?'none':'block'; // ブラシ径＋削るボタンはブラシ選択時のみ
   if(t!=='sam') samResetPoints(); renderOverlay(); }
 
 // surface panel
@@ -2445,11 +2446,10 @@ on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; bu
 
 // erase panel
 document.querySelectorAll('#eraseTools button').forEach(b=>on(b,'click',()=>setEraseTool(b.dataset.etool)));
+on($('eraseSubToggle'),'click',()=>{ State.eraseSub=!State.eraseSub; $('eraseSubToggle').classList.toggle('primary',State.eraseSub); toast(State.eraseSub?'削るモード：塗った所を選択から消します':'追加モード：塗った所を消す範囲にします'); });
 on($('eraseSamAdd'),'click',samCommit);
 on($('eraseSamResetBtn'),'click',samResetPoints);
 on($('eraseSize'),'input',e=>{ $('eraseSizeV').textContent=e.target.value; renderOverlay(); });
-on($('eraseClear'),'click',()=>{ State.eraseMask=newMask(); erasePreviewClear(); samResetPoints(); $('runErase').disabled=true; render(); });
-on($('eraseRecheck'),'click',async()=>{ await probeServer(); toast(SERVER.inpaint?'AI補完エンジン（LaMa）に接続しました':'ブラウザ内補完（PatchMatch）で動作中'); });
 on($('runErase'),'click',()=>{ busy(true, SERVER.inpaint?'AIで補完しています…':'周囲から補完しています…'); setTimeout(async()=>{ try{ await runEraseNow(); }catch(err){ console.error(err); toast('補完に失敗しました'); } busy(false); },30); });
 
 // info-mark tooltips (hover an ⓘ to read the help text; positioned in <body> so it is never clipped)
