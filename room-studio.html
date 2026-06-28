@@ -103,8 +103,13 @@
   .scroll::-webkit-scrollbar-thumb{background:var(--line); border-radius:9px; border:2px solid var(--panel)}
 
   .section{margin-bottom:18px}
-  .subsection{margin-top:14px; padding-top:12px; border-top:1px solid var(--line)}
-  .sub-head{display:block; margin-bottom:8px; font-size:12px; font-weight:600; color:var(--muted)}
+  .sub-head{display:flex; align-items:center; gap:6px; margin-bottom:8px; font-size:12px; font-weight:600; color:var(--muted)}
+  .sub-head .n{display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; border-radius:50%; background:var(--accent); color:#fff; font-size:10px; font-weight:700; flex:0 0 auto}
+  /* category that visibly groups multiple features */
+  .group-head{display:flex; align-items:center; gap:7px; font-weight:700; font-size:13.5px; color:var(--ink); margin-bottom:9px}
+  .group-head svg{width:16px; height:16px; stroke-width:1.9; color:var(--accent)}
+  .group-body{border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--panel)}
+  .group-item + .group-item{margin-top:12px; padding-top:12px; border-top:1px dashed var(--line)}
   .section > .label{display:block; margin-bottom:9px}
   /* info mark + hover tooltip (replaces inline help text) */
   .info{display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; margin-left:6px;
@@ -441,15 +446,21 @@
       <!-- ===== FURNITURE PANEL ===== -->
       <div id="panelFurniture" style="display:none">
         <div class="section">
-          <span class="label">家具を追加</span>
-          <button class="addbtn" id="addFurniture">
+          <span class="group-head">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
-            画像を追加（ドラッグ＆ドロップも可）
-          </button>
-          <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
-
-          <div id="collectSection" class="subsection">
-            <span class="sub-head">家具店から収集<span class="info" data-tip="IKEAはキー不要。楽天家具メーカーは RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY（無料）が必要。RUGHAUSはキー不要。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。">i</span></span>
+            家具を追加
+          </span>
+          <div class="group-body">
+            <div class="group-item">
+              <span class="sub-head"><span class="n">1</span>自分の画像から</span>
+              <button class="addbtn" id="addFurniture">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+                画像を追加（ドラッグ＆ドロップも可）
+              </button>
+              <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
+            </div>
+            <div id="collectSection" class="group-item">
+              <span class="sub-head"><span class="n">2</span>家具店から収集<span class="info" data-tip="IKEAはキー不要。楽天家具メーカーは RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY（無料）が必要。RUGHAUSはキー不要。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。">i</span></span>
           <select class="field" id="collectSource" title="収集元を選択">
             <option value="ikea" selected>IKEA（キー不要）</option>
             <option value="makers">楽天 家具メーカー（複数選択・楽天キー必要）</option>
@@ -496,6 +507,7 @@
             家具店から収集
           </button>
           <div class="engine" id="collectStatus" style="display:none"></div>
+            </div>
           </div>
         </div>
 
