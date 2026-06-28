@@ -365,13 +365,10 @@
         </button>
         <div id="surfaceControls" style="display:none">
           <div class="section">
-            <span class="label">選択ツール<span class="info" data-tip="壁は一面ごとに「表面を追加」し、その面だけを選択して色・素材を変えると面ごとに塗り分けられます。範囲指定は 面選択(四隅クリック)/自動選択(角で止める)/ブラシ/AI選択 から。質感や陰影は保ったまま色だけ変わります。">i</span></span>
+            <span class="label">選択ツール<span class="info" data-tip="壁は一面ごとに「表面を追加」し、その面だけを選択して色・素材を変えると面ごとに塗り分けられます。範囲指定は 面選択(四隅クリック)/ブラシ/AI選択 から。ブラシ選択時は「消す」ボタンで塗った所の選択を消せます。質感や陰影は保ったまま色だけ変わります。">i</span></span>
             <div class="seg" id="surfTools">
               <button data-tool="brush">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>ブラシ
-              </button>
-              <button data-tool="wand">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 4V2M4 13l9 9 7-7-9-9-7 7z"/></svg>自動
               </button>
               <button data-tool="sam">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v6M3 3h6M21 3v6M21 3h-6M3 21v-6M3 21h6M21 21v-6M21 21h-6M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/></svg>AI選択
@@ -379,13 +376,11 @@
               <button data-tool="poly" title="壁/床の四隅をクリックして一面を選択">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7l8-4 8 4-8 4-8-4zM4 7v10l8 4 8-4V7"/></svg>面
               </button>
-              <button data-tool="unmask">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8"/></svg>消す
-              </button>
             </div>
-            <div class="slider" id="brushSizeRow" style="display:none"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
-            <div class="slider" id="wandTolRow" style="display:none"><label>色の許容</label><input type="range" id="wandTol" min="6" max="90" value="34"><span class="val" id="wandTolV">34</span></div>
-            <label class="toggle" id="wandEdgeRow" style="display:none"><input type="checkbox" id="wandEdge" checked><span class="sw"></span>壁/床の角（境界）で止める</label>
+            <div id="surfBrushBox" style="display:none">
+              <div class="slider" id="brushSizeRow"><label>ブラシ径</label><input type="range" id="brushSize" min="6" max="120" value="42"><span class="val" id="brushSizeV">42</span></div>
+              <button class="btn" id="surfSubToggle" style="width:100%;justify-content:center">消す（塗った所の選択を消す）</button>
+            </div>
             <div id="polyBox" style="display:none">
               <div class="label" style="margin:0 0 6px">面選択<span class="info" data-tip="壁や床の四隅を順にクリックすると直線で囲み、その一面だけを選択します。ダブルクリックか「面を確定」で確定（Backspaceで1つ戻る）。一面ずつ色・素材を塗り分けられます。">i</span></div>
               <div class="row" style="margin-top:0">
@@ -417,7 +412,7 @@
                 スポイト
               </button>
             </div>
-            <p class="hint" id="eyedropHint" style="display:none;margin:8px 0 0">スポイトON: 画像をクリックすると周りの色を採取し、選択中の表面に塗ります。もう一度押すと解除。先に範囲（面/自動/ブラシ）を選んでおくと、その範囲がその色で塗りつぶされます。</p>
+            <p class="hint" id="eyedropHint" style="display:none;margin:8px 0 0">スポイトON: 画像をクリックすると周りの色を採取し、選択中の表面に塗ります。もう一度押すと解除。先に範囲（面/ブラシ）を選んでおくと、その範囲がその色で塗りつぶされます。</p>
             <div class="slider"><label>強さ</label><input type="range" id="surfStrength" min="0" max="100" value="100"><span class="val" id="surfStrengthV">100%</span></div>
             <div class="slider"><label>明るさ</label><input type="range" id="surfLight" min="-40" max="40" value="0"><span class="val" id="surfLightV">0</span></div>
             <label class="toggle"><input type="checkbox" id="keepTexture" checked><span class="sw"></span>質感・陰影を保つ</label>
@@ -702,7 +697,8 @@ const State = {
   layers:[],                          // ordered bottom->top
   selectedId:null,
   mode:'surface',                     // surface | furniture | erase
-  surfTool:null,                      // null(未選択) | brush | wand | unmask | sam | poly | eyedropper
+  surfTool:null,                      // null(未選択) | brush | sam | poly | eyedropper
+  surfSub:false,                      // ブラシの「消す」モード（ONで塗った所の選択を消す）
   view:{zoom:1},                      // 部屋画像の表示ズーム（1=全体フィット）
   eraseTool:'brush',                  // brush | sam
   eraseSub:false,                     // ブラシの「削る」モード（ONで塗った所を選択から消す）
@@ -1714,7 +1710,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
       deselectAll(); return; // 何も無い所（アイテム外）をクリック → 選択解除
     }
     // clicking a placed furniture (topmost opaque overlay) selects & edits it — basic mask tools only
-    if(State.surfTool==='brush'||State.surfTool==='wand'||State.surfTool==='unmask'){
+    if(State.surfTool==='brush'){
       for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); pushHistory('fmove'+l.id); drag={type:'move',offx:p.x-l.x,offy:p.y-l.y,layer:l}; return; } }
     }
     const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
@@ -1724,9 +1720,8 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
       const pts=State.poly.points; if(pts.length>=3){ const dx=p.x-pts[0].x, dy=p.y-pts[0].y; if(dx*dx+dy*dy<=12*12){ polyClose(); return; } }
       polyAddPoint(p); return; }
     if(State.surfTool==='sam'){ const label=(e.altKey||e.ctrlKey||e.button===2)?0:1; drag={type:'sampend',samMode:'surface',sx:p.x,sy:p.y,label}; return; }
-    if(State.surfTool==='wand'){ pushHistory(); floodFill(a.mask, p.x|0, p.y|0, +$('wandTol').value, $('wandEdge').checked?getEdgeMap():null); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); return; }
-    if(State.surfTool!=='brush' && State.surfTool!=='unmask'){ toast('上の「選択ツール」を選んでください'); return; }
-    pushHistory('stroke'); drag={type:State.surfTool==='unmask'?'erasemask':'paint'}; paintAt(p);
+    if(State.surfTool!=='brush'){ toast('上の「選択ツール」を選んでください'); return; }
+    pushHistory('stroke'); drag={type:(State.surfSub||e.altKey||e.ctrlKey||e.button===2)?'erasemask':'paint'}; paintAt(p);
   } else if(State.mode==='erase'){
     if(State.eraseTool==='sam'){ const neg=(e.altKey||e.ctrlKey||e.button===2); drag={type:'sampend',samMode:'erase',sx:p.x,sy:p.y,label:neg?0:1,sub:neg}; return; }
     const sub=State.eraseSub || (e.altKey||e.ctrlKey||e.button===2); drag={type:sub?'erasesub':'erasepaint'}; if(sub) eraseAtSub(p); else eraseAt(p);
@@ -2346,8 +2341,8 @@ document.querySelectorAll('.group-head.toggle').forEach(h=>on(h,'click',e=>{
   const open=body.style.display!=='none'; body.style.display=open?'none':'';
   const tg=h.querySelector('.tg'); if(tg) tg.textContent=open?'＋':'−';
 }));
-function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button').forEach(b=>{ if(['brush','wand','unmask','sam','poly'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
-  $('brushSizeRow').style.display=(t==='brush'||t==='unmask')?'flex':'none'; $('wandTolRow').style.display=(t==='wand')?'flex':'none'; $('wandEdgeRow').style.display=(t==='wand')?'flex':'none'; $('samBox').style.display=(t==='sam')?'block':'none'; $('polyBox').style.display=(t==='poly')?'block':'none';
+function setSurfTool(t){ State.surfTool=t; document.querySelectorAll('#surfTools button').forEach(b=>{ if(['brush','sam','poly'].includes(b.dataset.tool)) b.classList.toggle('on',b.dataset.tool===t); });
+  $('surfBrushBox').style.display=(t==='brush')?'block':'none'; $('samBox').style.display=(t==='sam')?'block':'none'; $('polyBox').style.display=(t==='poly')?'block':'none';
   $('eyedropBtn').classList.toggle('primary', t==='eyedropper'); $('eyedropHint').style.display=(t==='eyedropper')?'block':'none';
   overlay.style.cursor = (t==='eyedropper')?'crosshair':'';
   if(t!=='sam') samResetPoints(); if(t!=='poly') polyReset(); renderOverlay(); }
@@ -2360,7 +2355,7 @@ function setEraseTool(t){ State.eraseTool=t; document.querySelectorAll('#eraseTo
 on($('addSurface'),'click',addSurfaceLayer);
 document.querySelectorAll('#surfTools button').forEach(b=>on(b,'click',()=>setSurfTool(b.dataset.tool)));
 on($('brushSize'),'input',e=>{ $('brushSizeV').textContent=e.target.value; renderOverlay(); });
-on($('wandTol'),'input',e=>$('wandTolV').textContent=e.target.value);
+on($('surfSubToggle'),'click',()=>{ State.surfSub=!State.surfSub; $('surfSubToggle').classList.toggle('primary',State.surfSub); toast(State.surfSub?'消すモード：塗った所の選択を消します':'追加モード：塗った所を選択範囲にします'); });
 on($('clearMask'),'click',()=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.mask=newMask(); a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); render(); });
 on($('samCommit'),'click',samCommit);
 on($('samReset'),'click',samResetPoints);
