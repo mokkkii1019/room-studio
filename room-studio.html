@@ -1124,14 +1124,34 @@ async function imglyDevice(){ if(IMGLY_DEVICE!==null) return IMGLY_DEVICE; IMGLY
   try{ if(navigator.gpu && await navigator.gpu.requestAdapter()) IMGLY_DEVICE='gpu'; }catch(e){} return IMGLY_DEVICE; }
 /* run @imgly background removal on a canvas → returns a new canvas with alpha.
    Uses WebGPU when available + worker proxy to keep the main thread responsive. */
+/* 端末がメモリ的に弱い（スマホ等）かの判定。AIモデルはメモリを多く使うため、
+   弱い端末では入力を強めに縮小＋軽量モデル＋CPUにしてタブのOOMクラッシュ（=リロードで初期化）を防ぐ。 */
+function lowMem(){
+  try{ if(navigator.deviceMemory && navigator.deviceMemory<=4) return true; }catch(e){}
+  try{ return matchMedia('(pointer:coarse)').matches && matchMedia('(max-width:900px)').matches; }catch(e){}
+  return false;
+}
 async function aiCutCanvas(srcCanvas){
   if(!IMGLY) IMGLY=await import(/* @vite-ignore */ IMGLY_CDN);
-  const inBlob=await new Promise(res=>srcCanvas.toBlob(res,'image/png'));
-  const cfg={ proxyToWorker:true }; const dev=await imglyDevice(); if(dev==='gpu') cfg.device='gpu';
+  const low=lowMem();
+  // モデルへ渡す画像は縮小する（スマホでフル解像度を渡すとメモリ枯渇→タブ強制リロードで初期化される）。
+  // 切り抜きマスクは後で原寸の元画像に適用するので、色は鮮明なまま・家具の寸法も維持できる。
+  const small=downscaleCanvas(srcCanvas, low?640:1024);
+  const inBlob=await new Promise(res=>small.toBlob(res,'image/png'));
+  const cfg={ proxyToWorker:true };
+  if(low) cfg.model='isnet_quint8';                    // 量子化された軽量モデル（メモリ節約）
+  const dev=await imglyDevice(); if(dev==='gpu' && !low) cfg.device='gpu'; // 弱い端末はCPUワーカーで安定動作
   const outBlob=await IMGLY.removeBackground(inBlob, cfg);
   const url=URL.createObjectURL(outBlob);
-  const cut=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=srcCanvas.width; c.height=srcCanvas.height; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c); }; im.onerror=rej; im.src=url; });
-  URL.revokeObjectURL(url); return cut;
+  const cutSmall=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
+  URL.revokeObjectURL(url);
+  // 縮小した切り抜き結果のアルファを、原寸の元画像に適用（色は原寸＝鮮明、寸法は元画像と同じ）
+  const c=document.createElement('canvas'); c.width=srcCanvas.width; c.height=srcCanvas.height; const x=c.getContext('2d');
+  x.drawImage(srcCanvas,0,0);
+  x.globalCompositeOperation='destination-in';
+  x.drawImage(cutSmall,0,0,c.width,c.height);
+  x.globalCompositeOperation='source-over';
+  return c;
 }
 async function aiCutFurniture(layer){
   busy(true,'AIで背景を切り抜き中…（初回はモデル読み込みで時間がかかります）');
