@@ -217,6 +217,8 @@
   .layer.drop-after{box-shadow:inset 0 -3px 0 var(--accent)}
   .layer .swatch{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.12); flex:0 0 auto; background-size:cover}
   .layer .nm{flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .layer a.nm{color:var(--accent); text-decoration:none}
+  .layer a.nm:hover{text-decoration:underline}
   .layer .kind{font-size:9.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
   .layer .ic{border:0;background:transparent;color:var(--muted);padding:3px;border-radius:5px;display:flex}
   .layer .ic:hover{background:var(--panel-2); color:var(--ink)}
@@ -1831,7 +1833,7 @@ function makeFurniEl(it){
   const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
   if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
   const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
-  if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='購入'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='購入ページを開く'; on(buy,'click',ev=>ev.stopPropagation()); buy.draggable=false; el.appendChild(buy); }
+  if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>ev.stopPropagation()); buy.draggable=false; el.appendChild(buy); }
   on(el,'click',()=>placeFromLib(it.id));
   on(el,'dragstart',ev=>{ ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
   return el;
@@ -2029,7 +2031,11 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
     if(l.type==='surface'){ sw.style.background=l.material? 'none':l.color; if(l.material){ sw.style.backgroundImage=`url(${matTile(l.material).toDataURL()})`; } }
     else { sw.style.backgroundImage=`url(${(l.proc||l.srcCanvas).toDataURL()})`; sw.style.backgroundSize='cover'; }
     row.appendChild(sw);
-    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=l.name; row.appendChild(nm);
+    const buyUrl=(l.type==='furniture')?(l.affiliateUrl||l.productUrl||l.link||''):'';
+    let nm;
+    if(buyUrl){ nm=document.createElement('a'); nm.className='nm'; nm.href=buyUrl; nm.target='_blank'; nm.rel='noopener'; nm.draggable=false; nm.title=l.name+' — 詳細ページを開く'; on(nm,'click',ev=>ev.stopPropagation()); }
+    else { nm=document.createElement('div'); nm.className='nm'; }
+    nm.textContent=l.name; row.appendChild(nm);
     const kind=document.createElement('span'); kind.className='kind'; kind.textContent= l.type==='surface' ? '表面' : ((l.category && l.category!=='upload' && CAT_LABELS[l.category]) ? CAT_LABELS[l.category] : '家具'); row.appendChild(kind);
     const eye=document.createElement('button'); eye.className='ic eye'+(l.visible?'':' off'); eye.title='表示/非表示'; eye.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayers(); render(); });
