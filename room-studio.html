@@ -449,6 +449,7 @@
           <select class="field" id="collectSource" title="収集元を選択">
             <option value="ikea" selected>IKEA（キー不要）</option>
             <option value="makers">楽天 家具メーカー（複数選択・楽天キー必要）</option>
+            <option value="rughaus">RUGHAUS（ラグ・インテリア／キー不要）</option>
           </select>
           <div id="makerBox" style="display:none">
             <div class="row" style="margin:6px 0 4px; align-items:center; gap:8px">
@@ -1955,7 +1956,7 @@ async function doCollect(){
     } else {
       const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
-      const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source='ikea'; });
+      const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source=source; });  // 'ikea' or 'rughaus'
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
     }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
@@ -2146,7 +2147,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
         strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture, material:l.material, matStrength:l.matStrength,
         matScale:l.matScale, perspective:l.perspective, quad:l.quad, visible:l.visible };
       const src=l.source||'upload';
-      const stripImg = forCloud && (src==='rakuten' || src==='ikea'); // クラウドには商品画像を保存しない
+      const stripImg = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus'); // クラウドには商品画像を保存しない
       const f={ type:'furniture', id:l.id, name:l.name,
         x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
         bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,

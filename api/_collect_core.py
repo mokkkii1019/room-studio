@@ -114,7 +114,7 @@ IKEA_TYPE_KW = {
 
 # /imgproxy is a same-origin relay (avoids canvas tainting). On a PUBLIC deployment it
 # must NOT be an open relay, so only the furniture image hosts are allowed.
-IMG_HOST_SUFFIXES = ("ikea.com", "cdtapps.com", "rakuten.co.jp", "r10s.jp")
+IMG_HOST_SUFFIXES = ("ikea.com", "cdtapps.com", "rakuten.co.jp", "r10s.jp", "shopify.com", "rughaus.jp")
 
 
 def _numbered_variants(url, maxn):
@@ -260,12 +260,75 @@ def _collect_rakuten(type_, taste, count, shop="", referer=None):
     return items
 
 
+def _collect_shopify(type_, taste, count, base, shop_name):
+    """Shopify storefront (e.g. RUGHAUS = rughaus.jp). Uses the public /products.json
+    (no key). Shopify has no keyword search, so fetch pages and filter by category/taste."""
+    inc = TYPE_MATCH.get(type_)
+    tl = (taste or "").strip().lower()
+    items, seen, page = [], set(), 1
+    while len(items) < count and page <= 6:
+        url = base.rstrip("/") + "/products.json?limit=250&page=" + str(page)
+        req = urllib.request.Request(url, headers={"User-Agent": IKEA_UA, "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except Exception as e:  # noqa: BLE001
+            if items:
+                break
+            raise CollectError(502, f"{shop_name}取得に失敗: {e}")
+        prods = data.get("products") or []
+        if not prods:
+            break
+        for p in prods:
+            pid = p.get("id")
+            if not pid or pid in seen:
+                continue
+            seen.add(pid)
+            title = p.get("title") or ""
+            tags = p.get("tags") or []
+            tagstr = " ".join(tags) if isinstance(tags, list) else str(tags)
+            hay = (title + " " + (p.get("product_type") or "") + " " + tagstr).lower()
+            if inc and not any(k.lower() in hay for k in inc):
+                continue  # not this category
+            if tl and tl not in hay and tl not in (p.get("body_html") or "").lower():
+                continue  # taste keyword not matched
+            cand_urls = []
+            for im in (p.get("images") or [])[:8]:
+                u = im.get("src") if isinstance(im, dict) else None
+                if u:
+                    cand_urls.append(u)
+            if not cand_urls:
+                continue
+            price = 0
+            vs = p.get("variants") or []
+            if vs:
+                try:
+                    price = int(float(vs[0].get("price") or 0))
+                except Exception:  # noqa: BLE001
+                    price = 0
+            cands = ["/imgproxy?url=" + urllib.parse.quote(u, safe="") for u in cand_urls[:10]]
+            items.append({
+                "id": str(pid),
+                "title": title[:80] or type_,
+                "proxy": cands[0], "cands": cands,
+                "link": base.rstrip("/") + "/products/" + (p.get("handle") or ""),
+                "price": price,
+                "shop": shop_name,
+            })
+            if len(items) >= count:
+                break
+        page += 1
+    return items
+
+
 def collect(type_, taste="", count=50, source="ikea", shop="", referer=None):
     """Dispatch a collection request. Returns the response dict. Raises CollectError.
     `referer` (the request's own origin) lets the Rakuten call match the deployed domain."""
     count = max(1, min(90, int(count)))
     try:
-        if source == "artofblack":
+        if source == "rughaus":
+            items = _collect_shopify(type_, taste, count, "https://rughaus.jp", "RUGHAUS")
+        elif source == "artofblack":
             items = _collect_rakuten(type_, taste, count, "artofblack", referer)
         elif source == "rakuten":
             items = _collect_rakuten(type_, taste, count, shop, referer)
