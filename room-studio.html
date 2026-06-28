@@ -234,6 +234,22 @@
   .maker-list input{width:16px; height:16px; flex:0 0 auto; accent-color:var(--accent)}
   .maker-list .mk-empty{padding:10px; color:var(--muted); font-size:12px; text-align:center}
 
+  /* my-projects (favorites) drawer */
+  .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
+  .fav-panel{width:min(460px,100%); height:100%; background:var(--panel); display:flex; flex-direction:column; box-shadow:-8px 0 40px rgba(0,0,0,.4)}
+  .fav-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line)}
+  .fav-title{font-weight:700; font-size:14px}
+  .fav-save{display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line)}
+  .fav-list{flex:1 1 auto; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:10px}
+  .fav-card{display:grid; grid-template-columns:88px 1fr; gap:10px 12px; border:1px solid var(--line); border-radius:10px; padding:9px; align-items:center}
+  .fav-card.on{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+  .fav-thumb{width:88px; height:66px; object-fit:cover; border-radius:6px; background:#eceae6}
+  .fav-meta{min-width:0}
+  .fav-nm{font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .fav-dt{font-size:11px; color:var(--muted); margin-top:2px}
+  .fav-acts{grid-column:1/-1; display:flex; gap:6px; flex-wrap:wrap}
+  .fav-acts .btn{padding:5px 10px; font-size:12px}
+
   @media (max-width:880px){
     main{grid-template-columns:1fr; grid-template-rows:minmax(260px,48vh) 1fr}
     .panel{border-left:0; border-top:1px solid var(--line)}
@@ -269,6 +285,10 @@
     <button class="btn" id="btnTutorial" title="使い方をステップで案内">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg>
       使い方
+    </button>
+    <button class="btn" id="btnFav" title="保存した自分の作品（この端末内）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 17.3l-6.2 3.7 1.6-7L2 9.3l7.1-.6L12 2l2.9 6.7 7.1.6-5.4 4.7 1.6 7z"/></svg>
+      マイ作品
     </button>
     <button class="btn" id="btnOpen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16l4-5 4 4 3-3 5 6M4 4h16v16H4z"/></svg>
@@ -614,6 +634,20 @@
   </aside>
 </main>
 
+<div id="favDrawer" class="fav-drawer" style="display:none">
+  <div class="fav-panel">
+    <div class="fav-head">
+      <span class="fav-title">マイ作品（この端末に保存）</span>
+      <button class="btn" id="favClose">閉じる</button>
+    </div>
+    <div class="fav-save">
+      <input type="text" class="field" id="favName" placeholder="作品名（任意）" style="flex:1;margin:0">
+      <button class="btn primary" id="favSaveNew" style="flex:0 0 auto">現在の作品を保存</button>
+    </div>
+    <div class="fav-list" id="favList"></div>
+    <div id="favEmpty" class="empty-note" style="padding:16px">まだ保存した作品はありません。「現在の作品を保存」で追加できます。</div>
+  </div>
+</div>
 <div id="toast"></div>
 <div id="busy"><div class="card"><span class="spin"></span><span id="busyText">処理中…</span></div></div>
 
@@ -668,6 +702,7 @@ const State = {
   furniEyedrop:false,                 // eyedropper active for furniture recolor
   furniErase:false,                   // manual background-erase brush active for selected furniture
   makers:new Set(),                   // selected Rakuten furniture-maker shopCodes (multi-collect)
+  currentFavId:null,                  // id of the IndexedDB favorite currently open (for overwrite-save)
   furniLib:[], libNextId:1, libFilter:'all',  // library of loaded furniture images (staged) + category filter
   eraseMask:null,                     // Uint8 over room
   undo:[], redo:[], _hcKey:null, _hcTime:0,   // general history (full snapshots) + coalescing
@@ -1749,11 +1784,12 @@ function addSurfaceLayer(){
     visible:true, dirty:false, cache:null };
   State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
 }
-function addFurnitureLayer(srcCanvas, name, px, py){
-  pushHistory();
+function addFurnitureLayer(srcCanvas, name, px, py, meta){
+  pushHistory(); meta=meta||{};
   const id=State.nextId++;
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
-    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1, category:null,
+    srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1, category:meta.category||null,
+    source:meta.source||'upload', itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'', shop:meta.shop||'',
     bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
@@ -1765,7 +1801,12 @@ function addFurnitureLayer(srcCanvas, name, px, py){
    FURNITURE LIBRARY — staged images you can place into the room
    ========================================================================= */
 function copyCanvas(src){ const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; c.getContext('2d').drawImage(src,0,0); return c; }
-function addToFurniLib(canvas, name, meta){ const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,60), srcCanvas:canvas, link:(meta&&meta.link)||'', price:(meta&&meta.price)||0, shop:(meta&&meta.shop)||'', category:(meta&&meta.category)||'upload' }; State.furniLib.push(it); renderFurniLib(); return it; }
+function addToFurniLib(canvas, name, meta){ meta=meta||{};
+  const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,60), srcCanvas:canvas,
+    link:meta.link||'', price:meta.price||0, shop:meta.shop||'', category:meta.category||'upload',
+    source:meta.source||'upload',                 // 'upload' | 'rakuten' | 'ikea'（provenance）
+    itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'' };
+  State.furniLib.push(it); renderFurniLib(); return it; }
 const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット/ラグ',plant:'観葉植物',chest:'サイドボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',shelf:'シェルフ',cushion:'ブランケット/クッション',upload:'アップロード'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
@@ -1777,7 +1818,7 @@ function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(
   sel.value=State.libFilter;
 }
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
-function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py); const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); } toast('部屋に配置しました。ドラッグで移動できます'); }
+function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py, it); const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); } toast('部屋に配置しました。ドラッグで移動できます'); }
 function renderFurniLib(){ const host=$('furniLib'); if(!host) return; host.innerHTML='';
   updateLibFilter();
   const filt=State.libFilter||'all';
@@ -1912,14 +1953,14 @@ async function doCollect(){
         try{
           const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), source:'rakuten', shop:sel[i].code}), {cache:'no-store'});
           if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
-          const j=await r.json(); (j.items||[]).forEach(it=>{ it.shop=it.shop||sel[i].name; items.push(it); });
+          const j=await r.json(); (j.items||[]).forEach(it=>{ it.shop=it.shop||sel[i].name; it.source='rakuten'; items.push(it); });
         }catch(e){ lastErr=String(e&&e.message||e); }
       }
       if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
     } else {
       const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
-      const j=await r.json(); items=j.items||[];
+      const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source='ikea'; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
     }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
@@ -1927,7 +1968,7 @@ async function doCollect(){
     await pool(items, 5, it=> new Promise(async res=>{
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
       const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
-      if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type}); added.push(li); ok++; }
+      if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||''}); added.push(li); ok++; }
       done++; setCollectStatus(`画像処理中… ${done}/${items.length}（成功 ${ok}）`); res();
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
@@ -2097,28 +2138,34 @@ function dataURLToBlob(durl){ const c=durl.indexOf(','), head=durl.slice(0,c), m
 function canvasToPNG(cv){ return cv.toDataURL('image/png'); }
 function loadDataURL(url){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); res(c); }; im.onerror=rej; im.src=url; }); }
 
-async function saveProject(){
-  if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+/* シリアライズの純粋関数。opts.forCloud=true のとき、楽天/IKEA由来の家具は
+   画像を含めず参照のみ（source/itemCode/productUrl/配置情報）にする（楽天規約順守）。 */
+function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud;
   const origCv=document.createElement('canvas'); origCv.width=State.W; origCv.height=State.H; origCv.getContext('2d').putImageData(State.roomOriginal,0,0);
-  const proj={
+  return {
     app:'room-studio', version:1, W:State.W, H:State.H, selectedId:State.selectedId, nextId:State.nextId,
     userMaterials:serializeUserMats(),
     roomOriginal:canvasToPNG(origCv), room:canvasToPNG(State.roomCanvas),
-    layers:State.layers.map(l=> l.type==='surface' ? {
-      type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
-      strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture,
-      material:l.material, matStrength:l.matStrength, matScale:l.matScale,
-      perspective:l.perspective, quad:l.quad, visible:l.visible
-    } : {
-      type:'furniture', id:l.id, name:l.name, src:canvasToPNG(l.srcCanvas),
-      aiCut:l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null,
-      x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
-      bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
-      material:l.material, matStrength:l.matStrength, visible:l.visible, category:l.category,
-      eraseMask:l.eraseMask?bytesToB64(l.eraseMask):null
+    layers:State.layers.map(l=>{
+      if(l.type==='surface') return { type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
+        strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture, material:l.material, matStrength:l.matStrength,
+        matScale:l.matScale, perspective:l.perspective, quad:l.quad, visible:l.visible };
+      const src=l.source||'upload';
+      const stripImg = forCloud && (src==='rakuten' || src==='ikea'); // クラウドには商品画像を保存しない
+      const f={ type:'furniture', id:l.id, name:l.name,
+        x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
+        bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
+        material:l.material, matStrength:l.matStrength, visible:l.visible, category:l.category,
+        eraseMask:l.eraseMask?bytesToB64(l.eraseMask):null,
+        source:src, itemCode:l.itemCode||'', productUrl:l.productUrl||'', affiliateUrl:l.affiliateUrl||'', shop:l.shop||'' };
+      if(!stripImg){ f.src=canvasToPNG(l.srcCanvas); f.aiCut=l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null; }
+      return f;
     })
   };
-  const blob=new Blob([JSON.stringify(proj)],{type:'application/json'});
+}
+async function saveProject(){
+  if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+  const blob=new Blob([JSON.stringify(buildProjectObject({forCloud:false}))],{type:'application/json'});
   if(await saveBlob(blob, 'room-studio-project.json', 'application/json')) toast('プロジェクトを保存しました');
 }
 
@@ -2140,12 +2187,15 @@ async function loadProject(obj){
           lightShift:d.lightShift, keepTexture:d.keepTexture, material:d.material, matStrength:d.matStrength,
           matScale:d.matScale, perspective:d.perspective||false, quad:d.quad||null, visible:d.visible, dirty:true, cache:null });
       } else {
-        const src=await loadDataURL(d.src), aiCut=d.aiCut? await loadDataURL(d.aiCut):null;
+        const hasImg=!!d.src;
+        const src=hasImg? await loadDataURL(d.src) : placeholderCanvas();   // クラウド作品(画像なし)はB側で都度再取得
+        const aiCut=d.aiCut? await loadDataURL(d.aiCut):null;
         layers.push({ id:d.id, type:'furniture', name:d.name, srcCanvas:src, aiCutCanvas:aiCut,
           x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners||null, flip:d.flip, opacity:d.opacity,
           bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
           material:d.material, matStrength:d.matStrength, visible:d.visible, category:d.category||null,
-          dirty:true, proc:null, natW:src.width, natH:src.height,
+          source:d.source||'upload', itemCode:d.itemCode||'', productUrl:d.productUrl||'', affiliateUrl:d.affiliateUrl||'', shop:d.shop||'',
+          needsRehydrate:!hasImg, dirty:true, proc:null, natW:src.width, natH:src.height,
           eraseMask:d.eraseMask?b64ToBytes(d.eraseMask):null });
       }
     }
@@ -2156,6 +2206,68 @@ async function loadProject(obj){
   }catch(err){ console.error('load project failed:',err); toast('プロジェクトの読み込みに失敗しました'); }
   finally{ busy(false); }
 }
+
+/* =========================================================================
+   MY PROJECTS — local favorites in IndexedDB (offline; full save incl. images)
+   ========================================================================= */
+function placeholderCanvas(){ const c=document.createElement('canvas'); c.width=c.height=200; const x=c.getContext('2d');
+  x.fillStyle='#e7e2d8'; x.fillRect(0,0,200,200); x.strokeStyle='#b9b2a4'; x.lineWidth=4; x.strokeRect(6,6,188,188);
+  x.fillStyle='#9a9384'; x.textAlign='center'; x.textBaseline='middle'; x.font='bold 88px sans-serif'; x.fillText('?',100,92);
+  x.font='14px "Noto Sans JP",sans-serif'; x.fillText('再取得待ち',100,150); return c; }
+function stageThumb(maxSide){ const m=Math.max(stage.width,stage.height), s=Math.min(1,maxSide/m);
+  const c=document.createElement('canvas'); c.width=Math.round(stage.width*s); c.height=Math.round(stage.height*s);
+  c.getContext('2d').drawImage(stage,0,0,c.width,c.height); return c.toDataURL('image/jpeg',0.7); }
+function fmtDate(ts){ const d=new Date(ts||Date.now()); const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function uid(pfx){ return (pfx||'id')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+// minimal IndexedDB wrapper (no external libs)
+const IDB_NAME='roomstudio', IDB_STORE='projects';
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_NAME,1);
+  r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE,{keyPath:'id'}); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function idbPut(entry){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(entry); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); })); }
+function idbGetAll(){ return idbOpen().then(db=>new Promise((res,rej)=>{ const r=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); })); }
+function idbGet(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const r=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); }
+function idbDel(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
+
+async function saveCurrentFavorite(){
+  if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+  render();
+  const nameIn=$('favName').value.trim();
+  let id=State.currentFavId, createdAt=Date.now(), existing=null;
+  if(id){ try{ existing=await idbGet(id); }catch(e){} }
+  if(existing) createdAt=existing.createdAt||createdAt; else id=uid('fav');
+  const name=nameIn || (existing&&existing.name) || ('作品 '+fmtDate(Date.now()));
+  const entry={ id, name, createdAt, updatedAt:Date.now(), thumb:stageThumb(320), project:buildProjectObject({forCloud:false}) };
+  try{ await idbPut(entry); State.currentFavId=id; $('favName').value=name; toast(existing?'上書き保存しました':'マイ作品に保存しました'); renderFavorites(); }
+  catch(e){ console.error('fav save failed',e); toast(e&&e.name==='QuotaExceededError'?'保存容量が足りません（不要な作品を削除してください）':'保存に失敗しました'); }
+}
+async function renderFavorites(){
+  const host=$('favList'); if(!host) return; host.innerHTML='';
+  let entries=[]; try{ entries=await idbGetAll(); }catch(e){ console.error(e); }
+  entries.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const emp=$('favEmpty'); if(emp) emp.style.display=entries.length?'none':'block';
+  for(const en of entries){ const card=document.createElement('div'); card.className='fav-card'+(en.id===State.currentFavId?' on':'');
+    const img=document.createElement('img'); img.className='fav-thumb'; img.src=en.thumb||''; img.alt='';
+    const meta=document.createElement('div'); meta.className='fav-meta';
+    const nm=document.createElement('div'); nm.className='fav-nm'; nm.textContent=en.name||'無題';
+    const dt=document.createElement('div'); dt.className='fav-dt'; dt.textContent=fmtDate(en.updatedAt||en.createdAt);
+    meta.appendChild(nm); meta.appendChild(dt);
+    const acts=document.createElement('div'); acts.className='fav-acts';
+    const mk=(label,cls,fn)=>{ const b=document.createElement('button'); b.className='btn '+(cls||''); b.textContent=label; on(b,'click',fn); return b; };
+    acts.appendChild(mk('開く','primary',()=>openFav(en.id)));
+    acts.appendChild(mk('名前変更','',()=>renameFav(en.id)));
+    acts.appendChild(mk('複製','',()=>dupFav(en.id)));
+    acts.appendChild(mk('削除','ghost-warn',()=>delFav(en.id)));
+    card.appendChild(img); card.appendChild(meta); card.appendChild(acts); host.appendChild(card);
+  }
+}
+async function openFav(id){ try{ const en=await idbGet(id); if(!en){ toast('見つかりません'); return; } State.currentFavId=id; $('favName').value=en.name||''; closeFavDrawer(); await loadProject(en.project); }catch(e){ console.error(e); toast('開けませんでした'); } }
+async function renameFav(id){ const en=await idbGet(id); if(!en) return; const nn=prompt('新しい名前', en.name||''); if(nn==null) return; en.name=(nn.trim()||en.name); en.updatedAt=Date.now(); await idbPut(en); if(State.currentFavId===id) $('favName').value=en.name; renderFavorites(); }
+async function dupFav(id){ const en=await idbGet(id); if(!en) return; const copy=Object.assign({}, en, {id:uid('fav'), name:(en.name||'作品')+' のコピー', createdAt:Date.now(), updatedAt:Date.now()}); await idbPut(copy); renderFavorites(); toast('複製しました'); }
+async function delFav(id){ if(!confirm('この作品を削除しますか？')) return; await idbDel(id); if(State.currentFavId===id) State.currentFavId=null; renderFavorites(); toast('削除しました'); }
+function openFavDrawer(){ $('favDrawer').style.display='flex'; renderFavorites(); }
+function closeFavDrawer(){ $('favDrawer').style.display='none'; }
 
 /* =========================================================================
    WIRING — events
@@ -2335,6 +2447,11 @@ function positionTut(){ if(!tut.active) return; const s=TUT_STEPS[tut.step], el=
   tut.box.style.left=left+'px'; tut.box.style.top=top+'px';
 }
 on($('btnTutorial'),'click',tutStart);
+// my projects (favorites)
+on($('btnFav'),'click',openFavDrawer);
+on($('favClose'),'click',closeFavDrawer);
+on($('favSaveNew'),'click',saveCurrentFavorite);
+on($('favDrawer'),'click',e=>{ if(e.target===$('favDrawer')) closeFavDrawer(); });
 window.addEventListener('resize',()=>{ if(tut.active) positionTut(); });
 
 // init
