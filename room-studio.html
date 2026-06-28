@@ -311,10 +311,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-3"/></svg>
       取り消す
     </button>
-    <button class="btn" id="btnRedo" disabled title="やり直す (Ctrl+Shift+Z)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 14l4-4-4-4M19 10H10a5 5 0 0 0 0 10h3"/></svg>
-      やり直す
-    </button>
     <button class="btn" id="btnCompare" title="編集前と編集後を比べる">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18M5 7l-3 3 3 3M19 7l3 3-3 3"/></svg>
       比較
@@ -1567,9 +1563,8 @@ function pushHistory(key){
 }
 function endCoalesce(){ State._hcKey=null; }
 function clearHistory(){ State.undo=[]; State.redo=[]; State._hcKey=null; updateHistoryButtons(); }
-function updateHistoryButtons(){ $('btnUndo').disabled=!State.undo.length; const r=$('btnRedo'); if(r) r.disabled=!State.redo.length; }
+function updateHistoryButtons(){ $('btnUndo').disabled=!State.undo.length; }
 function doUndo(){ if(!State.undo.length) return; State.redo.push(captureState()); if(State.redo.length>HISTORY_MAX) State.redo.shift(); restoreState(State.undo.pop()); endCoalesce(); updateHistoryButtons(); }
-function doRedo(){ if(!State.redo.length) return; State.undo.push(captureState()); if(State.undo.length>HISTORY_MAX) State.undo.shift(); restoreState(State.redo.pop()); endCoalesce(); updateHistoryButtons(); }
 
 /* =========================================================================
    RENDER
@@ -2324,7 +2319,6 @@ function closeFavDrawer(){ $('favDrawer').style.display='none'; }
 on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
-on($('btnRedo'),'click',doRedo);
 on(document,'keydown',e=>{
   const tag=(e.target&&e.target.tagName)||''; const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(tag)||(e.target&&e.target.isContentEditable);
   if(State.mode==='surface'&&State.surfTool==='poly'&&State.poly.points.length){
@@ -2335,8 +2329,7 @@ on(document,'keydown',e=>{
   // Delete/Backspace で選択中の家具を削除（入力欄にフォーカス中は除く）
   if((e.key==='Delete'||e.key==='Backspace') && !typing){ const f=selectedFurniture(); if(f){ e.preventDefault(); deleteLayer(f.id); toast('家具を削除しました'); return; } }
   if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
-  if(k==='z'&&!e.shiftKey){ e.preventDefault(); doUndo(); }
-  else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); doRedo(); } });
+  if(k==='z'){ e.preventDefault(); doUndo(); } });
 on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; }
   State.compare.active=!State.compare.active; $('btnCompare').classList.toggle('primary',State.compare.active);
   overlay.style.cursor=State.compare.active?'ew-resize':'';
