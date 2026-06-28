@@ -1982,7 +1982,7 @@ async function doCollect(){
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
       const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
       if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||''}); added.push(li); ok++; }
-      done++; setCollectStatus(`画像処理中… ${done}/${items.length}（成功 ${ok}）`); res();
+      done++; setCollectStatus(`最適な画像を選んでいます… ${done}/${items.length}（成功 ${ok}）`); res();
     }));
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
