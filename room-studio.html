@@ -1600,6 +1600,7 @@ function render(){
       sctx.restore(); sctx.globalAlpha=1; }
   }
   renderOverlay();
+  scheduleAutosave(); // 編集が変わるたびに（デバウンスで）セッションを自動保存
 }
 let lastMouse=null;
 function renderOverlay(){
@@ -2207,7 +2208,7 @@ async function saveProject(){
   if(await saveBlob(blob, 'room-studio-project.json', 'application/json')) toast('プロジェクトを保存しました');
 }
 
-async function loadProject(obj){
+async function loadProject(obj, opts){
   if(!obj || obj.app!=='room-studio'){ toast('対応していないファイルです'); return; }
   busy(true,'プロジェクトを読み込み中…');
   try{
@@ -2240,7 +2241,7 @@ async function loadProject(obj){
     State.layers=layers; State.selectedId=obj.selectedId||null;
     State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); });
     renderLayers(); syncPanels(); rebuildMaskPreview(); render();
-    toast('プロジェクトを読み込みました');
+    toast(opts&&opts.restored ? '前回の続きから復元しました' : 'プロジェクトを読み込みました');
   }catch(err){ console.error('load project failed:',err); toast('プロジェクトの読み込みに失敗しました'); }
   finally{ busy(false); }
 }
@@ -2259,14 +2260,37 @@ function fmtDate(ts){ const d=new Date(ts||Date.now()); const p=n=>String(n).pad
   return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
 function uid(pfx){ return (pfx||'id')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
 // minimal IndexedDB wrapper (no external libs)
-const IDB_NAME='roomstudio', IDB_STORE='projects';
-function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_NAME,1);
-  r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE,{keyPath:'id'}); };
+const IDB_NAME='roomstudio', IDB_STORE='projects', IDB_SESSION='session';
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_NAME,2);
+  r.onupgradeneeded=()=>{ const db=r.result;
+    if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE,{keyPath:'id'});
+    if(!db.objectStoreNames.contains(IDB_SESSION)) db.createObjectStore(IDB_SESSION,{keyPath:'id'}); };
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 function idbPut(entry){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(entry); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); })); }
 function idbGetAll(){ return idbOpen().then(db=>new Promise((res,rej)=>{ const r=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); })); }
 function idbGet(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const r=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); }
 function idbDel(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
+// session store: holds the in-progress edit so F5 / 強制リロードでも直前の状態を維持する
+function idbSessionPut(entry){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_SESSION,'readwrite'); tx.objectStore(IDB_SESSION).put(entry); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); })); }
+function idbSessionGet(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const r=db.transaction(IDB_SESSION,'readonly').objectStore(IDB_SESSION).get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); }
+function idbSessionDel(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_SESSION,'readwrite'); tx.objectStore(IDB_SESSION).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
+// ---- autosave / restore (編集中セッション) ----
+let _autosaveTimer=null, _autosaveBusy=false;
+function scheduleAutosave(){ clearTimeout(_autosaveTimer); _autosaveTimer=setTimeout(doAutosave, 1200); }
+async function doAutosave(){
+  if(_autosaveBusy){ scheduleAutosave(); return; }
+  _autosaveBusy=true;
+  try{
+    if(!State.roomCanvas || !State.W){ await idbSessionDel('current'); }
+    else{ await idbSessionPut({ id:'current', savedAt:Date.now(), project:buildProjectObject({forCloud:false}) }); }
+  }catch(e){ console.warn('autosave failed', e); }
+  finally{ _autosaveBusy=false; }
+}
+async function restoreAutosave(){
+  try{ const s=await idbSessionGet('current'); if(s && s.project && s.project.room){ await loadProject(s.project, {restored:true}); return true; } }
+  catch(e){ console.warn('autosave restore failed', e); }
+  return false;
+}
 
 // ---- freemium: 無料は3作品まで。プロモ期間中に利用開始した端末は無制限（grandfather） ----
 const FREE_LIMIT=3;
@@ -2538,7 +2562,12 @@ setMode('surface');
 probeServer();
 loadUserMatsLocal(); // restore extracted materials from previous sessions
 ensureFirstSeen();   // record first-use date for the freemium grandfather window
-if(!localStorage.getItem('roomstudio_tut_done')) setTimeout(tutStart, 500); // first-visit auto-start
+// 直前の編集セッションを復元（F5 / Shift+Ctrl+R などで更新しても初期化されない）。無ければ初回チュートリアル。
+(async()=>{ let restored=false; try{ restored=await restoreAutosave(); }catch(e){}
+  if(!restored && !localStorage.getItem('roomstudio_tut_done')) setTimeout(tutStart, 500); })();
+// 離脱/非表示の直前にも保存（デバウンス待ちの取りこぼし防止）
+on(window,'pagehide',()=>{ try{ doAutosave(); }catch(e){} });
+on(document,'visibilitychange',()=>{ if(document.visibilityState==='hidden'){ try{ doAutosave(); }catch(e){} } });
 </script>
 </body>
 </html>
