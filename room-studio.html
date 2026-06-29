@@ -169,10 +169,10 @@
   .furni-lib{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px}
   .furni-lib .lib-cat{grid-column:1/-1; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px; padding-top:8px; border-top:1px solid var(--line)}
   .furni-lib .lib-cat:first-child{margin-top:0; padding-top:0; border-top:0}
-  .furni-item{position:relative; min-width:0; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; display:flex; flex-direction:column}
+  .furni-item{position:relative; min-width:0; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; display:flex; flex-direction:column; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none}
   .furni-item:hover{border-color:var(--accent)}
   .furni-item:active{cursor:grabbing}
-  .furni-item .thumb{display:block; width:100%; height:58px; background:repeating-conic-gradient(#ececec 0% 25%, #fff 0% 50%) 50% / 12px 12px}
+  .furni-item .thumb{display:block; width:100%; max-width:100%; height:58px; pointer-events:none; -webkit-user-drag:none; background:repeating-conic-gradient(#ececec 0% 25%, #fff 0% 50%) 50% / 12px 12px}
   .furni-item .nm{font-size:10px; text-align:center; padding:2px 3px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .furni-item .add{position:absolute; left:0; right:0; top:0; height:58px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; transition:opacity .15s; background:rgba(44,110,107,.55)}
   .furni-item:hover .add{opacity:1}
@@ -1845,8 +1845,11 @@ function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(
 }
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
 function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py, it); const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); } toast('部屋に配置しました。ドラッグで移動できます'); }
+const COARSE_POINTER = (()=>{ try{ return matchMedia('(pointer:coarse)').matches; }catch(e){ return false; } })();
 function makeFurniEl(it){
-  const el=document.createElement('div'); el.className='furni-item'; el.draggable=true; el.title=it.name+' — クリックで配置 / ステージへドラッグで位置指定';
+  const el=document.createElement('div'); el.className='furni-item';
+  el.draggable=!COARSE_POINTER; // タッチ端末ではネイティブのドラッグ無効（タップ誤判定でサムネが伸びる/崩れるのを防止）。配置はタップでOK
+  el.title=it.name+(COARSE_POINTER?' — タップで配置':' — クリックで配置 / ステージへドラッグで位置指定');
   const cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
   const s=Math.min(cv.width/it.srcCanvas.width, cv.height/it.srcCanvas.height), dw=it.srcCanvas.width*s, dh=it.srcCanvas.height*s;
   x.drawImage(it.srcCanvas,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); el.appendChild(cv);
