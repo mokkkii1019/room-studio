@@ -58,4 +58,6 @@ def _html():
 @app.get("/", response_class=HTMLResponse)
 @app.get("/room-studio.html", response_class=HTMLResponse)
 def index():
-    return HTMLResponse(_html())
+    # Always serve the latest HTML (the app is one self-contained file that updates often).
+    # Without this, mobile browsers can keep showing a stale cached version.
+    return HTMLResponse(_html(), headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"})

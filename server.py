@@ -176,7 +176,7 @@ def index():
         return HTMLResponse("<h1>room-studio.html が見つかりません</h1>"
                             "<p>server.py と同じフォルダに置いてください。</p>", status_code=404)
     with open(path, encoding="utf-8") as f:
-        return HTMLResponse(f.read())
+        return HTMLResponse(f.read(), headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"})
 
 
 if __name__ == "__main__":
