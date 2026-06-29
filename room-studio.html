@@ -1833,7 +1833,7 @@ function addToFurniLib(canvas, name, meta){ meta=meta||{};
     link:meta.link||'', price:meta.price||0, shop:meta.shop||'', category:meta.category||'upload',
     source:meta.source||'upload',                 // 'upload' | 'rakuten' | 'ikea'（provenance）
     itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'' };
-  State.furniLib.push(it); renderFurniLib(); return it; }
+  State.furniLib.push(it); if(!meta.defer) renderFurniLib(); return it; }
 const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット/ラグ',plant:'観葉植物',chest:'サイドボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',shelf:'シェルフ',cushion:'ブランケット/クッション',upload:'自分の画像から追加'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
@@ -1851,9 +1851,11 @@ function makeFurniEl(it){
   const el=document.createElement('div'); el.className='furni-item';
   el.draggable=!COARSE_POINTER; // タッチ端末ではネイティブのドラッグ無効（タップ誤判定でサムネが伸びる/崩れるのを防止）。配置はタップでOK
   el.title=it.name+(COARSE_POINTER?' — タップで配置':' — クリックで配置 / ステージへドラッグで位置指定');
-  const cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
-  const s=Math.min(cv.width/it.srcCanvas.width, cv.height/it.srcCanvas.height), dw=it.srcCanvas.width*s, dh=it.srcCanvas.height*s;
-  x.drawImage(it.srcCanvas,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); el.appendChild(cv);
+  let cv=it._thumb; // サムネはキャッシュ（再描画を避ける＝ライブラリが大きくても再表示が軽い）
+  if(!cv){ cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
+    const s=Math.min(cv.width/it.srcCanvas.width, cv.height/it.srcCanvas.height), dw=it.srcCanvas.width*s, dh=it.srcCanvas.height*s;
+    x.drawImage(it.srcCanvas,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); it._thumb=cv; }
+  el.appendChild(cv);
   const add=document.createElement('div'); add.className='add'; add.textContent='＋ 配置'; el.appendChild(add);
   const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
   if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
@@ -2008,9 +2010,10 @@ async function doCollect(){
     await pool(items, 5, it=> new Promise(async res=>{
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
       const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
-      if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||''}); added.push(li); ok++; }
-      done++; setCollectStatus(`最適な画像を選んでいます… ${done}/${items.length}（成功 ${ok}）`); res();
+      if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', defer:true}); added.push(li); ok++; }
+      done++; setCollectStatus(`最適な画像を選んでいます… ${done}/${items.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
     }));
+    renderFurniLib(); // 収集完了時に一括描画
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
     toast(ok+' 枚を収集しました');
   }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
@@ -2179,16 +2182,22 @@ async function saveBlob(blob, suggestedName, mime){
 }
 function dataURLToBlob(durl){ const c=durl.indexOf(','), head=durl.slice(0,c), mime=(head.match(/:(.*?);/)||[])[1]||'application/octet-stream'; const bin=atob(durl.slice(c+1)); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:mime}); }
 function canvasToPNG(cv){ return cv.toDataURL('image/png'); }
+/* PNGエンコードのキャッシュ。家具ライブラリ/レイヤーのsrcCanvas等は一度作ると不変なので、
+   自動保存のたびに全画像を再エンコードせず使い回す（画像が増えても自動保存が重くならない）。
+   canvasが差し替わると新しいキー＝自動的に再エンコードされる。 */
+const _pngCache = new WeakMap();
+function pngCached(cv){ if(!cv) return null; let p=_pngCache.get(cv); if(p===undefined){ p=cv.toDataURL('image/png'); _pngCache.set(cv,p); } return p; }
+let _origPng=null, _origPngKey=null; // 元部屋（roomOriginal）のPNGキャッシュ（部屋読込時のみ変化）
 function loadDataURL(url){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); res(c); }; im.onerror=rej; im.src=url; }); }
 
 /* シリアライズの純粋関数。opts.forCloud=true のとき、楽天/IKEA由来の家具は
    画像を含めず参照のみ（source/itemCode/productUrl/配置情報）にする（楽天規約順守）。 */
 function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud;
-  const origCv=document.createElement('canvas'); origCv.width=State.W; origCv.height=State.H; origCv.getContext('2d').putImageData(State.roomOriginal,0,0);
+  if(_origPngKey!==State.roomOriginal){ const origCv=document.createElement('canvas'); origCv.width=State.W; origCv.height=State.H; origCv.getContext('2d').putImageData(State.roomOriginal,0,0); _origPng=origCv.toDataURL('image/png'); _origPngKey=State.roomOriginal; }
   return {
     app:'room-studio', version:1, W:State.W, H:State.H, selectedId:State.selectedId, nextId:State.nextId,
     userMaterials:serializeUserMats(),
-    roomOriginal:canvasToPNG(origCv), room:canvasToPNG(State.roomCanvas),
+    roomOriginal:_origPng, room:canvasToPNG(State.roomCanvas),
     layers:State.layers.map(l=>{
       if(l.type==='surface') return { type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
         strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture, material:l.material, matStrength:l.matStrength,
@@ -2201,7 +2210,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
         material:l.material, matStrength:l.matStrength, visible:l.visible, category:l.category,
         eraseMask:l.eraseMask?bytesToB64(l.eraseMask):null,
         source:src, itemCode:l.itemCode||'', productUrl:l.productUrl||'', affiliateUrl:l.affiliateUrl||'', shop:l.shop||'' };
-      if(!stripImg){ f.src=canvasToPNG(l.srcCanvas); f.aiCut=l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null; }
+      if(!stripImg){ f.src=pngCached(l.srcCanvas); f.aiCut=pngCached(l.aiCutCanvas); }
       return f;
     }),
     // 収集した家具などの「家具ライブラリ」も保存（更新しても消えないように）
@@ -2211,7 +2220,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
       const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono'); // クラウドには商品画像を保存しない
       const o={ id:it.id, name:it.name, category:it.category||'upload', source:src,
         link:it.link||'', price:it.price||0, shop:it.shop||'', itemCode:it.itemCode||'', productUrl:it.productUrl||'', affiliateUrl:it.affiliateUrl||'' };
-      if(!strip) o.src=canvasToPNG(it.srcCanvas);
+      if(!strip) o.src=pngCached(it.srcCanvas);
       return o;
     })
   };
@@ -2304,7 +2313,7 @@ function idbSessionGet(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ c
 function idbSessionDel(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_SESSION,'readwrite'); tx.objectStore(IDB_SESSION).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
 // ---- autosave / restore (編集中セッション) ----
 let _autosaveTimer=null, _autosaveBusy=false;
-function scheduleAutosave(){ clearTimeout(_autosaveTimer); _autosaveTimer=setTimeout(doAutosave, 1200); }
+function scheduleAutosave(){ clearTimeout(_autosaveTimer); _autosaveTimer=setTimeout(doAutosave, 2500); }
 async function doAutosave(){
   if(_autosaveBusy){ scheduleAutosave(); return; }
   _autosaveBusy=true;
