@@ -2202,6 +2202,16 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
         source:src, itemCode:l.itemCode||'', productUrl:l.productUrl||'', affiliateUrl:l.affiliateUrl||'', shop:l.shop||'' };
       if(!stripImg){ f.src=canvasToPNG(l.srcCanvas); f.aiCut=l.aiCutCanvas?canvasToPNG(l.aiCutCanvas):null; }
       return f;
+    }),
+    // 収集した家具などの「家具ライブラリ」も保存（更新しても消えないように）
+    libNextId: State.libNextId,
+    furniLib: State.furniLib.map(it=>{
+      const src=it.source||'upload';
+      const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus'); // クラウドには商品画像を保存しない
+      const o={ id:it.id, name:it.name, category:it.category||'upload', source:src,
+        link:it.link||'', price:it.price||0, shop:it.shop||'', itemCode:it.itemCode||'', productUrl:it.productUrl||'', affiliateUrl:it.affiliateUrl||'' };
+      if(!strip) o.src=canvasToPNG(it.srcCanvas);
+      return o;
     })
   };
 }
@@ -2243,6 +2253,20 @@ async function loadProject(obj, opts){
     }
     State.layers=layers; State.selectedId=obj.selectedId||null;
     State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); });
+    // 家具ライブラリ（収集した家具など）を復元
+    if(Array.isArray(obj.furniLib)){
+      const lib=[];
+      for(const d of obj.furniLib){
+        const hasImg=!!d.src;
+        const cv=hasImg?await loadDataURL(d.src):placeholderCanvas();
+        lib.push({ id:d.id, name:d.name, srcCanvas:cv, category:d.category||'upload', source:d.source||'upload',
+          link:d.link||'', price:d.price||0, shop:d.shop||'', itemCode:d.itemCode||'', productUrl:d.productUrl||'', affiliateUrl:d.affiliateUrl||'',
+          needsRehydrate:!hasImg });
+      }
+      State.furniLib=lib;
+      if(obj.libNextId) State.libNextId=Math.max(obj.libNextId, State.furniLib.reduce((m,it)=>Math.max(m,(it.id|0)+1),1));
+      renderFurniLib();
+    }
     renderLayers(); syncPanels(); rebuildMaskPreview(); render();
     toast(opts&&opts.restored ? '前回の続きから復元しました' : 'プロジェクトを読み込みました');
   }catch(err){ console.error('load project failed:',err); toast('プロジェクトの読み込みに失敗しました'); }
