@@ -149,6 +149,10 @@
   .chip{aspect-ratio:1; border-radius:7px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -10px 14px rgba(0,0,0,.04)}
   .chip.on{outline:2px solid var(--accent); outline-offset:2px}
   .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:12px; text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  /* transparent ("素通し") swatch — checkerboard + red slash so it clearly reads as "none/see-through" */
+  .chip.alpha, .swatch.alpha{ background-color:#fff;
+    background-image:linear-gradient(135deg,transparent 46%,#e2574c 46%,#e2574c 54%,transparent 54%),linear-gradient(45deg,#c4c4c4 25%,transparent 25%,transparent 75%,#c4c4c4 75%),linear-gradient(45deg,#c4c4c4 25%,#fff 25%,#fff 75%,#c4c4c4 75%);
+    background-size:100% 100%,10px 10px,10px 10px; background-position:0 0,0 0,5px 5px; background-repeat:no-repeat,repeat,repeat }
   .picker-row{display:flex; align-items:center; gap:10px; margin-top:11px}
   .picker-row input[type=color]{width:40px;height:32px; border:1px solid var(--line); border-radius:8px; background:none; padding:2px}
   .picker-row .hexv{font-family:"Space Grotesk",monospace; font-size:12px; color:var(--muted)}
@@ -1034,6 +1038,8 @@ function rebuildSurface(layer){
   let any=false; for(let i=0;i<layer.mask.length;i++){ if(layer.mask[i]>0){any=true;break;} }
   layer._hasMask=any;
   if(!any){ layer.dirty=false; return; }
+  // 「透明」= その範囲は色を変えない（元の写真のまま）。表面キャッシュを空のままにすると下の元写真が素通しで見える。
+  if(layer.color==='transparent' && !layer.material){ layer.dirty=false; return; }
   const feather = boxBlurMask(layer.mask, 1); // minimal AA only; the selection should fully (opaquely) cover the plane
   const src=getRoomData().data;
   const out=cctx.createImageData(w,h);
@@ -1045,7 +1051,7 @@ function rebuildSurface(layer){
     matBuf=layer._matBuf;
   }
   const opts={
-    color: rgb2hsl(...hex2rgb(layer.color)),
+    color: rgb2hsl(...hex2rgb(layer.color==='transparent'?'#FFFFFF':layer.color)), // 素材併用時の安全フォールバック
     strength: layer.strength,
     lightShift: layer.lightShift,
     keepTexture: layer.keepTexture,
@@ -2075,7 +2081,7 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
     on(row,'dragleave',ev=>{ row.classList.remove('drop-before','drop-after'); });
     on(row,'drop',ev=>{ ev.preventDefault(); const id=+ev.dataTransfer.getData('text/layer-id'); const r=row.getBoundingClientRect(); const after=ev.clientY>r.top+r.height/2; row.classList.remove('drop-before','drop-after'); reorderLayer(id,l.id,after); });
     const sw=document.createElement('div'); sw.className='swatch';
-    if(l.type==='surface'){ sw.style.background=l.material? 'none':l.color; if(l.material){ sw.style.backgroundImage=`url(${matTile(l.material).toDataURL()})`; } }
+    if(l.type==='surface'){ if(!l.material && l.color==='transparent'){ sw.classList.add('alpha'); } else { sw.style.background=l.material? 'none':l.color; if(l.material){ sw.style.backgroundImage=`url(${matTile(l.material).toDataURL()})`; } } }
     else { sw.style.backgroundImage=`url(${(l.proc||l.srcCanvas).toDataURL()})`; sw.style.backgroundSize='cover'; }
     row.appendChild(sw);
     const buyUrl=(l.type==='furniture')?(l.affiliateUrl||l.productUrl||l.link||''):'';
@@ -2111,7 +2117,7 @@ function setMode(m){ State.mode=m;
   samResetPoints(); polyReset();
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
-  if(a){ $('surfColor').value=a.color; $('surfHex').textContent=a.color.toUpperCase(); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
+  if(a){ if(a.color!=='transparent') $('surfColor').value=a.color; $('surfHex').textContent=(a.color==='transparent'?'透明':a.color.toUpperCase()); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
   updateMatConfig();
   const f=selectedFurniture(); $('furnitureControls').style.display=f?'block':'none'; $('furnitureEmpty').style.display=f?'none':'block';
   if(f) syncFurnitureUI(f);
@@ -2133,7 +2139,8 @@ const PALETTE=[
   '#DDE0D6','#BCC6B2','#93A78C','#6E8670','#4E6552','#36433A', // セージ〜深緑
   '#CFD8DD','#9FB4C0','#6A8593','#3C5366','#233140','#A8674A', // 青〜ネイビー＋テラコッタ
 ];
-function buildChips(hostId, onPick){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); }); }
+function buildChips(hostId, onPick, includeTransparent){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); });
+  if(includeTransparent){ const c=document.createElement('button'); c.className='chip alpha'; c.dataset.hex='transparent'; c.title='透明（色を変えず、元の写真のまま）'; on(c,'click',()=>onPick('transparent')); host.appendChild(c); } }
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
 function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
   const mkBtn=(m)=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key;
@@ -2477,14 +2484,14 @@ on($('samReset'),'click',samResetPoints);
 on($('polyClose'),'click',polyClose);
 on($('polyReset'),'click',polyReset);
 on($('eyedropBtn'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; } setSurfTool(State.surfTool==='eyedropper'?'brush':'eyedropper'); });
-buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.color=hex; a.material=null; $('surfColor').value=hex; $('surfHex').textContent=hex.toUpperCase(); markChips('colorChips',hex); markMats('matGrid',null); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
+buildChips('colorChips',hex=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.color=hex; a.material=null; if(hex!=='transparent') $('surfColor').value=hex; $('surfHex').textContent=(hex==='transparent'?'透明':hex.toUpperCase()); markChips('colorChips',hex); markMats('matGrid',null); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }, true);
 on($('surfColor'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfColor'); a.color=e.target.value; a.material=null; $('surfHex').textContent=e.target.value.toUpperCase(); markChips('colorChips',e.target.value); markMats('matGrid',null); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); });
 on($('surfStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfStrength'); a.strength=+e.target.value/100; $('surfStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 on($('surfLight'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('surfLight'); a.lightShift=+e.target.value/100; $('surfLightV').textContent=e.target.value; a.dirty=true; rebuildSurface(a); render(); });
 on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.keepTexture=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
 function updateMatConfig(){ const a=activeSurface(), el=$('matConfig'); if(el) el.style.display=(a&&a.material)?'block':'none'; }
 function updateFMatConfig(){ const f=selectedFurniture(), el=$('fMatConfig'); if(el) el.style.display=(f&&f.material)?'block':'none'; }
-function pickSurfMat(key){ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }
+function pickSurfMat(key){ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; if(a.color==='transparent'){ a.color=$('surfColor').value; markChips('colorChips',a.color); $('surfHex').textContent=a.color.toUpperCase(); } markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }
 function pickFurnMat(key){ const f=selectedFurniture(); if(!f) return; pushHistory(); f.material=key; markMats('fMatGrid',key); updateFMatConfig(); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }
 function refreshMatGrids(){ buildMats('matGrid', pickSurfMat, false); buildMats('fMatGrid', pickFurnMat, false); const a=activeSurface(); if(a) markMats('matGrid',a.material); const f=selectedFurniture(); if(f) markMats('fMatGrid',f.material); }
 buildMats('matGrid', pickSurfMat, false);
