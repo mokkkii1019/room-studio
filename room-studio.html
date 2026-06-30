@@ -1038,10 +1038,16 @@ function rebuildSurface(layer){
   let any=false; for(let i=0;i<layer.mask.length;i++){ if(layer.mask[i]>0){any=true;break;} }
   layer._hasMask=any;
   if(!any){ layer.dirty=false; return; }
-  // 「透明」= その範囲は色を変えない（元の写真のまま）。表面キャッシュを空のままにすると下の元写真が素通しで見える。
-  if(layer.color==='transparent' && !layer.material){ layer.dirty=false; return; }
   const feather = boxBlurMask(layer.mask, 1); // minimal AA only; the selection should fully (opaquely) cover the plane
   const src=getRoomData().data;
+  // 「透明」= 元の部屋写真のピクセルをこの範囲へそのまま貼る（occluder）。色は元のまま保たれ、
+  //   このレイヤーを家具レイヤーより前面に並べれば“元からある家具”として下の家具を遮蔽できる。
+  //   コストは通常の単色サーフェスと同等（むしろHSL変換が無いぶん軽い）。再描画時のみ・以降はキャッシュ。
+  if(layer.color==='transparent' && !layer.material){
+    const o=cctx.createImageData(w,h), od=o.data;
+    for(let i=0;i<w*h;i++){ const a=feather[i]; if(a){ const p=i*4; od[p]=src[p]; od[p+1]=src[p+1]; od[p+2]=src[p+2]; od[p+3]=a; } }
+    cctx.putImageData(o,0,0); layer.dirty=false; return;
+  }
   const out=cctx.createImageData(w,h);
   let matBuf=null;
   if(layer.material){
