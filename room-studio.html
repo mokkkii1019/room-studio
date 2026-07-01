@@ -193,6 +193,9 @@
   .furni-item:hover .del{display:flex}
   .furni-item .save{position:absolute; top:3px; right:24px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:12px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
   .furni-item:hover .save{display:flex}
+  /* provenance badge: collected (dark) vs your uploads (blue) */
+  .furni-item .src-badge{position:absolute; top:40px; left:3px; background:rgba(0,0,0,.55); color:#fff; font-size:8.5px; font-weight:700; padding:1px 5px; border-radius:4px; z-index:2; pointer-events:none; letter-spacing:.02em}
+  .furni-item .src-badge.up{background:rgba(59,111,224,.9)}
   .furni-item .buy{position:absolute; top:3px; left:3px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-decoration:none; display:none; z-index:2}
   .furni-item:hover .buy{display:block}
   .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -211,6 +214,9 @@
   .addbtn{width:100%; border:1px dashed var(--line); background:var(--panel-2); border-radius:9px; padding:12px; color:var(--ink); font-weight:600; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:8px}
   .addbtn:hover{border-color:var(--accent); color:var(--accent)}
   .addbtn svg{width:16px;height:16px;stroke-width:1.9}
+  /* upload as a primary furniture flow (0-4) — solid accent, emphasized */
+  .addbtn.hero{border-style:solid; border-color:var(--accent); background:var(--accent-weak); color:var(--accent-ink); font-weight:700; font-size:13px; padding:14px}
+  .addbtn.hero:hover{background:rgba(59,111,224,.16)}
 
   .run-erase{width:100%; background:var(--warn); border:1px solid var(--warn); color:#fff; border-radius:9px; padding:11px; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px}
   .run-erase:hover{background:#93382c}
@@ -463,15 +469,16 @@
           </button>
           <div class="group-body" id="addFurniBody">
             <div class="group-item">
-              <span class="sub-head"><span class="n">・</span>自分の画像から</span>
-              <button class="addbtn" id="addFurniture">
+              <span class="sub-head"><span class="n">・</span>自分の家具画像をアップロード</span>
+              <button class="addbtn hero" id="addFurniture">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
                 画像を追加（ドラッグ＆ドロップも可）
               </button>
+              <p class="hint" style="margin:7px 0 0">手持ちの家具写真をそのまま使えます。配置後に背景の自動／手動切り抜きができます。</p>
               <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
             </div>
             <div id="collectSection" class="group-item">
-              <span class="sub-head"><span class="n">・</span>家具店から収集<span class="info" data-tip="IKEAはキー不要。楽天家具メーカーは RAKUTEN_APP_ID と RAKUTEN_ACCESS_KEY（無料）が必要。RUGHAUSはキー不要。各画像に商品ページへのリンクが付きます。個人の模様替えプレビュー用途を想定。">i</span></span>
+              <span class="sub-head"><span class="n">・</span><span id="collectSubLbl">家具を収集</span><span class="info" data-tip="種類・テイストで家具を検索してライブラリに取り込みます。各画像に商品ページ（購入リンク）が付きます。検索・表示・購入リンクはログイン不要・無料です。">i</span></span>
           <select class="field" id="collectSource" title="収集元を選択">
             <option value="ikea" selected>IKEA（キー不要）</option>
             <option value="makers">楽天 家具メーカー（複数選択・楽天キー必要）</option>
@@ -512,9 +519,10 @@
           <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
           <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
-            家具店から収集
+            <span class="lbl">家具を収集</span>
           </button>
           <div class="engine" id="collectStatus" style="display:none"></div>
+          <p id="collectCredit" style="display:none;margin:8px 0 0;font-size:10.5px;color:var(--faint);line-height:1.55">商品情報提供：楽天ウェブサービス。購入リンクは楽天市場（アフィリエイト）です。検索・表示・購入リンクはログイン不要・無料でご利用いただけます。</p>
             </div>
           </div>
         </div>
@@ -1363,13 +1371,27 @@ function buildWarpCanvas(l){
    INPAINT — LaMa local server (best, CPU-friendly) with in-browser PatchMatch fallback
    ========================================================================= */
 // available = API（収集/画像リレー）に到達できるか。 inpaint = 高品質LaMaが使えるか（公開版は無し→PatchMatch）。
-const SERVER = { available:false, url:'', inpaint:false };
+const SERVER = { available:false, url:'', inpaint:false, provider:'official', mode:'public' };
 async function probeServer(){
   const cands = ['', 'http://127.0.0.1:7865', 'http://localhost:7865'];
   for(const base of cands){
-    try{ const r=await fetch(base+'/health',{cache:'no-store'}); if(r.ok){ const j=await r.json(); SERVER.available=true; SERVER.url=base; SERVER.inpaint=!!(j&&j.inpaint); updateEraseBadge(); return; } }catch(e){}
+    try{ const r=await fetch(base+'/health',{cache:'no-store'}); if(r.ok){ const j=await r.json(); SERVER.available=true; SERVER.url=base; SERVER.inpaint=!!(j&&j.inpaint);
+      SERVER.provider=(j&&j.provider)||'official'; SERVER.mode=(j&&j.mode)||'public';
+      updateEraseBadge(); applyCollectMode(); return; } }catch(e){}
   }
-  SERVER.available=false; SERVER.inpaint=false; updateEraseBadge();
+  SERVER.available=false; SERVER.inpaint=false; updateEraseBadge(); applyCollectMode();
+}
+/* 収集UIをプロバイダに合わせて出し分ける（公開=official）。公開版は特定メーカー名を前面に
+   出さず「楽天市場」モール単位で表示し、クレジットを出す。私的版(crawler)は従来のソース選択を表示。 */
+function isOfficialCollect(){ return SERVER.mode!=='private'; }  // 公開/未接続は official 扱い（安全側）
+function applyCollectMode(){
+  const official=isOfficialCollect();
+  const sel=$('collectSource'), makerBox=$('makerBox'), credit=$('collectCredit'), lbl=$('collectSubLbl');
+  if(sel) sel.style.display = official ? 'none' : '';       // 公開版はソース選択を隠す＝モール単位
+  if(official && makerBox) makerBox.style.display='none';    // 特定メーカーの前面表示を避ける
+  if(credit) credit.style.display = official ? 'block' : 'none';
+  if(lbl) lbl.textContent = official ? '楽天市場から収集' : '家具を収集';
+  const btnLbl=document.querySelector('#collectBtn .lbl'); if(btnLbl) btnLbl.textContent = official ? '楽天市場から収集' : '家具店から収集';
 }
 function updateEraseBadge(){ const b=$('eraseEngine'); if(!b) return;
   if(SERVER.inpaint){ b.textContent='● AI補完エンジン（LaMa）に接続済み — 高品質'; b.className='engine ok'; }
@@ -1967,6 +1989,9 @@ function makeFurniEl(it){
   if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
   const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
   const sav=document.createElement('button'); sav.className='save'; sav.textContent='⤓'; sav.title='画像をPCに保存（PNG）'; on(sav,'click',ev=>{ ev.stopPropagation(); saveCanvasPNG(it.srcCanvas, it.name); }); el.appendChild(sav);
+  // provenance badge: 自分のアップロード vs 収集元（モール単位表現）
+  const srcTxt = it.source==='upload' ? '自分' : (it.source==='rakuten' ? '楽天市場' : (it.source==='ikea' ? 'IKEA' : (it.source ? '収集' : '')));
+  if(srcTxt){ const sb=document.createElement('div'); sb.className='src-badge'+(it.source==='upload'?' up':''); sb.textContent=srcTxt; el.appendChild(sb); }
   if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>ev.stopPropagation()); buy.draggable=false; el.appendChild(buy); }
   on(el,'click',()=>placeFromLib(it.id));
   on(el,'dragstart',ev=>{ ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
@@ -2090,7 +2115,9 @@ function renderMakers(filter){
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
-  const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value, source=$('collectSource').value;
+  const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value;
+  // 公開版(official)は常にモール単位（楽天市場）で検索。私的版のみUIのソース選択を尊重。
+  const source = isOfficialCollect() ? 'rakuten' : $('collectSource').value;
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
     let items=[];
@@ -2597,6 +2624,7 @@ on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.le
 on($('collectCount'),'input',e=>{ $('collectCountV').textContent=e.target.value; });
 on($('collectBtn'),'click',doCollect);
 on($('collectSource'),'change',e=>{ const isMakers=e.target.value==='makers'; $('makerBox').style.display=isMakers?'block':'none'; if(isMakers && !$('makerList').children.length) renderMakers(); });
+applyCollectMode(); // 初期は official 既定（ソース選択を隠す）。probeServer 完了後に mode に応じ再適用。
 on($('makerFilter'),'input',e=>renderMakers(e.target.value));
 on($('makerAll'),'click',()=>{ MAKERS.forEach(m=>State.makers.add(m.code)); renderMakers($('makerFilter').value); updateMakerCount(); });
 on($('makerNone'),'click',()=>{ State.makers.clear(); renderMakers($('makerFilter').value); updateMakerCount(); });
