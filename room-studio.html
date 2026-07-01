@@ -191,6 +191,8 @@
   .furni-item:hover .add{opacity:1}
   .furni-item .del{position:absolute; top:3px; right:3px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:13px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
   .furni-item:hover .del{display:flex}
+  .furni-item .save{position:absolute; top:3px; right:24px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:12px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
+  .furni-item:hover .save{display:flex}
   .furni-item .buy{position:absolute; top:3px; left:3px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-decoration:none; display:none; z-index:2}
   .furni-item:hover .buy{display:block}
   .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -570,6 +572,9 @@
             <div class="row">
               <button class="btn" id="fFlip" style="flex:1;justify-content:center">左右反転</button>
               <button class="btn" id="fDup" style="flex:1;justify-content:center">複製</button>
+            </div>
+            <div class="row">
+              <button class="btn" id="fSaveImg" style="flex:1;justify-content:center">画像をPCに保存（PNG）</button>
             </div>
           </div>
           <div class="section">
@@ -1961,6 +1966,7 @@ function makeFurniEl(it){
   const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
   if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
   const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
+  const sav=document.createElement('button'); sav.className='save'; sav.textContent='⤓'; sav.title='画像をPCに保存（PNG）'; on(sav,'click',ev=>{ ev.stopPropagation(); saveCanvasPNG(it.srcCanvas, it.name); }); el.appendChild(sav);
   if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>ev.stopPropagation()); buy.draggable=false; el.appendChild(buy); }
   on(el,'click',()=>placeFromLib(it.id));
   on(el,'dragstart',ev=>{ ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
@@ -2527,7 +2533,11 @@ on(document,'keydown',e=>{
   // Delete/Backspace で選択中の家具を削除（入力欄にフォーカス中は除く）
   if((e.key==='Delete'||e.key==='Backspace') && !typing){ const f=selectedFurniture(); if(f){ e.preventDefault(); deleteLayer(f.id); toast('家具を削除しました'); return; } }
   if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
-  if(k==='z'){ e.preventDefault(); doUndo(); } });
+  if(k==='z'){ e.preventDefault(); doUndo(); return; }
+  // 配置した家具: Ctrl+C コピー / Ctrl+V・Ctrl+P 貼付（入力欄フォーカス中は既定動作のまま）
+  if(k==='c' && !typing){ if(selectedFurniture()){ e.preventDefault(); copyFurniture(); } return; }
+  if((k==='v'||k==='p') && !typing){ if(furniClip){ e.preventDefault(); pasteFurniture(); } return; }
+});
 on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込んでください'); return; }
   State.compare.active=!State.compare.active; $('btnCompare').classList.toggle('primary',State.compare.active);
   overlay.style.cursor=State.compare.active?'ew-resize':'';
@@ -2619,7 +2629,35 @@ on($('fKeystone'),'change',e=>{ const f=selectedFurniture(); if(!f) return; push
 on($('fKeystoneReset'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.corners) return; pushHistory(); f.corners=rectCornersLocal(f); f._warpKey=null; render(); });
 on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
-on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; const c=document.createElement('canvas'); c.width=f.srcCanvas.width; c.height=f.srcCanvas.height; c.getContext('2d').drawImage(f.srcCanvas,0,0); addFurnitureLayer(c,f.name+' のコピー'); const nf=selectedFurniture(); Object.assign(nf,{bgRemove:f.bgRemove,bgTol:f.bgTol,aiCutCanvas:f.aiCutCanvas,recolor:f.recolor,color:f.color,strength:f.strength,material:f.material,matStrength:f.matStrength,scale:f.scale,rot:f.rot,yaw:f.yaw,corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null,flip:f.flip,opacity:f.opacity,category:f.category,eraseMask:f.eraseMask?f.eraseMask.slice():null,x:f.x+30,y:f.y+30,dirty:true}); rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); });
+/* 家具のプロパティ一式をスナップショット（画像は不変なので srcCanvas 参照を保持）。コピペ/複製で共用。 */
+function snapshotFurniture(f){ return { src:f.srcCanvas, aiCut:f.aiCutCanvas||null, name:f.name, x:f.x, y:f.y,
+  props:{ bgRemove:f.bgRemove, bgTol:f.bgTol, recolor:f.recolor, color:f.color, strength:f.strength, material:f.material, matStrength:f.matStrength,
+    scale:f.scale, rot:f.rot, yaw:f.yaw, corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null, flip:f.flip, opacity:f.opacity, category:f.category,
+    eraseMask:f.eraseMask?f.eraseMask.slice():null } }; }
+/* スナップショットから新レイヤーとして配置（+dx,+dy ずらし）。返り値=新家具。 */
+function placeFurnitureSnapshot(snap, dx, dy){ if(!State.W){ toast('先に部屋を読み込んでください'); return null; }
+  addFurnitureLayer(copyCanvas(snap.src), (snap.name||'家具')+' のコピー');
+  const nf=selectedFurniture(); if(!nf) return null; const pr=snap.props;
+  Object.assign(nf, pr, { aiCutCanvas:snap.aiCut, corners:pr.corners?pr.corners.map(p=>[p[0],p[1]]):null,
+    eraseMask:pr.eraseMask?pr.eraseMask.slice():null, x:snap.x+(dx||0), y:snap.y+(dy||0), dirty:true });
+  rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); return nf; }
+on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; placeFurnitureSnapshot(snapshotFurniture(f),30,30); });
+
+/* 家具を画像ファイル(PNG)としてPCに保存（切り抜き＋色/素材反映済みの見た目・透過つき）。 */
+async function saveCanvasPNG(cv, name){ if(!cv){ toast('画像がありません'); return; }
+  const safe=((name||'furniture').replace(/[\\/:*?"<>|\s]+/g,'_')).slice(0,60)||'furniture';
+  try{ if(await saveBlob(dataURLToBlob(canvasToPNG(cv)), safe+'.png', 'image/png')) toast('画像を保存しました'); }
+  catch(err){ console.error(err); toast('画像の保存に失敗しました'); } }
+function saveSelectedFurnitureImage(){ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; }
+  if(f.dirty||!f.proc) rebuildFurniture(f); saveCanvasPNG(f.proc||f.srcCanvas, f.name); }
+on($('fSaveImg'),'click',saveSelectedFurnitureImage);
+
+/* 選択中家具の Ctrl+C コピー / Ctrl+V(・Ctrl+P) 貼付。連続貼付は少しずつずらす。 */
+let furniClip=null;
+function copyFurniture(){ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return false; }
+  furniClip=snapshotFurniture(f); toast('家具をコピーしました'); return true; }
+function pasteFurniture(){ if(!furniClip){ toast('コピーした家具がありません'); return false; }
+  const nf=placeFurnitureSnapshot(furniClip,30,30); if(nf){ furniClip.x+=30; furniClip.y+=30; toast('貼り付けました'); } return !!nf; }
 on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.recolor=e.target.checked; $('fRecolorBox').style.display=f.recolor?'block':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fColor'); f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
