@@ -769,6 +769,54 @@ const MATERIALS = [
   {key:'stonetile',name:'石目タイル（大判）', base:'#d6d3cc', draw:stoneTileDraw('#d8d5ce','#b7b2a7',3,3,193)},
   {key:'brick',    name:'レンガ',         base:'#b06a4f', draw:brickDraw('#b06a4f','#d8cdbb',5,9,196)},
   {key:'terr',     name:'テラコッタ',     base:'#c47a55', draw:tileDraw('#c47a55','#9c5d3e',4,4,199)},
+  // ---- 追加分 ----
+  // 木目 wood
+  {key:'maple',    name:'メープル',       base:'#e2cba0', draw:woodDraw('#e8d4b0','#c0a374',6,101)},
+  {key:'cherry',   name:'チェリー',       base:'#a9603f', draw:woodDraw('#b56d48','#7a3f28',6,103)},
+  {key:'mahogany', name:'マホガニー',     base:'#7e3f2f', draw:woodDraw('#8a4735','#4d2317',7,107)},
+  {key:'birch',    name:'バーチ',         base:'#e4d3b3', draw:woodDraw('#ead9bd','#c3ab86',5,109)},
+  {key:'pine',     name:'パイン',         base:'#dcc290', draw:woodDraw('#e5cf9e','#b89660',6,113)},
+  {key:'rosewood', name:'ローズウッド',   base:'#6b4030', draw:woodDraw('#77492f','#3a2016',7,127)},
+  {key:'greyoak',  name:'グレーオーク',   base:'#b8b0a3', draw:woodDraw('#c0b8ab','#8f887d',6,131)},
+  {key:'smokedoak',name:'スモークオーク', base:'#8a7a63', draw:woodDraw('#93826a','#5a4d3c',6,137)},
+  // 石目・大理石 stone / marble
+  {key:'emperador',name:'エンペラドール（茶）', base:'#5f4632', draw:marbleDraw('#6a4f39','#c9a878',139)},
+  {key:'nero',     name:'黒大理石',       base:'#2c2b2a', draw:marbleDraw('#33322f','#9b978c',149)},
+  {key:'greenmarble',name:'グリーン大理石', base:'#33473b', draw:marbleDraw('#3a5044','#9fb59d',151)},
+  {key:'pinkmarble',name:'ピンク大理石',  base:'#e6d5cf', draw:marbleDraw('#ead9d3','#b98f88',157)},
+  {key:'limestone',name:'ライムストーン', base:'#ddd6c4', draw:stoneDraw('#ddd6c4',163)},
+  {key:'sandstone',name:'砂岩',           base:'#cbb48c', draw:stoneDraw('#cbb48c',167)},
+  {key:'basalt',   name:'玄武岩',         base:'#3f4145', draw:stoneDraw('#3f4145',173)},
+  {key:'blackgranite',name:'黒御影石',    base:'#3a3c40', draw:graniteDraw('#3a3c40',179)},
+  {key:'beigegranite',name:'ベージュ御影石', base:'#b6a98f', draw:graniteDraw('#b6a98f',181)},
+  // 塗り壁 plaster
+  {key:'plasterwarm',name:'漆喰（生成り）', base:'#e8e0d0', draw:plasterDraw('#e8e0d0',191,16)},
+  {key:'mochaplaster',name:'塗り壁（モカ）', base:'#a99684', draw:plasterDraw('#a99684',193,22)},
+  {key:'terraplaster',name:'塗り壁（テラ）', base:'#c39a80', draw:plasterDraw('#c39a80',197,20)},
+  // コンクリート concrete
+  {key:'concretedk',name:'コンクリート（濃）', base:'#8a8884', draw:concreteDraw('#8a8884',201)},
+  {key:'mortarwarm',name:'モルタル（暖）', base:'#ada492', draw:concreteDraw('#ada492',211)},
+  // 織物・布 fabric
+  {key:'wool',     name:'ウール',         base:'#c9c2b4', draw:fabricDraw('#c9c2b4',223,40)},
+  {key:'denim',    name:'デニム',         base:'#5b6b82', draw:fabricDraw('#5b6b82',227,54)},
+  {key:'greenvelvet',name:'ベルベット（緑）', base:'#3d5a4a', draw:fabricDraw('#3d5a4a',229,60)},
+  {key:'terrafabric',name:'織物（テラコッタ）', base:'#b57a5f', draw:fabricDraw('#b57a5f',233,44)},
+  {key:'navyfabric',name:'織物（ネイビー）', base:'#37435a', draw:fabricDraw('#37435a',239,50)},
+  // タイル・レンガ tile / brick
+  {key:'greensubway',name:'グリーンタイル', base:'#7f9c8b', draw:tileDraw('#7f9c8b','#e6e2d8',6,12,241)},
+  {key:'blacktile',name:'黒タイル',       base:'#33322f', draw:tileDraw('#33322f','#8a8578',6,12,251)},
+  {key:'navytile', name:'ネイビータイル', base:'#33415a', draw:tileDraw('#33415a','#dcd7cc',6,12,257)},
+  {key:'whitebrick',name:'白レンガ',      base:'#d8d3ca', draw:brickDraw('#d8d3ca','#efece5',5,9,263)},
+  {key:'darkbrick',name:'黒レンガ',       base:'#5a4a44', draw:brickDraw('#5a4a44','#b7ada0',5,9,269)},
+  // レザー leather（サンゲツ レザー調）
+  {key:'leathercamel',name:'レザー（キャメル）', base:'#a9764a', draw:leatherDraw('#a9764a',301)},
+  {key:'leatherbrown',name:'レザー（ブラウン）', base:'#6e4632', draw:leatherDraw('#6e4632',307)},
+  {key:'leatherblack',name:'レザー（ブラック）', base:'#2f2b28', draw:leatherDraw('#2f2b28',311)},
+  {key:'leathergreige',name:'レザー（グレージュ）', base:'#a99e8c', draw:leatherDraw('#a99e8c',313)},
+  {key:'leathergreen',name:'レザー（グリーン）', base:'#4a5a48', draw:leatherDraw('#4a5a48',317)},
+  // 和紙・紙 washi / paper（サンゲツ 和紙・紙壁紙）
+  {key:'washi',    name:'和紙（生成り）', base:'#e9e3d5', draw:paperDraw('#e9e3d5',331)},
+  {key:'washigray',name:'和紙（グレー）', base:'#c9c6bd', draw:paperDraw('#c9c6bd',337)},
 ];
 function newTile(){ const c=document.createElement('canvas'); c.width=c.height=256; return c; }
 /* tileable fractal value noise (seamless): coords scaled by `per` (a power of 2 ≤32) wrap at 0..1 */
@@ -834,6 +882,18 @@ function brickDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(see
 function stoneTileDraw(hex,grout,cols,rows,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex), gc=hex2rgb(grout), gx=0.018, gy=0.018;
   return pxTile((u,v)=>{ const fu=(u*cols)%1, fv=(v*rows)%1; if(fu<gx||fu>1-gx||fv<gy||fv>1-gy) return gc;
     const band=(n.fbm(u*8,v*16,8,4)-0.5)*18, fine=(n.fbm(u*32,v*32,32,2)-0.5)*8, l=band+fine; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+/* leather（レザー調）— pebbled grain: broad tone + dark creases between cells（Sangetsu レザー相当） */
+function leatherDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
+  return pxTile((u,v)=>{ const grain=(n.fbm(u*32,v*32,32,4)-0.5)*16;
+    const cell=n.fbm(u*64,v*64,64,2);
+    const crease=Math.pow(1-Math.abs(Math.sin(cell*6.2831853)),8)*24;   // dark valleys between pebbles
+    const micro=(n.vn(u*64,v*64,64)-0.5)*6;
+    const l=grain-crease+micro; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
+/* washi / paper（和紙・紙壁紙）— fine fibers + faint laid lines（Sangetsu 和紙・紙 相当） */
+function paperDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(hex);
+  return pxTile((u,v)=>{ const grain=(n.fbm(u*32,v*32,32,4)-0.5)*7 + (n.vn(u*64,v*64,64)-0.5)*5;
+    const streak=Math.sin(v*64*6.2831853)*0.5*(n.fbm(u*16,v*16,16,2));   // subtle horizontal laid lines (tileable)
+    const l=grain+streak*3; return [b[0]+l,b[1]+l,b[2]+l]; }); }; }
 function shade(hex,amt){ const [r,g,b]=hex2rgb(hex); return `rgb(${clamp(r+amt*2.55,0,255)|0},${clamp(g+amt*2.55,0,255)|0},${clamp(b+amt*2.55,0,255)|0})`; }
 // cache rendered tiles
 const tileCache={}, thumbCache={};
@@ -2145,6 +2205,11 @@ const PALETTE=[
   '#CFCABF','#B9B3A6','#9E9788','#7C766B','#57534C','#2E2B27', // グレージュ〜チャコール
   '#DDE0D6','#BCC6B2','#93A78C','#6E8670','#4E6552','#36433A', // セージ〜深緑
   '#CFD8DD','#9FB4C0','#6A8593','#3C5366','#233140','#A8674A', // 青〜ネイビー＋テラコッタ
+  '#EAD9C3','#D8BE9C','#C19A6B','#A87A4E','#8A5A38','#5E3A22', // 暖色ブラウン〜タン
+  '#E4B499','#D18E6A','#B96A43','#9C4E2E','#7C3B22','#5A2A18', // テラコッタ〜ラスト
+  '#F0E1DC','#E3C9C4','#CBA6A2','#B08A88','#8E6E6E','#6B5155', // ダスティピンク〜モーヴ
+  '#E9D8A6','#D9C078','#C2A24C','#9C8340','#7A6A34','#565027', // オーカー〜マスタード〜オリーブ
+  '#D6E2DF','#A9C6C2','#74A19C','#4E7C78','#345B58','#22403E', // ティール〜ダックエッグ
 ];
 function buildChips(hostId, onPick, includeTransparent){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); });
   if(includeTransparent){ const c=document.createElement('button'); c.className='chip alpha'; c.dataset.hex='transparent'; c.title='透明（色を変えず、元の写真のまま）'; on(c,'click',()=>onPick('transparent')); host.appendChild(c); } }
