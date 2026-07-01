@@ -21,18 +21,33 @@ def health():
     return {"ok": True, "inpaint": False, "collect": True}
 
 
-@app.get("/collect")
-def collect(request: Request, type: str = "", taste: str = "", count: int = 50, source: str = "ikea", shop: str = ""):
+def _req_referer(request: Request):
     # Rakuten requires Referer/Origin matching a registered site → use the request's own domain
     host = request.headers.get("host", "")
-    referer = None
     if host and "localhost" not in host and "127.0.0.1" not in host:
         proto = request.headers.get("x-forwarded-proto", "https")
-        referer = f"{proto}://{host}/"
+        return f"{proto}://{host}/"
+    return None
+
+
+@app.get("/collect")
+def collect(request: Request, type: str = "", taste: str = "", count: int = 50,
+           source: str = "", shop: str = "", provider: str = ""):
     try:
-        return core.collect(type, taste, count, source, shop, referer)
+        return core.collect(type, taste, count, source, shop, _req_referer(request), provider or None)
     except core.CollectError as e:
         raise HTTPException(status_code=e.status, detail=e.detail)
+
+
+@app.get("/item")
+def item(request: Request, code: str = "", source: str = "", provider: str = ""):
+    try:
+        it = core.fetch_item(code, source, _req_referer(request), provider or None)
+    except core.CollectError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    if it is None:
+        raise HTTPException(status_code=404, detail="item not found")
+    return it
 
 
 @app.get("/imgproxy")

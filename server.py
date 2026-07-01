@@ -148,12 +148,24 @@ import _collect_core as core  # noqa: E402
 
 
 @app.get("/collect")
-def collect(type: str, taste: str = "", count: int = 50, source: str = "ikea", shop: str = ""):
-    """家具店の商品を種類＋テイストで検索（ロジックは api/_collect_core と共有）。"""
+def collect(type: str, taste: str = "", count: int = 50, source: str = "", shop: str = "", provider: str = ""):
+    """家具店の商品を種類＋テイストで検索（ロジックは api/_collect_core・プロバイダ経由）。"""
     try:
-        return core.collect(type, taste, count, source, shop)
+        return core.collect(type, taste, count, source, shop, None, provider or None)
     except core.CollectError as e:
         raise HTTPException(status_code=e.status, detail=e.detail)
+
+
+@app.get("/item")
+def item(code: str = "", source: str = "", provider: str = ""):
+    """商品コードで1件再取得（参照のみ保存の再ハイドレーション用）。"""
+    try:
+        it = core.fetch_item(code, source, None, provider or None)
+    except core.CollectError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    if it is None:
+        raise HTTPException(status_code=404, detail="item not found")
+    return it
 
 
 @app.get("/imgproxy")
