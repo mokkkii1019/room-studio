@@ -105,7 +105,8 @@ class InpaintReq(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"inpaint": _check_import(), "model": "lama", "loaded": _model is not None}
+    return {"inpaint": _check_import(), "model": "lama", "loaded": _model is not None,
+            **core.provider_status()}
 
 
 @app.post("/inpaint")

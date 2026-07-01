@@ -18,7 +18,8 @@ app = FastAPI()
 
 @app.get("/health")
 def health():
-    return {"ok": True, "inpaint": False, "collect": True}
+    # provider/mode make it visible on the public URL that the crawler is NOT enabled.
+    return {"ok": True, "inpaint": False, "collect": True, **core.provider_status()}
 
 
 def _req_referer(request: Request):

@@ -52,6 +52,18 @@ def get_provider(name=None):
     return _official
 
 
+def provider_status():
+    """Effective collection provider + deployment mode (for /health).
+    In public mode a crawler request is refused, so the *active* provider resolves to
+    'official' — surfacing that here lets you confirm on the public URL that the crawler
+    is NOT enabled."""
+    try:
+        active = get_provider().PROVIDER_NAME
+    except CollectError:
+        active = "official"  # crawler refused (public) → official is what actually runs
+    return {"provider": active, "mode": APP_MODE, "configured": COLLECT_PROVIDER}
+
+
 def _to_frontend(it):
     """Normalized provider item -> the shape room-studio.html expects (proxied images)."""
     imgs = it.get("imageUrls") or ([it["imageUrl"]] if it.get("imageUrl") else [])

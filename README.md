@@ -79,12 +79,24 @@ python server.py   # → http://127.0.0.1:7865
 不特定多数に使ってもらうための公開デプロイ。**Vercel の FastAPI ランタイム**で単一の関数（`api/index.py`）が HTML 配信＋`/health`・`/collect`・`/imgproxy` を担当する。重い LaMa(`/inpaint`)は公開では使わず、消しゴムは**ブラウザ内 PatchMatch** に自動フォールバックする（無料・完全動作）。
 
 **構成（このリポジトリに同梱済み）**
-- `api/index.py` … FastAPI アプリ（`app`）。Vercel が**単一の Serverless Function**としてデプロイし、全リクエストを処理（HTML・/health・/collect・/imgproxy）
-- `api/_collect_core.py` … 収集/画像リレーの共有ロジック（`server.py` と Vercel が共用・標準ライブラリのみ）
+- `api/index.py` … FastAPI アプリ（`app`）。Vercel が**単一の Serverless Function**としてデプロイし、全リクエストを処理（HTML・/health・/collect・/item・/imgproxy）
+- `api/_collect_core.py` … 収集の facade（プロバイダ選択＋画像リレー・`server.py` と Vercel が共用・標準ライブラリのみ）
+- `api/_provider_base.py` … プロバイダ共通（エラー型・env切替・カテゴリフィルタ）
+- `api/_provider_official.py` … **公開用**プロバイダ。楽天など正規APIのみ（公開安全）
+- `api/_provider_crawler.py` … **私的用**プロバイダ。IKEA/Shopify クローラ。**公開デプロイには載せない**（`.vercelignore` で除外＋実行時ガード）
 - `requirements.txt` … `fastapi`（**Vercel の Python ランタイム有効化に必須**。これが無いと関数が検出されない）
 - `vercel.json` は**不要**（ゼロ設定。FastAPI プリセットが `api/index.py` の `app` を自動検出し全ルートを処理）。関数の最大実行時間を延ばしたい場合のみ Vercel の Project Settings → Functions で設定
-- `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env` 等を配信対象から除外
-- `/imgproxy` は公開時の悪用防止のため **IKEA/楽天の画像ホストのみ許可**（`IMG_HOST_SUFFIXES`）
+- `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env`・**`api/_provider_crawler.py`** 等を配信対象から除外
+- `/imgproxy` は公開時の悪用防止のため**アクティブなプロバイダの画像ホストのみ許可**（`provider.imgproxy_hosts()`。公開=official時は**楽天の画像ドメインのみ**）
+
+**収集プロバイダと動作モード（公開=official/public・私的=crawler/private）**
+- 収集は「プロバイダ」で抽象化し、環境変数で切り替える:
+  - `COLLECT_PROVIDER` … `official`（正規APIのみ）/ `crawler`（IKEA/Shopify・私的用）。既定 `official`
+  - `APP_MODE` … `public` / `private`。既定 `public`
+- **公開（Vercel）= `official` / `public`**（既定のまま・環境変数の設定不要）。`public` では**クローラを import すらせず**、要求されても `403`。加えて `.vercelignore` でファイル自体を配信物から除外する**二重防御**。
+- **私的利用（自分のPC）= `crawler` / `private`**。`.env` に `APP_MODE=private` と `COLLECT_PROVIDER=crawler` を書けば IKEA/Shopify 収集が有効（`.env` は git/Vercel いずれからも除外済み）。
+- **確認方法**: 公開URLの `GET /health` が `{"provider":"official","mode":"public", ...}` を返す。公開版でクローラが有効化されていないことを目視確認できる。
+- **クローラ収集は自己の私的利用のみ**を想定（公開サービスとしては提供しない）。公開版のマネタイズはアフィリエイト（楽天）＋正規API表示のみで、表示データは都度取得（運営サーバーに保存しない）。
 
 **手順**
 1. リポジトリを GitHub に push（例: `https://github.com/mokkkii1019/room-studio`）。
@@ -93,6 +105,7 @@ python server.py   # → http://127.0.0.1:7865
    - `RAKUTEN_APP_ID`（楽天アプリID／UUID）
    - `RAKUTEN_ACCESS_KEY`（アクセスキー）
    - `RAKUTEN_AFFILIATE_ID`（任意・購入リンクをアフィリエイト化）
+   - `APP_MODE=public`・`COLLECT_PROVIDER=official`（**推奨・明示設定**。未設定でも既定が public/official なので同じ挙動。念のため明示しておくとクローラが絶対に有効化されない）
    - ※ `RAKUTEN_REFERER` は**不要**（サーバーがリクエスト元ドメインから自動生成）。
 4. **Deploy**。発行ドメイン（例 `room-studio-xxxx.vercel.app`）が出る。
 5. **楽天の「許可されたWebサイト」にそのドメインを追加**（`http(s)://` は付けない＝`room-studio-xxxx.vercel.app`）。新APIは Referer/Origin 一致が必須で、サーバーは**自身のドメインを自動送出**するため、ドメイン登録だけでOK（再デプロイ不要・反映は登録後すぐ）。
