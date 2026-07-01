@@ -6,36 +6,45 @@
 <title>Room Studio — 買う前に試す</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#E8E6E1;          /* cool light greige workspace (not cream) */
-    --panel:#FAFAF9;
-    --panel-2:#F1F0EC;
-    --ink:#23262A;         /* graphite */
-    --muted:#71777D;
-    --line:#D9D7D1;
-    --line-2:#E7E5E0;
-    --stage:#2A2D31;       /* dark backdrop so the photo reads true */
-    --stage-2:#212427;
-    --accent:#2C6E6B;      /* deep petrol/teal — the one bold note */
-    --accent-ink:#0f3433;
-    --accent-weak:#DCEAE8;
-    --warn:#BB5239;        /* terracotta — destructive / eraser / furniture handles */
-    --warn-weak:#F1DED7;
+    /* 1a redesign tokens (README §6). Names kept so existing var() usage re-skins automatically. */
+    --bg:#FBFAF8;          /* app background */
+    --panel:#FBFAF8;       /* panels */
+    --panel-2:#F1EFEA;     /* sub surface / chip bg */
+    --panel-3:#F6F4EF;     /* alt sub surface */
+    --rail:#F0EEE9;        /* left mode rail (used in T2) */
+    --ink:#2A2824;         /* text primary */
+    --muted:#7C776E;       /* text secondary */
+    --faint:#a49e94;       /* text faint */
+    --line:rgba(0,0,0,.10);   /* border */
+    --line-2:rgba(0,0,0,.06); /* hairline */
+    --stage:#E7E4DE;       /* canvas background (light) */
+    --stage-2:#E7E4DE;
+    --accent:#3B6FE0;      /* selection / active */
+    --accent-ink:#2450a0;  /* darker accent (text on light) */
+    --accent-weak:rgba(59,111,224,.10);
+    --accent-line:rgba(59,111,224,.35);
+    --warn:#b5493a;        /* destructive / eraser */
+    --warn-weak:#f2e2de;
+    --on:#5aa06a;          /* on-state (green) */
+    --btn-dark:#2A2824;    /* dark CTA button */
+    /* mode dot colors */
+    --mode-paint:#B26B4E; --mode-place:#5D7089; --mode-erase:#C7A18B; --mode-select:#7C776E;
     --r:10px;
-    --r-sm:7px;
-    --shadow:0 1px 2px rgba(20,22,24,.06), 0 6px 20px rgba(20,22,24,.06);
+    --r-sm:8px;
+    --shadow:0 3px 10px rgba(0,0,0,.10);
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
     margin:0; background:var(--bg); color:var(--ink);
-    font-family:"Noto Sans JP",system-ui,-apple-system,sans-serif;
+    font-family:"Zen Kaku Gothic New",system-ui,-apple-system,sans-serif;
     font-size:13.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
     display:flex; flex-direction:column;
   }
-  .label{font-family:"Space Grotesk","Noto Sans JP",sans-serif; text-transform:uppercase; letter-spacing:.12em; font-size:10.5px; font-weight:600; color:var(--muted)}
+  .label{font-family:"Zen Kaku Gothic New",sans-serif; letter-spacing:.04em; font-size:11px; font-weight:700; color:var(--muted)}
   button{font-family:inherit; cursor:pointer}
   button:focus-visible, [tabindex]:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 
@@ -45,8 +54,8 @@
     background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto;
   }
   .brand{display:flex; align-items:baseline; gap:10px; margin-right:auto}
-  .brand .mark{font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:18px; letter-spacing:.02em}
-  .brand .mark b{color:var(--accent)}
+  .brand .mark{font-family:"JetBrains Mono",monospace; font-weight:700; font-size:15px; letter-spacing:.04em}
+  .brand .mark b{font-weight:700; background:var(--btn-dark); color:var(--bg); padding:2px 6px; border-radius:4px}
   .brand .tag{font-size:11px; color:var(--muted)}
   .h-actions{display:flex; gap:8px; flex-wrap:wrap}
   .btn{
@@ -56,7 +65,7 @@
   }
   .btn:hover{background:var(--panel-2)}
   .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
-  .btn.primary:hover{background:#235754}
+  .btn.primary:hover{background:var(--accent-ink)}
   .btn.ghost-warn{color:var(--warn); border-color:var(--warn-weak)}
   .btn.ghost-warn:hover{background:var(--warn-weak)}
   .btn svg{width:15px;height:15px;stroke-width:1.8}
@@ -79,11 +88,11 @@
   .zoom-ctl #zoomLabel{font-size:12px; min-width:46px; text-align:center; display:inline-block}
   .empty-hint{
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    color:#cfd3d6; text-align:center; max-width:340px; pointer-events:none;
+    color:var(--muted); text-align:center; max-width:340px; pointer-events:none;
   }
-  .empty-hint .label{color:#9aa0a4}
+  .empty-hint .label{color:var(--faint)}
 
-  .zoom-note{position:absolute; right:14px; bottom:16px; color:#80878c; font-size:11px}
+  .zoom-note{position:absolute; right:14px; bottom:16px; color:var(--faint); font-size:11px}
 
   /* ---------- right panel ---------- */
   .panel{background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0}
@@ -155,7 +164,7 @@
     background-size:100% 100%,10px 10px,10px 10px; background-position:0 0,0 0,5px 5px; background-repeat:no-repeat,repeat,repeat }
   .picker-row{display:flex; align-items:center; gap:10px; margin-top:11px}
   .picker-row input[type=color]{width:40px;height:32px; border:1px solid var(--line); border-radius:8px; background:none; padding:2px}
-  .picker-row .hexv{font-family:"Space Grotesk",monospace; font-size:12px; color:var(--muted)}
+  .picker-row .hexv{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--muted)}
 
   /* material tiles */
   .mats{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px}
@@ -178,7 +187,7 @@
   .furni-item:active{cursor:grabbing}
   .furni-item .thumb{display:block; width:100%; max-width:100%; height:58px; pointer-events:none; -webkit-user-drag:none; background:repeating-conic-gradient(#ececec 0% 25%, #fff 0% 50%) 50% / 12px 12px}
   .furni-item .nm{font-size:10px; text-align:center; padding:2px 3px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .furni-item .add{position:absolute; left:0; right:0; top:0; height:58px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; transition:opacity .15s; background:rgba(44,110,107,.55)}
+  .furni-item .add{position:absolute; left:0; right:0; top:0; height:58px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; transition:opacity .15s; background:rgba(59,111,224,.55)}
   .furni-item:hover .add{opacity:1}
   .furni-item .del{position:absolute; top:3px; right:3px; width:18px; height:18px; border:0; border-radius:5px; background:rgba(0,0,0,.5); color:#fff; font-size:13px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; z-index:2}
   .furni-item:hover .del{display:flex}
@@ -188,7 +197,7 @@
   .field{width:100%; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; font-size:12.5px; background:var(--panel); color:var(--ink); margin:6px 0}
   select.field{cursor:pointer}
   .drop-active{outline:2px dashed var(--accent); outline-offset:-5px}
-  #canvasBox.drop-active::after{content:"ここにドロップして配置"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(44,110,107,.25); color:#fff; font-weight:700; font-size:14px; pointer-events:none; z-index:5}
+  #canvasBox.drop-active::after{content:"ここにドロップして配置"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(59,111,224,.25); color:#fff; font-weight:700; font-size:14px; pointer-events:none; z-index:5}
 
   .toggle{display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; font-size:12.5px; margin:10px 0}
   .toggle input{display:none}
@@ -202,7 +211,7 @@
   .addbtn svg{width:16px;height:16px;stroke-width:1.9}
 
   .run-erase{width:100%; background:var(--warn); border:1px solid var(--warn); color:#fff; border-radius:9px; padding:11px; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px}
-  .run-erase:hover{background:#a3472f}
+  .run-erase:hover{background:#93382c}
   .run-erase svg{width:16px;height:16px;stroke-width:1.9}
   .run-erase[disabled]{opacity:.5; cursor:not-allowed}
 
@@ -1615,7 +1624,7 @@ function rebuildSamPreview(){ const c=samPreviewCanvas, x=c.getContext('2d'); x.
   x.putImageData(img,0,0);
 }
 function drawSamPoints(){ for(const pt of State.sam.points){ octx.beginPath(); octx.arc(pt.x,pt.y,6,0,7);
-  octx.fillStyle= pt.label? 'rgba(44,110,107,.95)':'rgba(187,82,57,.95)'; octx.fill();
+  octx.fillStyle= pt.label? 'rgba(59,111,224,.95)':'rgba(181,73,58,.95)'; octx.fill();
   octx.lineWidth=2; octx.strokeStyle='#fff'; octx.stroke(); } }
 function rebuildErasePreviewFromMask(){ const x=erasePreviewCanvas.getContext('2d'); x.clearRect(0,0,State.W,State.H);
   const em=State.eraseMask, img=x.createImageData(State.W,State.H), d=img.data;
@@ -1708,7 +1717,7 @@ function renderOverlay(){
     octx.beginPath(); octx.arc(sx,hy,hr,0,7); octx.fillStyle='rgba(35,38,42,.85)'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#fff'; octx.stroke();
     octx.fillStyle='#fff'; octx.font=`${(hr*0.9)|0}px sans-serif`; octx.textAlign='center'; octx.textBaseline='middle'; octx.fillText('⟺',sx,hy);
     // labels
-    octx.font='600 13px "Noto Sans JP",sans-serif'; octx.textBaseline='top';
+    octx.font='600 13px "Zen Kaku Gothic New",sans-serif'; octx.textBaseline='top';
     octx.fillStyle='rgba(255,255,255,.92)'; octx.textAlign='left'; octx.fillText('編集前',10,10);
     octx.textAlign='right'; octx.fillText('編集後',State.W-10,10);
     return;
@@ -1724,10 +1733,10 @@ function renderOverlay(){
   // selected furniture handles
   if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); }
     if(State.furniEyedrop && lastMouse){ drawEyedropLoupe(lastMouse); }
-    if(State.furniErase && lastMouse){ const r=+$('fEraseSize').value/2; octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(187,82,57,.95)'; octx.lineWidth=1.5; octx.stroke(); octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke(); } }
+    if(State.furniErase && lastMouse){ const r=+$('fEraseSize').value/2; octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(181,73,58,.95)'; octx.lineWidth=1.5; octx.stroke(); octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke(); } }
   // brush cursor — shown for brush-like tools (incl. SAM, where drag = brush); not for the eyedropper (it shows a loupe)
   if(lastMouse && State.mode!=='furniture' && !(State.mode==='surface'&&(State.surfTool==='eyedropper'||!State.surfTool))){ const r=(State.mode==='erase')? +$('eraseSize').value/2 : +$('brushSize').value/2;
-    octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle=(State.mode==='erase')?'rgba(187,82,57,.9)':'rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.stroke();
+    octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle=(State.mode==='erase')?'rgba(181,73,58,.9)':'rgba(59,111,224,.95)'; octx.lineWidth=1.5; octx.stroke();
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke();
   }
 }
@@ -1735,20 +1744,20 @@ function drawFurnitureHandles(f){
   const corners=effectiveCorners(f).map(c=>furnitureOuter(f,c[0],c[1]));
   f._cornersStage=corners;
   octx.beginPath(); octx.moveTo(corners[0][0],corners[0][1]); for(let i=1;i<4;i++) octx.lineTo(corners[i][0],corners[i][1]); octx.closePath();
-  octx.strokeStyle='rgba(187,82,57,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
+  octx.strokeStyle='rgba(181,73,58,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
   if(f.corners){ // keystone mode: all 4 corners are draggable
-    for(const hp of corners){ octx.beginPath(); octx.arc(hp[0],hp[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#BB5239'; octx.stroke(); }
+    for(const hp of corners){ octx.beginPath(); octx.arc(hp[0],hp[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#b5493a'; octx.stroke(); }
     f._scaleHandle=null;
   } else { // scale handle bottom-right (index 2)
-    const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#BB5239'; octx.stroke();
+    const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#b5493a'; octx.stroke();
     f._scaleHandle=hp;
   }
 }
 
 function drawPerspectiveQuad(quad){
   octx.beginPath(); octx.moveTo(quad[0][0],quad[0][1]); for(let i=1;i<4;i++) octx.lineTo(quad[i][0],quad[i][1]); octx.closePath();
-  octx.strokeStyle='rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
-  for(const p of quad){ octx.beginPath(); octx.arc(p[0],p[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#2C6E6B'; octx.stroke(); }
+  octx.strokeStyle='rgba(59,111,224,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
+  for(const p of quad){ octx.beginPath(); octx.arc(p[0],p[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#3B6FE0'; octx.stroke(); }
 }
 
 /* ---- polygon (face) selection: click straight-edged corners of a wall/floor ---- */
@@ -1760,11 +1769,11 @@ function polyClose(){ const a=activeSurface(); if(!a){ toast('表面を選択し
   pushHistory(); fillPolygonToMask(a.mask, State.poly.points); a.dirty=true; rebuildSurface(a); rebuildMaskPreview();
   polyReset(); render(); toast('面を選択に追加しました'); }
 function drawPolyInProgress(){ const pts=State.poly.points; if(!pts.length) return;
-  if(pts.length>=3){ octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y); octx.closePath(); octx.fillStyle='rgba(44,110,107,.18)'; octx.fill(); }
+  if(pts.length>=3){ octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y); octx.closePath(); octx.fillStyle='rgba(59,111,224,.18)'; octx.fill(); }
   octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y);
   if(lastMouse) octx.lineTo(lastMouse.x,lastMouse.y);
-  octx.strokeStyle='rgba(44,110,107,.95)'; octx.lineWidth=1.5; octx.setLineDash([5,4]); octx.stroke(); octx.setLineDash([]);
-  pts.forEach((p,i)=>{ octx.beginPath(); octx.arc(p.x,p.y, i===0?7:5, 0,7); octx.fillStyle= i===0?'#2C6E6B':'#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle= i===0?'#fff':'#2C6E6B'; octx.stroke(); });
+  octx.strokeStyle='rgba(59,111,224,.95)'; octx.lineWidth=1.5; octx.setLineDash([5,4]); octx.stroke(); octx.setLineDash([]);
+  pts.forEach((p,i)=>{ octx.beginPath(); octx.arc(p.x,p.y, i===0?7:5, 0,7); octx.fillStyle= i===0?'#3B6FE0':'#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle= i===0?'#fff':'#3B6FE0'; octx.stroke(); });
 }
 
 /* ---- eyedropper: sample a colour from the composited image, then fill with it ---- */
@@ -1882,10 +1891,10 @@ on(overlay,'contextmenu',e=>{ if((State.mode==='surface'&&(State.surfTool==='sam
 
 function paintAt(p){ const a=activeSurface(); if(!a) return; const r=+$('brushSize').value/2;
   if(drag.type==='erasemask'){ stampDisc(a.mask,p.x,p.y,r,0); const x=maskPreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); }
-  else { stampDiscSoft(a.mask,p.x,p.y,r); stampPreview(maskPreviewCanvas,p.x,p.y,r,'rgba(44,110,107,.28)'); }
+  else { stampDiscSoft(a.mask,p.x,p.y,r); stampPreview(maskPreviewCanvas,p.x,p.y,r,'rgba(59,111,224,.28)'); }
   renderOverlay();
 }
-function eraseAt(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,p.x,p.y,r,255); stampPreview(erasePreviewCanvas,p.x,p.y,r,'rgba(187,82,57,.42)'); renderOverlay(); }
+function eraseAt(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,p.x,p.y,r,255); stampPreview(erasePreviewCanvas,p.x,p.y,r,'rgba(181,73,58,.42)'); renderOverlay(); }
 function eraseAtSub(p){ const r=+$('eraseSize').value/2; stampDisc(State.eraseMask,p.x,p.y,r,0); // remove from erase selection
   const x=erasePreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); renderOverlay(); }
 function eraseMaskHasContent(){ const em=State.eraseMask; for(let i=0;i<em.length;i++) if(em[i]>0) return true; return false; }
@@ -2387,7 +2396,7 @@ async function loadProject(obj, opts){
 function placeholderCanvas(){ const c=document.createElement('canvas'); c.width=c.height=200; const x=c.getContext('2d');
   x.fillStyle='#e7e2d8'; x.fillRect(0,0,200,200); x.strokeStyle='#b9b2a4'; x.lineWidth=4; x.strokeRect(6,6,188,188);
   x.fillStyle='#9a9384'; x.textAlign='center'; x.textBaseline='middle'; x.font='bold 88px sans-serif'; x.fillText('?',100,92);
-  x.font='14px "Noto Sans JP",sans-serif'; x.fillText('再取得待ち',100,150); return c; }
+  x.font='14px "Zen Kaku Gothic New",sans-serif'; x.fillText('再取得待ち',100,150); return c; }
 function stageThumb(maxSide){ const m=Math.max(stage.width,stage.height), s=Math.min(1,maxSide/m);
   const c=document.createElement('canvas'); c.width=Math.round(stage.width*s); c.height=Math.round(stage.height*s);
   c.getContext('2d').drawImage(stage,0,0,c.width,c.height); return c.toDataURL('image/jpeg',0.7); }
