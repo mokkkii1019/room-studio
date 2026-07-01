@@ -71,7 +71,23 @@
   .btn svg{width:15px;height:15px;stroke-width:1.8}
 
   /* ---------- layout ---------- */
-  main{flex:1 1 auto; display:grid; grid-template-columns:1fr 348px; min-height:0}
+  main{flex:1 1 auto; display:flex; min-height:0}
+  /* left mode rail (README §4.2) */
+  .rail{flex:0 0 56px; background:var(--rail); border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px}
+  .rail-btn{width:40px; height:40px; border-radius:9px; border:1px solid transparent; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s,color .15s,border-color .15s}
+  .rail-btn:hover{color:var(--ink); background:rgba(0,0,0,.04)}
+  .rail-btn.on{color:var(--accent); background:var(--accent-weak); border-color:var(--accent-line)}
+  .rail-btn svg{width:22px;height:22px;stroke-width:1.8}
+  .rail .ondevice{margin-top:auto; writing-mode:vertical-rl; text-orientation:mixed; font-family:"JetBrains Mono",monospace; font-size:8px; letter-spacing:.15em; color:var(--faint); padding-bottom:4px; user-select:none}
+  /* left layers column (README §4.3) */
+  .layers-col{flex:0 0 220px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  .layers-bg{flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:10px 14px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted)}
+  .layers-bg svg{width:13px;height:13px;stroke-width:1.8; margin-left:auto; color:var(--faint)}
+  /* right contextual panel header (README §4.5) */
+  .ctx-head{flex:0 0 auto; height:40px; display:flex; align-items:center; gap:8px; padding:0 15px; border-bottom:1px solid var(--line)}
+  .ctx-head .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--mode-select)}
+  .ctx-head .ttl{font-weight:700; font-size:12.5px; color:var(--ink)}
+  .ctx-head .hint2{margin-left:auto; font-size:10.5px; color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .stage-wrap{
     position:relative; background:
       radial-gradient(120% 120% at 50% 0%, var(--stage) 0%, var(--stage-2) 100%);
@@ -95,7 +111,7 @@
   .zoom-note{position:absolute; right:14px; bottom:16px; color:var(--faint); font-size:11px}
 
   /* ---------- right panel ---------- */
-  .panel{background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0}
+  .panel{flex:0 0 314px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0}
   .tabs{display:flex; padding:10px 12px 0; gap:4px; border-bottom:1px solid var(--line)}
   .tab{
     flex:1; border:0; background:transparent; padding:9px 6px 11px; border-radius:7px 7px 0 0;
@@ -228,8 +244,8 @@
   .engine.ok{color:var(--accent-ink); border-color:var(--accent); background:var(--accent-weak)}
 
   /* layers */
-  .layers{border-top:1px solid var(--line); padding:12px 14px; background:var(--panel-2); flex:0 0 auto; max-height:42%; overflow-y:auto}
-  .layers .label{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+  .layers{padding:12px 14px; background:transparent; flex:1 1 auto; min-height:0; overflow-y:auto}
+  .layers .label{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; height:16px}
   .layer{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; border:1px solid transparent}
   .layer.on{background:#fff; border-color:var(--line)}
   .layer .grip{cursor:grab; color:var(--muted); font-size:13px; line-height:1; padding:0 1px; flex:0 0 auto; user-select:none}
@@ -344,6 +360,35 @@
 </header>
 
 <main>
+  <!-- LEFT MODE RAIL -->
+  <nav class="rail">
+    <button class="rail-btn" data-mode="select" id="railSelect" title="選択・移動">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 3l7 17 2.5-7L21 10 4 3z"/></svg>
+    </button>
+    <button class="rail-btn" data-mode="surface" id="railSurface" title="塗る（表面）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h13v5H3zM16 7h4a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-7M11 13v3a1 1 0 0 0 1 1h0a1 1 0 0 1 1 1v3h-4v-3a1 1 0 0 1 1-1"/></svg>
+    </button>
+    <button class="rail-btn" data-mode="furniture" id="railFurniture" title="置く（家具）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3m-16 0a2 2 0 0 0-2 2v3h20v-3a2 2 0 0 0-2-2m-16 0h16M5 19v-3m14 3v-3"/></svg>
+    </button>
+    <button class="rail-btn" data-mode="erase" id="railErase" title="消す（不要物）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>
+    </button>
+    <div class="ondevice">ON DEVICE</div>
+  </nav>
+
+  <!-- LAYERS COLUMN -->
+  <aside class="layers-col">
+    <div class="layers">
+      <span class="label"><span>レイヤー</span><span id="layerCount" style="font-size:10px">0</span></span>
+      <div id="layerList"></div>
+      <div id="layerEmpty" class="empty-note" style="margin-top:6px">まだレイヤーはありません</div>
+    </div>
+    <div class="layers-bg">背景（部屋の写真）
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+    </div>
+  </aside>
+
   <!-- STAGE -->
   <section class="stage-wrap">
     <div class="canvas-viewport" id="canvasViewport">
@@ -354,7 +399,7 @@
     </div>
     <div class="empty-hint" id="emptyHint">
       <div class="label">START</div>
-      <p style="font-size:15px;color:#e7eaec;margin:.5em 0">部屋の写真を読み込んでください</p>
+      <p style="font-size:15px;color:var(--ink);margin:.5em 0">部屋の写真を読み込んでください</p>
       <p>上の「画像を開く」から部屋の写真を読み込んでください。<br>写真はこの端末の中だけで処理され、どこにも送信されません。</p>
     </div>
 
@@ -367,19 +412,22 @@
 
   <!-- PANEL -->
   <aside class="panel">
-    <div class="tabs">
-      <button class="tab erase" data-mode="erase" id="tabErase">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 21H4a1 1 0 0 1-1-1v-3L14 6l5 5-8 8m-4 2h12"/></svg>消しゴム
-      </button>
-      <button class="tab on" data-mode="surface" id="tabSurface">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3h18v18H3zM3 9h18M9 9v12"/></svg>表面
-      </button>
-      <button class="tab" data-mode="furniture" id="tabFurniture">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3m-16 0a2 2 0 0 0-2 2v3h20v-3a2 2 0 0 0-2-2m-16 0h16M5 19v-3m14 3v-3"/></svg>家具
-      </button>
+    <div class="ctx-head">
+      <span class="dot" id="ctxDot"></span>
+      <span class="ttl" id="ctxTitle">塗る — 表面</span>
+      <span class="hint2" id="ctxHint"></span>
     </div>
 
     <div class="scroll">
+      <!-- ===== SELECT PANEL ===== -->
+      <div id="panelSelect" style="display:none">
+        <div class="section">
+          <span class="label">選択・移動</span>
+          <p class="hint" style="margin-top:8px">面や家具を<b>クリックで選択</b>します。家具は<b>ドラッグで移動</b>、選択後は右パネルで調整できます。左のレールでいつでもモードを切り替えられます。</p>
+          <p class="hint">配置した家具は <b>Ctrl+C</b> でコピー、<b>Ctrl+V</b> で貼り付け、<b>Delete</b> で削除できます。</p>
+        </div>
+      </div>
+
       <!-- ===== SURFACE PANEL ===== -->
       <div id="panelSurface">
         <button class="addbtn" id="addSurface">
@@ -656,11 +704,6 @@
     </div>
 
     <!-- LAYERS -->
-    <div class="layers">
-      <span class="label"><span>レイヤー</span><span id="layerCount" style="font-size:10px">0</span></span>
-      <div id="layerList"></div>
-      <div id="layerEmpty" class="empty-note" style="margin-top:6px">まだレイヤーはありません</div>
-    </div>
   </aside>
 </main>
 
@@ -1853,6 +1896,13 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size>=2){ drag=null; startPinch(); renderOverlay(); return; } // 2本指→ピンチ（描画はキャンセル）
   if(State.compare.active){ State.compare.split=clamp(p.x/State.W,0,1); drag={type:'compare'}; renderOverlay(); return; }
+  if(State.mode==='select'){
+    // クリックでカーソル下のアイテムを選択（家具はドラッグ移動、面は選択のみ）。何も無ければ選択解除。
+    for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); pushHistory('fmove'+l.id); drag={type:'move',offx:p.x-l.x,offy:p.y-l.y,layer:l}; return; } }
+    const idx=clamp(p.y|0,0,State.H-1)*State.W+clamp(p.x|0,0,State.W-1);
+    for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='surface'&&l.visible&&l.mask&&l.mask[idx]>0){ selectLayer(l.id); return; } }
+    deselectAll(); return;
+  }
   if(State.mode==='surface'){
     // 選択ツール未選択（既定）→ クリックでカーソル下のアイテムを選んで編集状態にする
     if(!State.surfTool){
@@ -2213,16 +2263,23 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
 /* =========================================================================
    MODE / PANEL sync
    ========================================================================= */
+const CTX_META={
+  select:   {t:'選択・移動',   c:'var(--mode-select)', h:'クリックで選択 / 家具はドラッグ'},
+  surface:  {t:'塗る — 表面',   c:'var(--mode-paint)',  h:'壁・床・天井'},
+  furniture:{t:'置く — 家具',   c:'var(--mode-place)',  h:'追加・配置・切り抜き'},
+  erase:    {t:'消す — 不要物', c:'var(--mode-erase)',  h:'端末内で処理'},
+};
 function setMode(m){ State.mode=m;
-  $('tabSurface').classList.toggle('on',m==='surface');
-  $('tabFurniture').classList.toggle('on',m==='furniture');
-  $('tabErase').classList.toggle('on',m==='erase');
+  document.querySelectorAll('.rail-btn').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
+  $('panelSelect').style.display=m==='select'?'block':'none';
   $('panelSurface').style.display=m==='surface'?'block':'none';
   $('panelFurniture').style.display=m==='furniture'?'block':'none';
   $('panelErase').style.display=m==='erase'?'block':'none';
+  const meta=CTX_META[m]||CTX_META.select; const dot=$('ctxDot'), ttl=$('ctxTitle'), hint=$('ctxHint');
+  if(dot) dot.style.background=meta.c; if(ttl) ttl.textContent=meta.t; if(hint) hint.textContent=meta.h;
   State.furniEyedrop=false; { const fe=$('fEyedropBtn'); if(fe) fe.classList.remove('primary'); const feh=$('fEyedropHint'); if(feh) feh.style.display='none'; }
   State.furniErase=false; { const eb=$('fEraseToggle'); if(eb) eb.classList.remove('primary'); const ebx=$('fEraseBox'); if(ebx) ebx.style.display='none'; }
-  if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':'';
+  if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':(m==='select'?'default':'');
   samResetPoints(); polyReset();
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
@@ -2573,7 +2630,8 @@ on($('fileProj'),'change',e=>{ const f=e.target.files[0]; if(!f) return; const r
 on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory(); erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
 
 // tabs
-document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
+document.querySelectorAll('.rail-btn').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
+setMode(State.mode||'surface'); // 初期のレール/文脈ヘッダを同期
 // collapsible category headers (＋ expand / − collapse)
 document.querySelectorAll('.group-head.toggle').forEach(h=>on(h,'click',e=>{
   if(e.target.closest('.info')) return; // ⓘ click shows tooltip, doesn't toggle
@@ -2738,9 +2796,9 @@ window.addEventListener('resize',()=>{ if(State.W) applyZoom(); });
 // ---- step-by-step tutorial ----
 const TUT_STEPS=[
   { target:'btnOpen', title:'① 画像を開く', body:'まずは部屋の写真を読み込みます。「画像を開く」から写真を選んでください（写真は端末内だけで処理されます）。', awaitImage:true },
-  { target:'tabErase', title:'② 消しゴムで不要なものを消す', body:'写真に写った不要なもの（小物・コンセント・貼り紙など）を消します。赤ブラシかAI選択で囲み、「この範囲を消す」を押すと周囲から自然に埋まります。', mode:'erase' },
-  { target:'tabSurface', title:'③ 表面に色や素材を重ねる', body:'壁や床に色や素材を重ねます。「表面を追加」→ 範囲を選択（面/自動/ブラシ/AI）→ 色や素材を適用。質感や陰影は保ったまま変わります。', mode:'surface' },
-  { target:'tabFurniture', title:'④ 家具を配置する', body:'好きな家具を置きます。「画像を追加」や「家具店から収集」で家具を用意し、サムネをクリック／ステージへドラッグで配置。クリックで選択して移動・拡大・回転できます。', mode:'furniture' },
+  { target:'railErase', title:'② 消しゴムで不要なものを消す', body:'写真に写った不要なもの（小物・コンセント・貼り紙など）を消します。赤ブラシかAI選択で囲み、「この範囲を消す」を押すと周囲から自然に埋まります。', mode:'erase' },
+  { target:'railSurface', title:'③ 表面に色や素材を重ねる', body:'壁や床に色や素材を重ねます。「表面を追加」→ 範囲を選択（面/自動/ブラシ/AI）→ 色や素材を適用。質感や陰影は保ったまま変わります。', mode:'surface' },
+  { target:'railFurniture', title:'④ 家具を配置する', body:'好きな家具を置きます。「画像を追加」や「家具店から収集」で家具を用意し、サムネをクリック／ステージへドラッグで配置。クリックで選択して移動・拡大・回転できます。', mode:'furniture' },
 ];
 const tut={active:false, step:0, hole:null, box:null};
 function ensureTutEls(){ if(tut.hole) return; tut.hole=document.createElement('div'); tut.hole.className='tut-hole'; tut.box=document.createElement('div'); tut.box.className='tut-box'; document.body.append(tut.hole, tut.box); }
