@@ -114,7 +114,7 @@ IKEA_TYPE_KW = {
 
 # /imgproxy is a same-origin relay (avoids canvas tainting). On a PUBLIC deployment it
 # must NOT be an open relay, so only the furniture image hosts are allowed.
-IMG_HOST_SUFFIXES = ("ikea.com", "cdtapps.com", "rakuten.co.jp", "r10s.jp", "shopify.com", "rughaus.jp", "kanademono.design")
+IMG_HOST_SUFFIXES = ("ikea.com", "cdtapps.com", "rakuten.co.jp", "r10s.jp", "shopify.com", "rughaus.jp", "kanademono.design", "officialbauhaus.jp")
 
 
 def _numbered_variants(url, maxn):
@@ -330,6 +330,8 @@ def collect(type_, taste="", count=50, source="ikea", shop="", referer=None):
             items = _collect_shopify(type_, taste, count, "https://rughaus.jp", "RUGHAUS")
         elif source == "kanademono":
             items = _collect_shopify(type_, taste, count, "https://kanademono.design", "KANADEMONO")
+        elif source == "bauhaus":
+            items = _collect_shopify(type_, taste, count, "https://officialbauhaus.jp", "BAUHAUS")
         elif source == "artofblack":
             items = _collect_rakuten(type_, taste, count, "artofblack", referer)
         elif source == "rakuten":

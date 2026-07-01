@@ -466,6 +466,7 @@
             <option value="makers">楽天 家具メーカー（複数選択・楽天キー必要）</option>
             <option value="rughaus">RUGHAUS（ラグ・インテリア／キー不要）</option>
             <option value="kanademono">KANADEMONO（テーブル・家具／キー不要）</option>
+            <option value="bauhaus">BAUHAUS（家具・インテリア／キー不要）</option>
           </select>
           <div id="makerBox" style="display:none">
             <div class="row" style="margin:6px 0 4px; align-items:center; gap:8px">
@@ -2235,7 +2236,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
         strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture, material:l.material, matStrength:l.matStrength,
         matScale:l.matScale, perspective:l.perspective, quad:l.quad, visible:l.visible };
       const src=l.source||'upload';
-      const stripImg = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono'); // クラウドには商品画像を保存しない
+      const stripImg = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus'); // クラウドには商品画像を保存しない
       const f={ type:'furniture', id:l.id, name:l.name,
         x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
         bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
@@ -2249,7 +2250,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
     libNextId: State.libNextId,
     furniLib: State.furniLib.map(it=>{
       const src=it.source||'upload';
-      const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono'); // クラウドには商品画像を保存しない
+      const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus'); // クラウドには商品画像を保存しない
       const o={ id:it.id, name:it.name, category:it.category||'upload', source:src,
         link:it.link||'', price:it.price||0, shop:it.shop||'', itemCode:it.itemCode||'', productUrl:it.productUrl||'', affiliateUrl:it.affiliateUrl||'' };
       if(!strip) o.src=pngCached(it.srcCanvas);
