@@ -3,9 +3,9 @@
 # try to install torch/PIL/etc for the (stdlib-only) /api functions.
 server.py
 tools/
-# CRITICAL: never ship the private-use crawler to the public deployment.
-# (Runtime is also guarded: APP_MODE=public refuses to import it — see get_provider.)
-api/_provider_crawler.py
+# NOTE (private-web branch): the crawler IS shipped here on purpose. This branch backs a
+# SEPARATE, access-gated private deployment (APP_MODE=private + COLLECT_PROVIDER=crawler +
+# ACCESS_TOKEN). The PUBLIC deployment must be built from `main`, where this file is excluded.
 requirements-local.txt
 .env
 .env.example
