@@ -48,16 +48,16 @@
   button{font-family:inherit; cursor:pointer}
   button:focus-visible, [tabindex]:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 
-  /* ---------- header ---------- */
+  /* ---------- header (README §4.1: 52px) ---------- */
   header{
-    display:flex; align-items:center; gap:18px; padding:11px 18px;
+    display:flex; align-items:center; gap:12px; height:52px; padding:0 14px;
     background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto;
   }
   .brand{display:flex; align-items:baseline; gap:10px; margin-right:auto}
   .brand .mark{font-family:"JetBrains Mono",monospace; font-weight:700; font-size:15px; letter-spacing:.04em}
   .brand .mark b{font-weight:700; background:var(--btn-dark); color:var(--bg); padding:2px 6px; border-radius:4px}
   .brand .tag{font-size:11px; color:var(--muted)}
-  .h-actions{display:flex; gap:8px; flex-wrap:wrap}
+  .h-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
   .btn{
     border:1px solid var(--line); background:var(--panel); color:var(--ink);
     border-radius:var(--r-sm); padding:7px 12px; font-size:12.5px; font-weight:500;
@@ -66,6 +66,12 @@
   .btn:hover{background:var(--panel-2)}
   .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
   .btn.primary:hover{background:var(--accent-ink)}
+  .btn.dark{background:var(--btn-dark); border-color:var(--btn-dark); color:var(--bg); font-weight:700}
+  .btn.dark:hover{background:#3a3733}
+  .btn.icon{padding:0; width:32px; height:32px; justify-content:center; gap:0}
+  .btn.icon svg{width:16px;height:16px}
+  .btn[disabled]{opacity:.4; cursor:not-allowed}
+  .hbar{width:1px; height:20px; background:var(--line); flex:0 0 auto; margin:0 2px}
   .btn.ghost-warn{color:var(--warn); border-color:var(--warn-weak)}
   .btn.ghost-warn:hover{background:var(--warn-weak)}
   .btn svg{width:15px;height:15px;stroke-width:1.8}
@@ -88,10 +94,28 @@
   .ctx-head .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--mode-select)}
   .ctx-head .ttl{font-weight:700; font-size:12.5px; color:var(--ink)}
   .ctx-head .hint2{margin-left:auto; font-size:10.5px; color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* selected-surface chip (§5.1) */
+  .sel-chip{display:flex; align-items:center; gap:6px; background:var(--accent-weak); color:var(--accent-ink); border:1px solid var(--accent-line); border-radius:20px; padding:5px 11px; font-size:11.5px; font-weight:700; margin:0 0 9px}
+  .sel-chip::before{content:""; width:9px; height:9px; border-radius:3px; background:var(--accent); flex:0 0 auto}
+  /* furniture inspector top header (§5.2) */
+  .insp-head{display:flex; align-items:center; gap:8px; margin-bottom:12px}
+  .insp-head .insp-name{flex:1; font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink)}
+  .insp-head .insp-del{padding:5px 10px; font-size:11.5px; flex:0 0 auto}
   /* drag-to-resize splitters between panel/canvas and canvas/layers */
   .resizer{flex:0 0 6px; align-self:stretch; cursor:col-resize; position:relative; background:transparent; z-index:5}
   .resizer::after{content:""; position:absolute; top:0; bottom:0; left:2px; width:2px; border-radius:2px; background:transparent; transition:background .15s}
   .resizer:hover::after, .resizer.on::after{background:var(--accent)}
+  /* collapse toggles (§8 narrow fallback) — fold detail panel / layers to maximize canvas */
+  .hicon{border:1px solid var(--line); background:var(--panel); color:var(--muted); width:24px; height:24px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex:0 0 auto; font-size:15px; line-height:1}
+  .hicon:hover{background:var(--panel-2); color:var(--ink)}
+  .reopen{position:absolute; top:50%; transform:translateY(-50%); z-index:7; display:none; width:22px; height:54px; align-items:center; justify-content:center; border:1px solid var(--line); background:var(--panel); color:var(--muted); cursor:pointer; box-shadow:var(--shadow); font-size:15px}
+  .reopen:hover{color:var(--ink); background:var(--panel-2)}
+  .reopen-l{left:0; border-left:0; border-radius:0 8px 8px 0}
+  .reopen-r{right:0; border-right:0; border-radius:8px 0 0 8px}
+  body.panel-collapsed .panel, body.panel-collapsed #rzPanel{display:none}
+  body.layers-collapsed .layers-col, body.layers-collapsed #rzLayers{display:none}
+  body.panel-collapsed .reopen-l{display:flex}
+  body.layers-collapsed .reopen-r{display:flex}
   .stage-wrap{
     order:3; flex:1 1 auto;  /* order: rail(0) → panel(1) → rzPanel(2) → canvas(3) → rzLayers(4) → layers(5) */
     position:relative; background:
@@ -334,6 +358,8 @@
     .tab{font-size:12px; padding:9px 4px 11px}
     .tut-box{width:auto; left:12px!important; right:12px!important; max-width:none}
   }
+  /* medium widths: shrink side columns; very narrow → use the collapse toggles (§8) */
+  @media (max-width:1180px){ .layers-col{flex-basis:186px} .panel{flex-basis:284px} }
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
 </style>
 </head>
@@ -357,16 +383,23 @@
       画像を開く
     </button>
     <input type="file" id="fileRoom" accept="image/*" hidden />
-    <button class="btn" id="btnUndo" disabled title="取り消す (Ctrl+Z)">
+    <button class="btn icon" id="btnUndo" disabled title="取り消す (Ctrl+Z)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-3"/></svg>
-      取り消す
     </button>
-    <button class="btn" id="btnCompare" title="編集前と編集後を比べる">
+    <button class="btn icon" id="btnRedo" disabled title="やり直す (Ctrl+Shift+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 14l4-4-4-4M19 10h-9a5 5 0 0 0 0 10h3"/></svg>
+    </button>
+    <span class="hbar"></span>
+    <button class="btn" id="btnCompare" title="編集前と編集後を比べる（押している間だけ元の写真）">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18M5 7l-3 3 3 3M19 7l3 3-3 3"/></svg>
       比較
     </button>
-    <input type="file" id="fileProj" accept="application/json,.json" hidden>
     <button class="btn ghost-warn" id="btnReset">リセット</button>
+    <input type="file" id="fileProj" accept="application/json,.json" hidden>
+    <button class="btn dark" id="btnShare" title="編集後の画像をPNGで書き出す">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v13M8 7l4-4 4 4"/></svg>
+      共有・書き出し
+    </button>
   </div>
 </header>
 
@@ -394,7 +427,7 @@
   <!-- LAYERS COLUMN -->
   <aside class="layers-col">
     <div class="layers">
-      <span class="label"><span>レイヤー</span><span id="layerCount" style="font-size:10px">0</span></span>
+      <span class="label"><span>レイヤー</span><span style="display:flex;gap:6px;align-items:center"><span id="layerCount" style="font-size:10px">0</span><button class="hicon" id="layersCollapse" title="レイヤーを隠す（キャンバスを広げる）">›</button></span></span>
       <div id="layerList"></div>
       <div id="layerEmpty" class="empty-note" style="margin-top:6px">まだレイヤーはありません</div>
     </div>
@@ -428,6 +461,8 @@
     <div class="status-pill" id="statusPill" style="display:none" title="画像は端末内だけで処理され、どこにも送信されません">
       <span class="sdot"></span><span id="statusText">端末内で処理</span>
     </div>
+    <button class="reopen reopen-l" id="reopenPanel" title="詳細パネルを表示">›</button>
+    <button class="reopen reopen-r" id="reopenLayers" title="レイヤーを表示">‹</button>
   </section>
 
   <!-- PANEL -->
@@ -436,6 +471,7 @@
       <span class="dot" id="ctxDot"></span>
       <span class="ttl" id="ctxTitle">塗る — 表面</span>
       <span class="hint2" id="ctxHint"></span>
+      <button class="hicon" id="panelCollapse" title="詳細パネルを隠す（キャンバスを広げる）">‹</button>
     </div>
 
     <div class="scroll">
@@ -460,6 +496,7 @@
               <span class="tg">−</span><span>選択方法</span><span class="info" data-tip="壁は一面ごとに「表面を追加」し、その面だけを選択して色・素材を変えると面ごとに塗り分けられます。範囲指定は 面選択(四隅クリック)/ブラシ/AI選択 から。ブラシ選択時は「消す」ボタンで塗った所の選択を消せます。質感や陰影は保ったまま色だけ変わります。">i</span>
             </button>
             <div class="group-body" id="surfSelectBody">
+            <div class="sel-chip" id="surfSelChip" style="display:none"></div>
             <div class="seg" id="surfTools">
               <button data-tool="brush">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.5 14.5L4 20M14 4l6 6-9 2-3 3-3-3 3-3 2-9z"/></svg>ブラシ
@@ -629,6 +666,10 @@
         </div>
 
         <div id="furnitureControls" style="display:none">
+          <div class="insp-head">
+            <span class="insp-name" id="fInspName">選択中</span>
+            <button class="btn ghost-warn insp-del" id="fDeleteTop" title="この家具を削除">削除</button>
+          </div>
           <div class="section">
             <button class="group-head toggle" type="button" data-target="fCutBody">
               <span class="tg">＋</span><span>切り抜き</span><span class="info" data-tip="複雑な背景の写真でもきれいに抜けます。初回のみモデルのダウンロード（数十MB・ネット接続が必要）が走ります。画像は端末内で処理されます。">i</span>
@@ -709,7 +750,6 @@
               </div>
             </div>
           </div>
-          <button class="btn ghost-warn" id="fDelete" style="width:100%;justify-content:center">この家具を削除</button>
         </div>
         <div id="furnitureEmpty" class="empty-note">配置した家具をクリックして選択すると、ここで切り抜き・色・大きさ・回転を調整できます。</div>
       </div>
@@ -1802,8 +1842,11 @@ function pushHistory(key){
 }
 function endCoalesce(){ State._hcKey=null; }
 function clearHistory(){ State.undo=[]; State.redo=[]; State._hcKey=null; updateHistoryButtons(); }
-function updateHistoryButtons(){ $('btnUndo').disabled=!State.undo.length; }
+function updateHistoryButtons(){ const u=$('btnUndo'); if(u) u.disabled=!State.undo.length; const r=$('btnRedo'); if(r) r.disabled=!State.redo.length; }
 function doUndo(){ if(!State.undo.length) return; State.redo.push(captureState()); if(State.redo.length>HISTORY_MAX) State.redo.shift(); restoreState(State.undo.pop()); endCoalesce(); updateHistoryButtons(); }
+function doRedo(){ if(!State.redo.length) return; State.undo.push(captureState()); if(State.undo.length>HISTORY_MAX) State.undo.shift(); restoreState(State.redo.pop()); endCoalesce(); updateHistoryButtons(); }
+/* 編集後の合成画像（#stage）をPNGで書き出す（オーバーレイのUIは含まない）。 */
+function shareExport(){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } render(); saveCanvasPNG(stage, 'room-studio'); }
 
 /* =========================================================================
    RENDER
@@ -2345,12 +2388,13 @@ function setMode(m){ State.mode=m;
   samResetPoints(); polyReset();
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
+  { const ch=$('surfSelChip'); if(ch){ ch.style.display=a?'flex':'none'; if(a) ch.textContent='選択中：'+(a.name||'表面'); } }
   if(a){ if(a.color!=='transparent') $('surfColor').value=a.color; $('surfHex').textContent=(a.color==='transparent'?'透明':a.color.toUpperCase()); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
   updateMatConfig();
   const f=selectedFurniture(); $('furnitureControls').style.display=f?'block':'none'; $('furnitureEmpty').style.display=f?'none':'block';
   if(f) syncFurnitureUI(f);
 }
-function syncFurnitureUI(f){ $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
+function syncFurnitureUI(f){ { const nm=$('fInspName'); if(nm) nm.textContent='選択中：'+(f.name||'家具'); } $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
   $('fAiCutClear').style.display=f.aiCutCanvas?'block':'none'; $('fAiCut').lastChild.textContent= f.aiCutCanvas?' AIで切り抜き直す':' AIで背景を切り抜く（任意背景・高品質）';
   setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fYaw',Math.round(f.yaw||0),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
   $('fKeystone').checked=!!f.corners; $('fKeystoneBox').style.display=f.corners?'block':'none'; $('fYaw').disabled=!!f.corners;
@@ -2696,6 +2740,14 @@ function closeFavDrawer(){ $('favDrawer').style.display='none'; }
 on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
+on($('btnRedo'),'click',doRedo);
+on($('btnShare'),'click',shareExport);
+// 折りたたみ（§8）: 詳細パネル / レイヤー列を隠してキャンバスを広げる
+function setCollapsed(cls, v){ document.body.classList.toggle(cls, v); if(State.W) applyZoom(); }
+on($('panelCollapse'),'click',()=>setCollapsed('panel-collapsed',true));
+on($('reopenPanel'),'click',()=>setCollapsed('panel-collapsed',false));
+on($('layersCollapse'),'click',()=>setCollapsed('layers-collapsed',true));
+on($('reopenLayers'),'click',()=>setCollapsed('layers-collapsed',false));
 on(document,'keydown',e=>{
   const tag=(e.target&&e.target.tagName)||''; const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(tag)||(e.target&&e.target.isContentEditable);
   if(State.mode==='surface'&&State.surfTool==='poly'&&State.poly.points.length){
@@ -2706,7 +2758,8 @@ on(document,'keydown',e=>{
   // Delete/Backspace で選択中の家具を削除（入力欄にフォーカス中は除く）
   if((e.key==='Delete'||e.key==='Backspace') && !typing){ const f=selectedFurniture(); if(f){ e.preventDefault(); deleteLayer(f.id); toast('家具を削除しました'); return; } }
   if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
-  if(k==='z'){ e.preventDefault(); doUndo(); return; }
+  if(k==='z'){ e.preventDefault(); if(e.shiftKey) doRedo(); else doUndo(); return; }
+  if(k==='y'){ e.preventDefault(); doRedo(); return; }
   // 配置した家具: Ctrl+C コピー / Ctrl+V・Ctrl+P 貼付（入力欄フォーカス中は既定動作のまま）
   if(k==='c' && !typing){ if(selectedFurniture()){ e.preventDefault(); copyFurniture(); } return; }
   if((k==='v'||k==='p') && !typing){ if(furniClip){ e.preventDefault(); pasteFurniture(); } return; }
@@ -2843,7 +2896,7 @@ on($('fEraseResetBtn'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.eras
 on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
 buildMats('fMatGrid', pickFurnMat, false);
 on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fMatStrength'); f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
-on($('fDelete'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
+on($('fDeleteTop'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
 on($('extractMat'),'click',()=>$('fileMat').click());
 on($('fExtractMat'),'click',()=>$('fileMat').click());
 on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; busy(true,'画像から素材を抽出中…');
