@@ -98,11 +98,16 @@
   .canvas-box{position:relative; margin:auto; box-shadow:0 18px 50px rgba(0,0,0,.42); border-radius:6px; overflow:hidden; background:#111; flex:0 0 auto}
   #stage,#overlay{display:block; width:100%; height:100%}
   #overlay{position:absolute; inset:0; touch-action:none}
-  .zoom-ctl{position:absolute; right:14px; bottom:14px; display:flex; align-items:center; gap:2px;
-    background:rgba(24,26,29,.82); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.08); border-radius:9px; padding:4px; box-shadow:var(--shadow); z-index:6}
-  .zoom-ctl button{border:0; background:transparent; color:#d6dadd; border-radius:6px; padding:5px 9px; font-size:14px; line-height:1; cursor:pointer}
-  .zoom-ctl button:hover{background:rgba(255,255,255,.10); color:#fff}
-  .zoom-ctl #zoomLabel{font-size:12px; min-width:46px; text-align:center; display:inline-block}
+  .zoom-ctl{position:absolute; left:14px; bottom:14px; display:flex; align-items:center; gap:2px;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:4px; box-shadow:var(--shadow); z-index:6}
+  .zoom-ctl button{border:0; background:transparent; color:var(--muted); border-radius:6px; padding:5px 9px; font-size:14px; line-height:1; cursor:pointer}
+  .zoom-ctl button:hover{background:var(--panel-2); color:var(--ink)}
+  .zoom-ctl #zoomLabel{font-family:"JetBrains Mono",monospace; font-size:11px; min-width:44px; text-align:center; display:inline-block; color:var(--ink)}
+  /* on-device status pill (README §4.4) */
+  .status-pill{position:absolute; right:14px; bottom:14px; display:flex; align-items:center; gap:7px;
+    background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:6px 12px; box-shadow:var(--shadow); z-index:6; font-size:11px; color:var(--muted)}
+  .status-pill .sdot{width:8px;height:8px;border-radius:50%;background:var(--on); flex:0 0 auto; animation:rs-pulse 2.4s ease-in-out infinite}
+  @keyframes rs-pulse{0%,100%{opacity:1; box-shadow:0 0 0 0 rgba(90,160,106,.5)} 50%{opacity:.55; box-shadow:0 0 0 5px rgba(90,160,106,0)}}
   .empty-hint{
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
     color:var(--muted); text-align:center; max-width:340px; pointer-events:none;
@@ -319,7 +324,8 @@
     main{grid-template-rows:minmax(200px,42vh) 1fr}
     .canvas-viewport{padding:12px}
     .scroll{padding:12px}
-    .zoom-ctl{right:10px; bottom:10px}
+    .zoom-ctl{left:10px; bottom:10px}
+    .status-pill{right:10px; bottom:10px}
     .seg button{padding:8px 4px}
     .tab{font-size:12px; padding:9px 4px 11px}
     .tut-box{width:auto; left:12px!important; right:12px!important; max-width:none}
@@ -408,6 +414,9 @@
       <button id="zoomOut" title="縮小">−</button>
       <button id="zoomReset" title="全体表示にリセット"><span id="zoomLabel">100%</span></button>
       <button id="zoomIn" title="拡大">＋</button>
+    </div>
+    <div class="status-pill" id="statusPill" style="display:none" title="画像は端末内だけで処理され、どこにも送信されません">
+      <span class="sdot"></span><span id="statusText">端末内で処理</span>
     </div>
   </section>
 
@@ -1464,7 +1473,11 @@ function applyCollectMode(){
 function updateEraseBadge(){ const b=$('eraseEngine'); if(!b) return;
   if(SERVER.inpaint){ b.textContent='● AI補完エンジン（LaMa）に接続済み — 高品質'; b.className='engine ok'; }
   else { b.textContent='○ ブラウザ内補完（PatchMatch）で動作中'; b.className='engine'; }
+  updateStatusPill();
 }
+/* キャンバス右下の状態ピル（README §4.4）。画像は端末内で処理という主旨＋補完エンジン状態。 */
+function updateStatusPill(){ const t=$('statusText'); if(!t) return;
+  t.textContent = SERVER.inpaint ? '端末内で処理 · AI補完 接続' : '端末内で処理 · サーバー未接続'; }
 function dataURLToCanvas(url, w, h){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(im,0,0,w,h); res(c); }; im.onerror=rej; im.src=url; }); }
 function dilate(mask,w,h,r){ if(r<=0) return mask; const out=new Uint8Array(w*h); for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let v=0; for(let dy=-r;dy<=r&&!v;dy++)for(let dx=-r;dx<=r;dx++){ const xx=clamp(x+dx,0,w-1),yy=clamp(y+dy,0,h-1); if(mask[yy*w+xx]){v=1;break;} } out[y*w+x]=v; } return out; }
 function boxBlurSub(src,w,h,r){ const tmp=new Float32Array(w*h),out=new Uint8ClampedArray(w*h);
@@ -1818,7 +1831,7 @@ function renderOverlay(){
     return;
   }
   // active surface mask outline (subtle), only in surface mode
-  if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); }
+  if(State.mode==='surface'){ const a=activeSurface(); if(a){ octx.drawImage(maskPreviewCanvas,0,0); if(a._centroid) drawFacePill(a._centroid[0],a._centroid[1],a.name); }
     if(a && a.perspective && a.quad){ drawPerspectiveQuad(a.quad); }
     if(State.surfTool==='poly'){ drawPolyInProgress(); }
     if(State.surfTool==='eyedropper' && lastMouse){ drawEyedropLoupe(lastMouse); }
@@ -1835,16 +1848,28 @@ function renderOverlay(){
     octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke();
   }
 }
+/* 面の名称を示す浮遊ピル（塗り色は変えず、選択面の中心に表示）。README §4.4 */
+function drawFacePill(cx, cy, name){
+  const fs=Math.max(12, Math.round(State.W*0.016)); octx.save();
+  octx.font=`700 ${fs}px "Zen Kaku Gothic New",sans-serif`;
+  const tw=octx.measureText(name||'').width, padX=fs*0.9, h=fs+fs*0.7, w=tw+padX*2, r=h/2;
+  const x=clamp(cx-w/2, 4, State.W-w-4), y=clamp(cy-h/2, 4, State.H-h-4);
+  octx.beginPath(); octx.moveTo(x+r,y); octx.arcTo(x+w,y,x+w,y+h,r); octx.arcTo(x+w,y+h,x,y+h,r); octx.arcTo(x,y+h,x,y,r); octx.arcTo(x,y,x+w,y,r); octx.closePath();
+  octx.fillStyle='rgba(59,111,224,.95)'; octx.shadowColor='rgba(0,0,0,.28)'; octx.shadowBlur=fs*0.5; octx.shadowOffsetY=fs*0.15; octx.fill();
+  octx.shadowColor='transparent'; octx.fillStyle='#fff'; octx.textAlign='center'; octx.textBaseline='middle'; octx.fillText(name||'', x+w/2, y+h/2+.5);
+  octx.restore();
+}
 function drawFurnitureHandles(f){
   const corners=effectiveCorners(f).map(c=>furnitureOuter(f,c[0],c[1]));
   f._cornersStage=corners;
   octx.beginPath(); octx.moveTo(corners[0][0],corners[0][1]); for(let i=1;i<4;i++) octx.lineTo(corners[i][0],corners[i][1]); octx.closePath();
-  octx.strokeStyle='rgba(181,73,58,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
+  octx.strokeStyle='rgba(59,111,224,.22)'; octx.lineWidth=6; octx.stroke();  // outer glow (§4.4: 外側の淡い青)
+  octx.strokeStyle='rgba(59,111,224,.95)'; octx.lineWidth=1.6; octx.setLineDash([6,4]); octx.stroke(); octx.setLineDash([]);
   if(f.corners){ // keystone mode: all 4 corners are draggable
-    for(const hp of corners){ octx.beginPath(); octx.arc(hp[0],hp[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#b5493a'; octx.stroke(); }
+    for(const hp of corners){ octx.beginPath(); octx.arc(hp[0],hp[1],8,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#3B6FE0'; octx.stroke(); }
     f._scaleHandle=null;
   } else { // scale handle bottom-right (index 2)
-    const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#b5493a'; octx.stroke();
+    const hp=corners[2]; octx.beginPath(); octx.arc(hp[0],hp[1],7,0,7); octx.fillStyle='#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle='#3B6FE0'; octx.stroke();
     f._scaleHandle=hp;
   }
 }
@@ -1903,7 +1928,9 @@ function drawEyedropLoupe(p){ const col=sampleStageColor(p.x,p.y,2); if(!col) re
 const maskPreviewCanvas=document.createElement('canvas'); const erasePreviewCanvas=document.createElement('canvas');
 function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas,samPreviewCanvas]){ c.width=State.W; c.height=State.H; } }
 function rebuildMaskPreview(){ const a=activeSurface(); const c=maskPreviewCanvas, x=c.getContext('2d'); x.clearRect(0,0,State.W,State.H); if(!a) return;
-  const img=x.createImageData(State.W,State.H), d=img.data; for(let i=0;i<a.mask.length;i++){ if(a.mask[i]>0){ const p=i*4; d[p]=44;d[p+1]=110;d[p+2]=107;d[p+3]=70; } } x.putImageData(img,0,0); }
+  const img=x.createImageData(State.W,State.H), d=img.data; let sx=0,sy=0,n=0;
+  for(let i=0;i<a.mask.length;i++){ if(a.mask[i]>0){ const p=i*4; d[p]=59;d[p+1]=111;d[p+2]=224;d[p+3]=70; sx+=i%State.W; sy+=(i/State.W)|0; n++; } }
+  x.putImageData(img,0,0); a._centroid = n? [sx/n, sy/n] : null; } // 浮遊ピルの表示位置をキャッシュ
 function erasePreviewClear(){ erasePreviewCanvas.getContext('2d').clearRect(0,0,State.W,State.H); }
 function stampPreview(canvas, cx, cy, r, color){ const x=canvas.getContext('2d'); x.beginPath(); x.arc(cx,cy,r,0,7); x.fillStyle=color; x.fill(); }
 
@@ -2377,6 +2404,7 @@ function setupRoomFromCanvas(srcCanvas){
   invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory();
   resizePreviews(); erasePreviewClear();
   $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('zoomCtl').style.display='flex';
+  { const sp=$('statusPill'); if(sp) sp.style.display='flex'; } updateStatusPill();
   State.view.zoom=1; applyZoom();
   setMode('surface'); // 新しい部屋を読み込んだら表面タブの綺麗な状態に戻す（家具タブのまま取り残されない）
   renderLayers(); syncPanels(); render();
