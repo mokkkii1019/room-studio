@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, Response
 
 sys.path.insert(0, os.path.dirname(__file__))
 import _collect_core as core  # noqa: E402
+import _site  # noqa: E402  (click tracking + legal pages)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (parent of api/)
 app = FastAPI()
@@ -58,6 +59,28 @@ def imgproxy(url: str = ""):
     except core.CollectError as e:
         raise HTTPException(status_code=e.status, detail=e.detail)
     return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/track")
+def track(id: str = "", type: str = "", url: str = "", src: str = ""):
+    # Purchase/affiliate click logging. Self-clicks are excluded client-side (localStorage opt-out).
+    _site.log_track({"id": id, "type": type, "url": url, "src": src})
+    return Response(status_code=204)
+
+
+@app.get("/about", response_class=HTMLResponse)
+def about():
+    return HTMLResponse(_site.legal_html("about"))
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy():
+    return HTMLResponse(_site.legal_html("privacy"))
+
+
+@app.get("/tokushoho", response_class=HTMLResponse)
+def tokushoho():
+    return HTMLResponse(_site.legal_html("tokushoho"))
 
 
 _HTML = None

@@ -146,6 +146,7 @@ def inpaint(req: InpaintReq):
 import sys as _sys
 _sys.path.insert(0, os.path.join(APP_DIR, "api"))
 import _collect_core as core  # noqa: E402
+import _site  # noqa: E402  (click tracking + legal pages)
 
 
 @app.get("/collect")
@@ -178,6 +179,28 @@ def imgproxy(url: str):
         raise HTTPException(status_code=e.status, detail=e.detail)
     return Response(content=data, media_type=ctype,
                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/track")
+def track(id: str = "", type: str = "", url: str = "", src: str = ""):
+    """購入/アフィリンクのクリック計測（自己クリックはクライアント側で除外）。"""
+    _site.log_track({"id": id, "type": type, "url": url, "src": src})
+    return Response(status_code=204)
+
+
+@app.get("/about", response_class=HTMLResponse)
+def about():
+    return HTMLResponse(_site.legal_html("about"))
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy():
+    return HTMLResponse(_site.legal_html("privacy"))
+
+
+@app.get("/tokushoho", response_class=HTMLResponse)
+def tokushoho():
+    return HTMLResponse(_site.legal_html("tokushoho"))
 
 
 # ---- アプリ本体（room-studio.html）を同一オリジンで配信 ----
