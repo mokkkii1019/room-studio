@@ -2595,9 +2595,10 @@ async function rehydrateProject(){
   State.furniLib.forEach(it=>{ if(it.needsRehydrate&&it.itemCode) targets.push({kind:'lib',obj:it}); });
   if(!targets.length) return;
   if(!SERVER.available) await probeServer();
-  if(!SERVER.available) return;
-  let ok=0;
+  if(!SERVER.available){ toast('参照のみの家具を再取得できませんでした（収集サーバーに接続不可）'); return; }
+  let ok=0, fail=0;
   await pool(targets, 4, t=> new Promise(async res=>{
+    let done=false;
     try{
       const r=await fetch(SERVER.url+'/item?'+new URLSearchParams({code:t.obj.itemCode, source:t.obj.source||'rakuten'}), {cache:'no-store'});
       if(r.ok){ const it=await r.json();
@@ -2606,11 +2607,16 @@ async function rehydrateProject(){
         if(cv){ t.obj.srcCanvas=downscaleCanvas(cv,1000); t.obj.needsRehydrate=false;
           if(t.kind==='layer'){ t.obj.dirty=true; t.obj.natW=t.obj.srcCanvas.width; t.obj.natH=t.obj.srcCanvas.height; rebuildFurniture(t.obj); }
           else { t.obj._thumb=null; }
-          ok++; } }
+          ok++; done=true; } }
     }catch(e){ /* 再取得失敗はプレースホルダのまま */ }
+    if(!done) fail++;
     res();
   }));
-  if(ok){ renderFurniLib(); renderLayers(); render(); toast(ok+'件の商品画像を再取得しました'); }
+  if(ok){ renderFurniLib(); renderLayers(); render(); }
+  // 取得不可はプレースホルダ（「再取得待ち」）のまま残し、差し替え案内をトーストで通知
+  if(ok&&fail) toast(`${ok}件を再取得、${fail}件は取得できませんでした（プレースホルダのまま・提供元/ネットを確認）`);
+  else if(ok) toast(ok+'件の商品画像を再取得しました');
+  else if(fail) toast(`${fail}件の商品画像を再取得できませんでした（プレースホルダのまま）`);
 }
 
 /* =========================================================================
