@@ -73,14 +73,14 @@
   /* ---------- layout ---------- */
   main{flex:1 1 auto; display:flex; min-height:0}
   /* left mode rail (README §4.2) */
-  .rail{flex:0 0 56px; background:var(--rail); border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px}
+  .rail{order:0; flex:0 0 56px; background:var(--rail); border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px}
   .rail-btn{width:40px; height:40px; border-radius:9px; border:1px solid transparent; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s,color .15s,border-color .15s}
   .rail-btn:hover{color:var(--ink); background:rgba(0,0,0,.04)}
   .rail-btn.on{color:var(--accent); background:var(--accent-weak); border-color:var(--accent-line)}
   .rail-btn svg{width:22px;height:22px;stroke-width:1.8}
   .rail .ondevice{margin-top:auto; writing-mode:vertical-rl; text-orientation:mixed; font-family:"JetBrains Mono",monospace; font-size:8px; letter-spacing:.15em; color:var(--faint); padding-bottom:4px; user-select:none}
   /* left layers column (README §4.3) */
-  .layers-col{flex:0 0 220px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  .layers-col{order:3; flex:0 0 220px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
   .layers-bg{flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:10px 14px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted)}
   .layers-bg svg{width:13px;height:13px;stroke-width:1.8; margin-left:auto; color:var(--faint)}
   /* right contextual panel header (README §4.5) */
@@ -89,7 +89,7 @@
   .ctx-head .ttl{font-weight:700; font-size:12.5px; color:var(--ink)}
   .ctx-head .hint2{margin-left:auto; font-size:10.5px; color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .stage-wrap{
-    flex:1 1 auto;         /* fill the space between layers column and right panel */
+    order:2; flex:1 1 auto;  /* order: rail(0) → panel(1) → canvas(2) → layers(3) */
     position:relative; background:
       radial-gradient(120% 120% at 50% 0%, var(--stage) 0%, var(--stage-2) 100%);
     min-width:0; overflow:hidden;
@@ -117,7 +117,7 @@
   .zoom-note{position:absolute; right:14px; bottom:16px; color:var(--faint); font-size:11px}
 
   /* ---------- right panel ---------- */
-  .panel{flex:0 0 314px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0}
+  .panel{order:1; flex:0 0 314px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0}
   .tabs{display:flex; padding:10px 12px 0; gap:4px; border-bottom:1px solid var(--line)}
   .tab{
     flex:1; border:0; background:transparent; padding:9px 6px 11px; border-radius:7px 7px 0 0;
