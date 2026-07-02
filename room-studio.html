@@ -80,7 +80,7 @@
   .rail-btn svg{width:22px;height:22px;stroke-width:1.8}
   .rail .ondevice{margin-top:auto; writing-mode:vertical-rl; text-orientation:mixed; font-family:"JetBrains Mono",monospace; font-size:8px; letter-spacing:.15em; color:var(--faint); padding-bottom:4px; user-select:none}
   /* left layers column (README §4.3) */
-  .layers-col{order:3; flex:0 0 220px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  .layers-col{order:5; flex:0 0 220px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
   .layers-bg{flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:10px 14px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted)}
   .layers-bg svg{width:13px;height:13px;stroke-width:1.8; margin-left:auto; color:var(--faint)}
   /* right contextual panel header (README §4.5) */
@@ -88,8 +88,12 @@
   .ctx-head .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--mode-select)}
   .ctx-head .ttl{font-weight:700; font-size:12.5px; color:var(--ink)}
   .ctx-head .hint2{margin-left:auto; font-size:10.5px; color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* drag-to-resize splitters between panel/canvas and canvas/layers */
+  .resizer{flex:0 0 6px; align-self:stretch; cursor:col-resize; position:relative; background:transparent; z-index:5}
+  .resizer::after{content:""; position:absolute; top:0; bottom:0; left:2px; width:2px; border-radius:2px; background:transparent; transition:background .15s}
+  .resizer:hover::after, .resizer.on::after{background:var(--accent)}
   .stage-wrap{
-    order:2; flex:1 1 auto;  /* order: rail(0) → panel(1) → canvas(2) → layers(3) */
+    order:3; flex:1 1 auto;  /* order: rail(0) → panel(1) → rzPanel(2) → canvas(3) → rzLayers(4) → layers(5) */
     position:relative; background:
       radial-gradient(120% 120% at 50% 0%, var(--stage) 0%, var(--stage-2) 100%);
     min-width:0; overflow:hidden;
@@ -384,6 +388,9 @@
     <div class="ondevice">ON DEVICE</div>
   </nav>
 
+  <!-- resizer: canvas / layers -->
+  <div class="resizer" id="rzLayers" style="order:4" title="ドラッグでレイヤー列の幅を調整"></div>
+
   <!-- LAYERS COLUMN -->
   <aside class="layers-col">
     <div class="layers">
@@ -395,6 +402,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
     </div>
   </aside>
+
+  <!-- resizer: detail panel / canvas -->
+  <div class="resizer" id="rzPanel" style="order:2" title="ドラッグで詳細パネルの幅を調整"></div>
 
   <!-- STAGE -->
   <section class="stage-wrap">
@@ -2871,6 +2881,31 @@ on($('zoomOut'),'click',()=>setZoom(State.view.zoom/1.25));
 on($('zoomReset'),'click',()=>setZoom(1));
 $('canvasViewport').addEventListener('wheel',e=>{ if(!State.W) return; if(e.ctrlKey||e.metaKey){ e.preventDefault(); setZoom(State.view.zoom*Math.exp(-e.deltaY*0.0015), e.clientX, e.clientY); } }, {passive:false});
 window.addEventListener('resize',()=>{ if(State.W) applyZoom(); });
+
+/* ドラッグで詳細パネル/レイヤー列の幅を調整（UI状態は localStorage に保存）。 */
+(function setupResizers(){
+  const panelEl=document.querySelector('.panel'), layersEl=document.querySelector('.layers-col');
+  const LS_P='rs_panelW', LS_L='rs_layersW';
+  try{ const pw=+localStorage.getItem(LS_P); if(pw>=240&&pw<=560) panelEl.style.flexBasis=pw+'px'; }catch(e){}
+  try{ const lw=+localStorage.getItem(LS_L); if(lw>=150&&lw<=480) layersEl.style.flexBasis=lw+'px'; }catch(e){}
+  function attach(handle, el, dir, min, max, lsKey){
+    if(!handle||!el) return;
+    on(handle,'pointerdown',e=>{
+      e.preventDefault(); handle.setPointerCapture(e.pointerId); handle.classList.add('on');
+      const startX=e.clientX, startW=el.getBoundingClientRect().width;
+      document.body.style.userSelect='none';
+      const move=ev=>{ const w=clamp(startW+(ev.clientX-startX)*dir, min, max); el.style.flexBasis=w+'px'; if(State.W) applyZoom(); };
+      const up=()=>{ handle.classList.remove('on'); document.body.style.userSelect='';
+        handle.removeEventListener('pointermove',move); handle.removeEventListener('pointerup',up); handle.removeEventListener('lostpointercapture',up);
+        try{ localStorage.setItem(lsKey, String(Math.round(el.getBoundingClientRect().width))); }catch(e){} };
+      handle.addEventListener('pointermove',move); handle.addEventListener('pointerup',up); handle.addEventListener('lostpointercapture',up);
+    });
+    // ダブルクリックで既定幅に戻す
+    on(handle,'dblclick',()=>{ el.style.flexBasis=''; if(State.W) applyZoom(); try{ localStorage.removeItem(lsKey); }catch(e){} });
+  }
+  attach($('rzPanel'),  panelEl,   1, 240, 560, LS_P); // パネルの右端: 右へドラッグで拡大
+  attach($('rzLayers'), layersEl, -1, 150, 480, LS_L); // レイヤーの左端: 左へドラッグで拡大
+})();
 
 // ---- step-by-step tutorial ----
 const TUT_STEPS=[
