@@ -11,7 +11,48 @@ Operator details are read from env so they can be set per-deployment without cod
 import os
 import json
 import time
+import hmac
 import html as _html
+
+# ---- optional access gate (for a PRIVATE web deployment) --------------------
+# When ACCESS_TOKEN is set, the whole app requires the token (login page + cookie).
+# When empty (the public deployment / local dev), the gate is OFF and nothing changes.
+# This lets a separate, crawler-enabled deployment be reachable on the web but usable
+# only by the operator, without affecting the public official build.
+ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "").strip()
+ACCESS_COOKIE = "rs_access"
+
+
+def _eq(a, b):
+    try:
+        return hmac.compare_digest(a or "", b or "")
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def key_matches(key):
+    """True only when the gate is on AND the supplied key equals the token."""
+    return bool(ACCESS_TOKEN) and _eq(key, ACCESS_TOKEN)
+
+
+def access_ok(cookie_val, query_key):
+    """Gate check. True when disabled, or a valid cookie / ?key is presented."""
+    if not ACCESS_TOKEN:
+        return True
+    return _eq(cookie_val, ACCESS_TOKEN) or _eq(query_key, ACCESS_TOKEN)
+
+
+def login_html():
+    return ("""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>非公開｜Room Studio</title>
+<style>body{margin:0;height:100vh;display:grid;place-items:center;background:#FBFAF8;color:#2A2824;
+font-family:"Zen Kaku Gothic New",system-ui,sans-serif}form{display:flex;gap:8px;flex-direction:column;width:260px}
+h1{font-size:15px;margin:0 0 4px;text-align:center}p{font-size:12px;color:#7C776E;margin:0 0 12px;text-align:center}
+input{padding:11px;border:1px solid rgba(0,0,0,.15);border-radius:8px;font-size:14px}
+button{padding:11px;border:0;border-radius:8px;background:#2A2824;color:#FBFAF8;font-weight:700;cursor:pointer}</style>
+</head><body><form method="get" action="/"><h1>非公開エリア</h1><p>アクセスキーを入力してください</p>
+<input name="key" type="password" placeholder="アクセスキー" autofocus autocomplete="current-password">
+<button type="submit">入る</button></form></body></html>""")
 
 # ---- operator info (fill via env on the deployment; safe placeholders otherwise) ----
 SITE_NAME = os.environ.get("SITE_NAME", "Room Studio")

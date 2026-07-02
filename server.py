@@ -146,7 +146,29 @@ def inpaint(req: InpaintReq):
 import sys as _sys
 _sys.path.insert(0, os.path.join(APP_DIR, "api"))
 import _collect_core as core  # noqa: E402
-import _site  # noqa: E402  (click tracking + legal pages)
+import _site  # noqa: E402  (click tracking + legal pages + access gate)
+
+_GATE_API = ("/collect", "/item", "/imgproxy", "/inpaint", "/track")
+
+
+@app.middleware("http")
+async def _access_gate(request, call_next):
+    # Opt-in gate: only active when ACCESS_TOKEN env is set (private web deployment).
+    if not _site.ACCESS_TOKEN:
+        return await call_next(request)
+    path = request.url.path
+    if path == "/health":
+        return await call_next(request)
+    key = request.query_params.get("key")
+    if _site.access_ok(request.cookies.get(_site.ACCESS_COOKIE), key):
+        resp = await call_next(request)
+        if _site.key_matches(key):
+            resp.set_cookie(_site.ACCESS_COOKIE, _site.ACCESS_TOKEN, httponly=True,
+                            samesite="lax", max_age=2592000, path="/")
+        return resp
+    if any(path.startswith(p) for p in _GATE_API):
+        return Response("unauthorized", status_code=401)
+    return HTMLResponse(_site.login_html(), status_code=401)
 
 
 @app.get("/collect")
