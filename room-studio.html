@@ -2529,8 +2529,34 @@ async function loadProject(obj, opts){
     }
     renderLayers(); syncPanels(); rebuildMaskPreview(); render();
     toast(opts&&opts.restored ? '前回の続きから復元しました' : 'プロジェクトを読み込みました');
+    rehydrateProject(); // クラウド作品（参照のみ＝画像なし）の商品画像を /item で都度再取得（あれば）
   }catch(err){ console.error('load project failed:',err); toast('プロジェクトの読み込みに失敗しました'); }
   finally{ busy(false); }
+}
+/* 「参照のみ」で保存された家具（needsRehydrate）を、商品コードから /item 経由で再取得して
+   実画像に差し替える。ローカル保存(full)には現れず、クラウド参照作品を開いたときだけ働く。 */
+async function rehydrateProject(){
+  const targets=[];
+  State.layers.forEach(l=>{ if(l.type==='furniture'&&l.needsRehydrate&&l.itemCode) targets.push({kind:'layer',obj:l}); });
+  State.furniLib.forEach(it=>{ if(it.needsRehydrate&&it.itemCode) targets.push({kind:'lib',obj:it}); });
+  if(!targets.length) return;
+  if(!SERVER.available) await probeServer();
+  if(!SERVER.available) return;
+  let ok=0;
+  await pool(targets, 4, t=> new Promise(async res=>{
+    try{
+      const r=await fetch(SERVER.url+'/item?'+new URLSearchParams({code:t.obj.itemCode, source:t.obj.source||'rakuten'}), {cache:'no-store'});
+      if(r.ok){ const it=await r.json();
+        const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
+        const cv=urls.length? await pickBestCandidate(urls) : null;
+        if(cv){ t.obj.srcCanvas=downscaleCanvas(cv,1000); t.obj.needsRehydrate=false;
+          if(t.kind==='layer'){ t.obj.dirty=true; t.obj.natW=t.obj.srcCanvas.width; t.obj.natH=t.obj.srcCanvas.height; rebuildFurniture(t.obj); }
+          else { t.obj._thumb=null; }
+          ok++; } }
+    }catch(e){ /* 再取得失敗はプレースホルダのまま */ }
+    res();
+  }));
+  if(ok){ renderFurniLib(); renderLayers(); render(); toast(ok+'件の商品画像を再取得しました'); }
 }
 
 /* =========================================================================
