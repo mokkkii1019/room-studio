@@ -2716,9 +2716,11 @@ async function saveCurrentToFile(){
     // ファイル名の初期値＝作品名（空なら日付）。保存先フォルダ/ファイル名は保存ダイアログで指定できる。
     const raw=(($('favName') && $('favName').value) || '').trim();
     const safe=(raw || ('作品 '+fmtDate(Date.now()))).replace(/[\\/:*?"<>|]+/g,'_').slice(0,80) || 'room-studio';
-    const blob=new Blob([JSON.stringify(buildProjectObject({forCloud:false}))],{type:'application/json'});
+    const json=JSON.stringify(buildProjectObject({forCloud:false}));
+    console.log('[save] current JSON size:', (json.length/1048576).toFixed(1), 'MB');
+    const blob=new Blob([json],{type:'application/json'});
     if(await saveBlob(blob, safe+'.json', 'application/json')) toast('作品をファイルに保存しました');
-  }catch(e){ console.error('save to file failed',e); toast('保存に失敗しました'); }
+  }catch(e){ console.error('save to file failed',e); toast('保存に失敗: '+(e&&e.name||e)); }
 }
 // 「現在の作品を保存」＝つねに新規で保存（既存の上書きはしない）
 async function saveCurrentFavorite(){
@@ -2742,10 +2744,14 @@ async function saveCurrentFavorite(){
   try{ await idbPut(entry); State.currentFavId=id; $('favName').value=''; toast(existing?'上書き保存しました':'MY作品に保存しました'); renderFavorites(); }
   catch(e){ console.error('fav save failed',e); toast(e&&e.name==='QuotaExceededError'?'保存容量が足りません（不要な作品を削除してください）':'保存に失敗しました'); }
 }
-async function exportFavFile(id){ const en=await idbGet(id); if(!en) return;
-  const blob=new Blob([JSON.stringify(en.project)],{type:'application/json'});
+async function exportFavFile(id){ try{
+  const en=await idbGet(id); if(!en) return;
+  const json=JSON.stringify(en.project);
+  console.log('[save] "'+(en.name||'')+'" JSON size:', (json.length/1048576).toFixed(1), 'MB');
+  const blob=new Blob([json],{type:'application/json'});
   const safe=(en.name||'room-studio').replace(/[\\/:*?"<>|]/g,'_').slice(0,60);
-  if(await saveBlob(blob, safe+'.json', 'application/json')) toast('ファイルに保存しました'); }
+  if(await saveBlob(blob, safe+'.json', 'application/json')) toast('ファイルに保存しました');
+}catch(e){ console.error('exportFavFile failed',e); toast('ファイル保存に失敗: '+(e&&e.name||e)); } }
 async function exportFavImage(id){ const en=await idbGet(id); if(!en) return;
   const url=en.png||en.thumb; if(!url){ toast('この作品には画像がありません'); return; }
   const isPng=url.indexOf('data:image/png')===0;
