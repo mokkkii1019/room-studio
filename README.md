@@ -100,7 +100,7 @@ python server.py   # → http://127.0.0.1:7865
 
 **手順**
 1. リポジトリを GitHub に push（例: `https://github.com/mokkkii1019/room-studio`）。
-2. [vercel.com](https://vercel.com) で **Add New → Project → Import**（Framework Preset は **Other**）。
+2. [vercel.com](https://vercel.com) で **Add New → Project → Import**。**Framework Preset は「FastAPI」**（`api/index.py` の ASGI `app` に全ルートが流れる）。※「Other」にすると `/` が関数に渡らず `404: NOT_FOUND`（Function Invocations 0）になるので注意。
 3. **Environment Variables** を設定（Production/Preview 両方）:
    - `RAKUTEN_APP_ID`（楽天アプリID／UUID）
    - `RAKUTEN_ACCESS_KEY`（アクセスキー）
