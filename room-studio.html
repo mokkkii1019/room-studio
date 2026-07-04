@@ -2546,9 +2546,12 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
       if(!stripImg){ f.src=pngCached(l.srcCanvas); f.aiCut=pngCached(l.aiCutCanvas); }
       return f;
     }),
-    // 収集した家具などの「家具ライブラリ」も保存（更新しても消えないように）
+    // 収集した家具などの「家具ライブラリ」も保存（更新しても消えないように）。
+    // ただし forFile（ファイル保存）では画像を含めない＝巨大化して JSON.stringify が
+    // RangeError(Invalid string length) になるのを回避。配置済み家具(layers)は原寸で
+    // 保持されるので、作品の見た目は完全に保存される。
     libNextId: State.libNextId,
-    furniLib: State.furniLib.map(it=>{
+    furniLib: opts.forFile ? [] : State.furniLib.map(it=>{
       const src=it.source||'upload';
       const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus'); // クラウドには商品画像を保存しない
       const o={ id:it.id, name:it.name, category:it.category||'upload', source:src,
@@ -2560,7 +2563,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
 }
 async function saveProject(){
   if(!State.W){ toast('先に部屋を読み込んでください'); return; }
-  const blob=new Blob([JSON.stringify(buildProjectObject({forCloud:false}))],{type:'application/json'});
+  const blob=new Blob([JSON.stringify(buildProjectObject({forCloud:false, forFile:true}))],{type:'application/json'});
   if(await saveBlob(blob, 'room-studio-project.json', 'application/json')) toast('プロジェクトを保存しました');
 }
 
@@ -2716,7 +2719,7 @@ async function saveCurrentToFile(){
     // ファイル名の初期値＝作品名（空なら日付）。保存先フォルダ/ファイル名は保存ダイアログで指定できる。
     const raw=(($('favName') && $('favName').value) || '').trim();
     const safe=(raw || ('作品 '+fmtDate(Date.now()))).replace(/[\\/:*?"<>|]+/g,'_').slice(0,80) || 'room-studio';
-    const json=JSON.stringify(buildProjectObject({forCloud:false}));
+    const json=JSON.stringify(buildProjectObject({forCloud:false, forFile:true}));
     console.log('[save] current JSON size:', (json.length/1048576).toFixed(1), 'MB');
     const blob=new Blob([json],{type:'application/json'});
     if(await saveBlob(blob, safe+'.json', 'application/json')) toast('作品をファイルに保存しました');
@@ -2746,7 +2749,9 @@ async function saveCurrentFavorite(){
 }
 async function exportFavFile(id){ try{
   const en=await idbGet(id); if(!en) return;
-  const json=JSON.stringify(en.project);
+  // 保存済み作品はライブラリ画像込みで肥大化しているので、書き出し時は外す（配置済み家具は保持）
+  const proj=Object.assign({}, en.project, { furniLib: [] });
+  const json=JSON.stringify(proj);
   console.log('[save] "'+(en.name||'')+'" JSON size:', (json.length/1048576).toFixed(1), 'MB');
   const blob=new Blob([json],{type:'application/json'});
   const safe=(en.name||'room-studio').replace(/[\\/:*?"<>|]/g,'_').slice(0,60);
