@@ -92,7 +92,7 @@
   .rail-btn svg{width:22px;height:22px;stroke-width:1.8}
   .rail .ondevice{margin-top:auto; writing-mode:vertical-rl; text-orientation:mixed; font-family:"JetBrains Mono",monospace; font-size:8px; letter-spacing:.15em; color:var(--faint); padding-bottom:4px; user-select:none}
   /* left layers column (README §4.3) */
-  .layers-col{order:5; flex:0 0 220px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  .layers-col{order:5; flex:0 0 220px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0}
   .layers-bg{flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:10px 14px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted)}
   .layers-bg svg{width:13px;height:13px;stroke-width:1.8; margin-left:auto; color:var(--faint)}
   /* right contextual panel header (README §4.5) */
@@ -284,16 +284,16 @@
   .engine.ok{color:var(--accent-ink); border-color:var(--accent); background:var(--accent-weak)}
 
   /* layers */
-  .layers{padding:12px 14px; background:transparent; flex:1 1 auto; min-height:0; overflow-y:auto}
+  .layers{padding:12px 14px; background:transparent; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden}
   .layers .label{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; height:16px}
-  .layer{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; border:1px solid transparent}
+  .layer{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; border:1px solid transparent; overflow:hidden}
   .layer.on{background:#fff; border-color:var(--line)}
   .layer .grip{cursor:grab; color:var(--muted); font-size:13px; line-height:1; padding:0 1px; flex:0 0 auto; user-select:none}
   .layer.dragging{opacity:.45}
   .layer.drop-before{box-shadow:inset 0 3px 0 var(--accent)}
   .layer.drop-after{box-shadow:inset 0 -3px 0 var(--accent)}
   .layer .swatch{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.12); flex:0 0 auto; background-size:cover}
-  .layer .nm{flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .layer .nm{flex:1 1 0; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .layer a.nm{color:var(--accent); text-decoration:none}
   .layer a.nm:hover{text-decoration:underline}
   .layer .kind{font-size:9.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
@@ -809,19 +809,19 @@
 <div id="favDrawer" class="fav-drawer" style="display:none">
   <div class="fav-panel">
     <div class="fav-head">
-      <span class="fav-title">MY作品（この端末に保存）</span>
+      <span class="fav-title">MY作品（ファイルに保存／読み込み）</span>
       <button class="btn" id="favClose">閉じる</button>
     </div>
     <div class="fav-save">
-      <input type="text" class="field" id="favName" placeholder="作品名（任意）" style="flex:1;margin:0">
-      <button class="btn primary" id="favSaveNew" style="flex:0 0 auto" title="同じ名前の作品があるときは上書きします">現在の作品を保存</button>
+      <input type="text" class="field" id="favName" placeholder="作品名（ファイル名・任意）" style="flex:1;margin:0">
+      <button class="btn primary" id="favSaveNew" style="flex:0 0 auto" title="JSONファイルとして、保存先フォルダとファイル名を指定して保存します">現在の作品を保存</button>
     </div>
     <div class="fav-tools">
       <button class="btn" id="favImport">ファイルから読み込み</button>
       <span id="favQuota" class="fav-quota"></span>
     </div>
     <div class="fav-list" id="favList"></div>
-    <div id="favEmpty" class="empty-note" style="padding:16px">まだ保存したMY作品はありません。「現在の作品を保存（新規）」で追加できます。</div>
+    <div id="favEmpty" class="empty-note" style="padding:16px">「現在の作品を保存」でJSONファイルとして書き出せます（保存先とファイル名を指定）。保存したファイルは「ファイルから読み込み」で開けます。<br>※以前この端末（ブラウザ）内に保存した作品があればここに一覧表示されます。</div>
   </div>
 </div>
 <div id="toast"></div>
@@ -2706,6 +2706,19 @@ async function updateFavQuota(){ const el=$('favQuota'); if(!el) return; const n
   else { el.textContent=`保存数 ${n} / ${FREE_LIMIT}（無料）`; el.classList.toggle('warn', n>=FREE_LIMIT); } }
 function favLimitMsg(){ return `無料保存は${FREE_LIMIT}作品までです。4作品目以降の保存には有料会員登録が必要です（近日提供）。`; }
 
+// 「現在の作品を保存」＝ JSONファイルとして保存（保存先フォルダ＋ファイル名を指定）。
+// 対応ブラウザ(Chrome/Edge等)は「名前を付けて保存」ダイアログでフォルダ＆ファイル名を選択、
+// 非対応(Firefox等)はダウンロードフォルダへ指定名で保存。
+async function saveCurrentToFile(){
+  if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+  render();
+  let name=$('favName').value.trim();
+  if(!name){ name=prompt('作品名（ファイル名）を入力してください', '作品 '+fmtDate(Date.now())); if(name===null) return; name=(name||'').trim(); }
+  const safe=(name||'room-studio').replace(/[\\/:*?"<>|]+/g,'_').slice(0,80) || 'room-studio';
+  const blob=new Blob([JSON.stringify(buildProjectObject({forCloud:false}))],{type:'application/json'});
+  try{ if(await saveBlob(blob, safe+'.json', 'application/json')){ $('favName').value=''; toast('作品をファイルに保存しました'); } }
+  catch(e){ console.error('save to file failed',e); toast('保存に失敗しました'); }
+}
 // 「現在の作品を保存」＝つねに新規で保存（既存の上書きはしない）
 async function saveCurrentFavorite(){
   if(!State.W){ toast('先に部屋を読み込んでください'); return; }
@@ -2992,7 +3005,7 @@ window.addEventListener('resize',()=>{ if(State.W) applyZoom(); });
     on(handle,'dblclick',()=>{ el.style.flexBasis=''; if(State.W) applyZoom(); try{ localStorage.removeItem(lsKey); }catch(e){} });
   }
   attach($('rzPanel'),  panelEl,   1, 240, 560, LS_P); // パネルの右端: 右へドラッグで拡大
-  attach($('rzLayers'), layersEl, -1, 150, 480, LS_L); // レイヤーの左端: 左へドラッグで拡大
+  attach($('rzLayers'), layersEl, -1, 120, 480, LS_L); // レイヤーの左端: 左へドラッグで拡大（下限120＝名前は…省略）
 })();
 
 // ---- step-by-step tutorial ----
@@ -3022,7 +3035,7 @@ on($('btnTutorial'),'click',tutStart);
 // my projects (favorites)
 on($('btnFav'),'click',openFavDrawer);
 on($('favClose'),'click',closeFavDrawer);
-on($('favSaveNew'),'click',saveCurrentFavorite);
+on($('favSaveNew'),'click',saveCurrentToFile);
 on($('favImport'),'click',importFav);
 on($('favDrawer'),'click',e=>{ if(e.target===$('favDrawer')) closeFavDrawer(); });
 window.addEventListener('resize',()=>{ if(tut.active) positionTut(); });
