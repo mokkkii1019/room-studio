@@ -28,8 +28,8 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RoomStudio/1.0 (personal room-pr
 IKEA_ENDPOINT = "https://sik.search.blue.cdtapps.com/jp/ja/search-result-page"
 IKEA_TYPE_KW = {
     "chair": "チェア", "dining_table": "ダイニングテーブル", "sofa": "ソファ", "bed": "ベッド",
-    "coffee_table": "コーヒーテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
-    "carpet": "ラグ カーペット", "plant": "観葉植物", "chest": "サイドボード", "art": "アート ポスター",
+    "coffee_table": "ローテーブル リビングテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
+    "carpet": "ラグ カーペット", "plant": "観葉植物", "chest": "サイドボード リビングボード", "art": "アート ポスター",
     "floor_lamp": "フロアランプ", "mirror": "ミラー 鏡", "shelf": "シェルフ 棚",
     "cushion": "クッション ブランケット",
 }
