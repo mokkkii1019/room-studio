@@ -293,7 +293,8 @@
   .layer.drop-before{box-shadow:inset 0 3px 0 var(--accent)}
   .layer.drop-after{box-shadow:inset 0 -3px 0 var(--accent)}
   .layer .swatch{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.12); flex:0 0 auto; background-size:cover}
-  .layer .nm{flex:1 1 0; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .layer .nm{flex:1 1 0; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text}
+  .layer .nm-edit{flex:1 1 0; min-width:0; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--accent); border-radius:5px; background:#fff; color:var(--ink); outline:none}
   .layer a.nm{color:var(--accent); text-decoration:none}
   .layer a.nm:hover{text-decoration:underline}
   .layer .kind{font-size:9.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
@@ -2364,6 +2365,20 @@ function reorderLayer(draggedId, targetId, after){
   pushHistory(); State.layers=disp.reverse(); renderLayers(); render();
 }
 
+/* レイヤー名のインライン編集（家具・表面とも）。ダブルクリックで開始。 */
+function beginLayerRename(l, nmEl, rowEl){
+  const input=document.createElement('input'); input.type='text'; input.className='nm-edit'; input.value=l.name||'';
+  input.maxLength=60; rowEl.draggable=false;
+  rowEl.replaceChild(input, nmEl); input.focus(); input.select();
+  let done=false;
+  const finish=(save)=>{ if(done) return; done=true;
+    if(save){ const v=input.value.trim(); if(v && v!==l.name){ pushHistory(); l.name=v; } }
+    renderLayers(); syncPanels(); render(); // 名前は 表面の浮遊ピル / 家具インスペクタ にも反映
+  };
+  on(input,'keydown',ev=>{ ev.stopPropagation(); if(ev.key==='Enter'){ ev.preventDefault(); finish(true); } else if(ev.key==='Escape'){ ev.preventDefault(); finish(false); } });
+  on(input,'blur',()=>finish(true));
+  on(input,'click',ev=>ev.stopPropagation()); on(input,'mousedown',ev=>ev.stopPropagation()); on(input,'dblclick',ev=>ev.stopPropagation());
+}
 function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerCount').textContent=State.layers.length; $('layerEmpty').style.display=State.layers.length?'none':'block';
   // show top first
   for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; const row=document.createElement('div'); row.className='layer'+(l.id===State.selectedId?' on':''); row.draggable=true; row.dataset.id=l.id;
@@ -2378,10 +2393,12 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
     else { sw.style.backgroundImage=`url(${(l.proc||l.srcCanvas).toDataURL()})`; sw.style.backgroundSize='cover'; }
     row.appendChild(sw);
     const buyUrl=(l.type==='furniture')?(l.affiliateUrl||l.productUrl||l.link||''):'';
-    let nm;
-    if(buyUrl){ nm=document.createElement('a'); nm.className='nm'; nm.href=buyUrl; nm.target='_blank'; nm.rel='noopener'; nm.draggable=false; nm.title=l.name+' — 詳細ページを開く'; on(nm,'click',ev=>{ ev.stopPropagation(); trackClick(l.itemCode||String(l.id), 'layer:'+(l.source||''), buyUrl); }); }
-    else { nm=document.createElement('div'); nm.className='nm'; }
-    nm.textContent=l.name; row.appendChild(nm);
+    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=l.name; nm.title=l.name+'（ダブルクリックで名前を変更）';
+    on(nm,'dblclick',ev=>{ ev.preventDefault(); ev.stopPropagation(); beginLayerRename(l, nm, row); });
+    row.appendChild(nm);
+    if(buyUrl){ const buy=document.createElement('a'); buy.className='ic lbuy'; buy.href=buyUrl; buy.target='_blank'; buy.rel='noopener'; buy.draggable=false; buy.title='商品ページを開く';
+      buy.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 3h7v7M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
+      on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(l.itemCode||String(l.id), 'layer:'+(l.source||''), buyUrl); }); row.appendChild(buy); }
     const kind=document.createElement('span'); kind.className='kind'; kind.textContent= l.type==='surface' ? '表面' : ((l.category && l.category!=='upload' && CAT_LABELS[l.category]) ? CAT_LABELS[l.category] : '家具'); row.appendChild(kind);
     const eye=document.createElement('button'); eye.className='ic eye'+(l.visible?'':' off'); eye.title='表示/非表示'; eye.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayers(); render(); });
