@@ -2027,6 +2027,9 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
     deselectAll(); return;
   }
   if(State.mode==='surface'){
+    const a0=activeSurface();
+    // 遠近の四隅ドラッグは選択ツール未選択でも最優先で判定（掴んだつもりが選択解除される問題を回避）
+    if(a0 && a0.perspective && a0.quad){ for(let i=0;i<4;i++){ const dx=p.x-a0.quad[i][0], dy=p.y-a0.quad[i][1]; if(dx*dx+dy*dy<=16*16){ pushHistory('quad'+a0.id+'_'+i); drag={type:'quad',idx:i,layer:a0}; return; } } }
     // 選択ツール未選択（既定）→ クリックでカーソル下のアイテムを選んで編集状態にする
     if(!State.surfTool){
       for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); return; } }
@@ -2039,7 +2042,6 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
       for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); pushHistory('fmove'+l.id); drag={type:'move',offx:p.x-l.x,offy:p.y-l.y,layer:l}; return; } }
     }
     const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
-    if(a.perspective && a.quad){ for(let i=0;i<4;i++){ const dx=p.x-a.quad[i][0], dy=p.y-a.quad[i][1]; if(dx*dx+dy*dy<=14*14){ pushHistory('quad'+a.id+'_'+i); drag={type:'quad',idx:i,layer:a}; return; } } }
     if(State.surfTool==='eyedropper'){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColor(col); return; }
     if(State.surfTool==='poly'){ if(e.altKey||e.ctrlKey||e.button===2){ polyRemoveLast(); return; }
       const pts=State.poly.points; if(pts.length>=3){ const dx=p.x-pts[0].x, dy=p.y-pts[0].y; if(dx*dx+dy*dy<=12*12){ polyClose(); return; } }
