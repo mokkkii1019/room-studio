@@ -96,6 +96,15 @@ TYPE_MATCH = {
 # accessory/parts words to drop regardless of type (not the item itself).
 TYPE_EXCLUDE = ["カバー", "ケース", "リペア", "交換用", "替えカバー", "脚のみ", "脚単品", "パーツ", "ステッカー", "シール"]
 
+# 部分一致による他カテゴリ混入を防ぐ「このカテゴリではない」語（タイトルに含めば除外）。
+# 例: dining_table 検索で「ダイニングチェア」が"ダイニング"にマッチしてしまうのを弾く。
+TYPE_EXCLUDE_BY_TYPE = {
+    "dining_table": ["チェア", "chair", "スツール", "stool", "ベンチ", "bench", "ソファ", "sofa", "デスク", "desk"],
+    "coffee_table": ["チェア", "chair", "スツール", "stool", "デスク", "desk"],
+    "shelf": ["ローテーブル", "センターテーブル", "コーヒーテーブル", "ダイニングテーブル", "デスク", "desk"],
+    "chest": ["チェア", "chair", "ソファ", "sofa"],
+}
+
 
 def _relevant(title, type_):
     """Does the product title match the requested category (drops mismatches)?"""
@@ -104,6 +113,9 @@ def _relevant(title, type_):
         return False
     if any(x.lower() in t for x in TYPE_EXCLUDE):
         return False
+    exc = TYPE_EXCLUDE_BY_TYPE.get(type_)
+    if exc and any(x.lower() in t for x in exc):
+        return False  # 他カテゴリの品（例: ダイニング「チェア」）を弾く
     inc = TYPE_MATCH.get(type_)
     if not inc:
         return True
