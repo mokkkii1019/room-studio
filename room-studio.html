@@ -616,8 +616,8 @@
             <div id="collectSection" class="group-item">
               <span class="sub-head"><span class="n">・</span><span id="collectSubLbl">家具を収集</span><span class="info" data-tip="種類・テイストで家具を検索してライブラリに取り込みます。各画像に商品ページ（購入リンク）が付きます。検索・表示・購入リンクはログイン不要・無料です。">i</span></span>
           <select class="field" id="collectSource" title="収集元を選択">
-            <option value="ikea" selected>IKEA（キー不要）</option>
-            <option value="makers">楽天 家具メーカー（複数選択・楽天キー必要）</option>
+            <option value="makers" selected>楽天 家具メーカー（複数選択・楽天キー必要）</option>
+            <option value="ikea">IKEA（キー不要）</option>
             <option value="rughaus">RUGHAUS（ラグ・インテリア／キー不要）</option>
             <option value="kanademono">KANADEMONO（テーブル・家具／キー不要）</option>
             <option value="bauhaus">BAUHAUS（家具・インテリア／キー不要）</option>
@@ -1545,9 +1545,10 @@ function applyCollectMode(){
   const official=isOfficialCollect();
   const sel=$('collectSource'), makerBox=$('makerBox'), credit=$('collectCredit'), lbl=$('collectSubLbl');
   if(sel) sel.style.display = official ? 'none' : '';       // 公開版はソース選択を隠す（=楽天メーカー固定）
-  // 公開版は「楽天 家具メーカー」複数選択UIを常時表示。私的版はドロップダウン選択に追従。
-  if(makerBox) makerBox.style.display = official ? 'block' : ((sel && sel.value==='makers') ? 'block' : 'none');
-  if(official && $('makerList') && !$('makerList').children.length) renderMakers();
+  // 公開版は常時、私的版もソースが「楽天メーカー」のとき、複数選択UIを表示（既定を makers に）。
+  const showMaker = official || (sel && sel.value==='makers');
+  if(makerBox) makerBox.style.display = showMaker ? 'block' : 'none';
+  if(showMaker && $('makerList') && !$('makerList').children.length) renderMakers();
   if(credit) credit.style.display = official ? 'block' : 'none';
   if(lbl) lbl.textContent = official ? '楽天 家具メーカーから収集' : '家具を収集';
   const btnLbl=document.querySelector('#collectBtn .lbl'); if(btnLbl) btnLbl.textContent = official ? '選択したメーカーから収集' : '家具店から収集';
@@ -2331,14 +2332,15 @@ async function doCollect(){
       const per=Math.max(1, Math.floor(count/sel.length)); let lastErr='';
       for(let i=0;i<sel.length;i++){ setCollectStatus(`メーカー ${i+1}/${sel.length}：${sel[i].name} を収集中…（各${per}枚）`);
         try{
-          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), source:'rakuten', shop:sel[i].code}), {cache:'no-store'});
+          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), source:'rakuten', shop:sel[i].code, provider:'official'}), {cache:'no-store'});
           if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
           const j=await r.json(); (j.items||[]).forEach(it=>{ it.shop=it.shop||sel[i].name; it.source='rakuten'; items.push(it); });
         }catch(e){ lastErr=String(e&&e.message||e); }
       }
       if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
     } else {
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source}), {cache:'no-store'});
+      const provider=(source==='rakuten'||source==='artofblack')?'official':'crawler'; // クローラ系は crawler で明示
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source, provider}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source=source; });  // 'ikea' or 'rughaus'
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やテイストを変えてみてください'); $('collectBtn').disabled=false; return; }
