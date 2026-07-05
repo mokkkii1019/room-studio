@@ -342,31 +342,43 @@
   .fav-acts{grid-column:1/-1; display:flex; gap:6px; flex-wrap:wrap}
   .fav-acts .btn{padding:5px 10px; font-size:12px}
 
+  /* medium widths: shrink side columns (still side-by-side). Must come BEFORE the
+     narrow stack query so the stack query wins at ≤880px. */
+  @media (max-width:1180px){ .layers-col{flex-basis:186px} .panel{flex-basis:284px} }
+
+  /* narrow / tablet-portrait / phone: the fixed 4-column row would overflow → stack vertically.
+     rail → horizontal top bar, canvas fixed height, detail panel + layers full-width below. */
   @media (max-width:880px){
-    main{grid-template-columns:1fr; grid-template-rows:minmax(260px,48vh) 1fr}
-    .panel{border-left:0; border-top:1px solid var(--line)}
+    main{flex-direction:column; overflow-y:auto; overflow-x:hidden}
+    .rail{order:0; flex:0 0 auto; width:100%; flex-direction:row; justify-content:center; align-items:center; gap:12px; padding:6px 0; border-right:0; border-bottom:1px solid var(--line)}
+    .rail .ondevice{display:none}
+    .stage-wrap{order:1; flex:0 0 auto; height:46vh; min-height:260px}
+    .canvas-viewport{padding:14px}
+    .panel{order:2; flex:0 0 auto; flex-basis:auto; width:100%; min-width:0; border-left:0; border-right:0; border-top:1px solid var(--line)}
+    .panel .scroll{flex:0 0 auto; overflow:visible}
+    .layers-col{order:3; flex:0 0 auto; flex-basis:auto; width:100%; border-left:0; border-top:1px solid var(--line)}
     .layers{max-height:none}
-  }
-  /* phones */
-  @media (max-width:600px){
-    header{gap:8px; padding:8px 10px}
-    .brand{margin-right:0; flex:0 0 auto}
-    .brand .tag{display:none}
-    .brand .mark{font-size:15px}
+    .resizer, .reopen, .hicon{display:none}                 /* リサイズ/折りたたみはスマホでは無効 */
+    body.panel-collapsed .panel, body.layers-collapsed .layers-col{display:flex} /* 折りたたみ状態が残っても表示 */
     .h-actions{flex:1 1 0; min-width:0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none}
     .h-actions::-webkit-scrollbar{display:none}
-    .btn{flex:0 0 auto; padding:7px 10px; white-space:nowrap}
-    main{grid-template-rows:minmax(200px,42vh) 1fr}
+    .btn{flex:0 0 auto; white-space:nowrap}
+  }
+  /* phones: tighten header + spacing */
+  @media (max-width:600px){
+    header{gap:8px; padding:0 10px}
+    .brand .tag{display:none}
+    .brand .mark{font-size:14px}
+    .btn{padding:7px 10px}
     .canvas-viewport{padding:12px}
     .scroll{padding:12px}
     .zoom-ctl{left:10px; bottom:10px}
     .status-pill{right:10px; bottom:10px}
     .seg button{padding:8px 4px}
-    .tab{font-size:12px; padding:9px 4px 11px}
+    .stage-wrap{height:44vh}
+    .site-foot{font-size:9.5px; padding:4px 10px; gap:8px}
     .tut-box{width:auto; left:12px!important; right:12px!important; max-width:none}
   }
-  /* medium widths: shrink side columns; very narrow → use the collapse toggles (§8) */
-  @media (max-width:1180px){ .layers-col{flex-basis:186px} .panel{flex-basis:284px} }
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
 </style>
 </head>
