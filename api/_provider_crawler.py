@@ -18,7 +18,7 @@ import urllib.parse
 import urllib.request
 
 import _provider_base as base
-from _provider_base import CollectError, _relevant, TYPE_MATCH
+from _provider_base import CollectError, _relevant, TYPE_MATCH, TYPE_EXCLUDE, TYPE_EXCLUDE_BY_TYPE
 
 PROVIDER_NAME = "crawler"
 
@@ -116,6 +116,12 @@ def _shopify(type_, taste, count, base_url, shop_name, source):
             hay = (title + " " + (p.get("product_type") or "") + " " + tagstr).lower()
             if inc and not any(k.lower() in hay for k in inc):
                 continue  # not this category
+            tl_title = title.lower()
+            if any(k.lower() in tl_title for k in TYPE_EXCLUDE):
+                continue  # アクセサリ/パーツ等
+            exc = TYPE_EXCLUDE_BY_TYPE.get(type_)
+            if exc and any(k.lower() in tl_title for k in exc):
+                continue  # 他カテゴリの品（例: ダイニングチェアを dining_table から除外）
             if tl and tl not in hay and tl not in (p.get("body_html") or "").lower():
                 continue  # taste keyword not matched
             cand_urls = []
@@ -150,20 +156,32 @@ def _shopify(type_, taste, count, base_url, shop_name, source):
 
 
 def _flymee(type_, taste, count):
-    """FLYMEe (flymee.jp) — internal search JSON API (no key). Keyword search + paging."""
-    kw = (taste.strip() + " " + IKEA_TYPE_KW.get(type_, type_).split()[0]).strip()  # 主キーワードのみ（複合語のAND検索で絞りすぎるのを回避）
+    """FLYMEe (flymee.jp) — the search PAGE embeds keyword-filtered results in
+    `window.__PRODUCTS__` (a JSON object with a `data` list). NOTE: the search filter param
+    is `keywords` (plural) on /search/ — `/api/search?keyword=` is NOT filtered (returns all).
+    """
+    kw = (taste.strip() + " " + IKEA_TYPE_KW.get(type_, type_).split()[0]).strip()  # 主キーワードのみ
     items, seen, page = [], set(), 1
+    dec = json.JSONDecoder()
     while len(items) < count and page <= 4:
-        url = "https://flymee.jp/api/search?" + urllib.parse.urlencode({"keyword": kw, "page": page})
-        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+        path = "/search/" if page == 1 else "/search/%d/" % page
+        url = "https://flymee.jp" + path + "?" + urllib.parse.urlencode({"keywords": kw})
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
         try:
-            with urllib.request.urlopen(req, timeout=15) as r:
-                data = json.loads(r.read().decode("utf-8"))
+            with urllib.request.urlopen(req, timeout=20) as r:
+                html = r.read().decode("utf-8", "ignore")
         except Exception as e:  # noqa: BLE001
             if items:
                 break
             raise CollectError(502, f"FLYMEe取得に失敗: {e}")
-        arr = data.get("data") or []
+        i = html.find("window.__PRODUCTS__ =")
+        if i < 0:
+            break
+        try:
+            obj, _ = dec.raw_decode(html, html.index("{", i))
+        except Exception:  # noqa: BLE001
+            break
+        arr = obj.get("data") or []
         if not arr:
             break
         for it in arr:
@@ -186,7 +204,7 @@ def _flymee(type_, taste, count):
             })
             if len(items) >= count:
                 break
-        if page >= (data.get("lastPage") or 1):
+        if page >= (obj.get("lastPage") or 1):
             break
         page += 1
     return items
