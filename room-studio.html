@@ -2918,7 +2918,7 @@ on($('fKeystoneReset'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.corn
 on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
 /* 家具のプロパティ一式をスナップショット（画像は不変なので srcCanvas 参照を保持）。コピペ/複製で共用。 */
-function snapshotFurniture(f){ return { src:f.srcCanvas, aiCut:f.aiCutCanvas||null, name:f.name, x:f.x, y:f.y,
+function snapshotFurniture(f){ return { src:f.srcCanvas, aiCut:f.aiCutCanvas||null, name:f.name, x:f.x, y:f.y, srcId:f.id,
   props:{ bgRemove:f.bgRemove, bgTol:f.bgTol, recolor:f.recolor, color:f.color, strength:f.strength, material:f.material, matStrength:f.matStrength,
     scale:f.scale, rot:f.rot, yaw:f.yaw, corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null, flip:f.flip, opacity:f.opacity, category:f.category,
     eraseMask:f.eraseMask?f.eraseMask.slice():null } }; }
@@ -2928,6 +2928,10 @@ function placeFurnitureSnapshot(snap, dx, dy){ if(!State.W){ toast('先に部屋
   const nf=selectedFurniture(); if(!nf) return null; const pr=snap.props;
   Object.assign(nf, pr, { aiCutCanvas:snap.aiCut, corners:pr.corners?pr.corners.map(p=>[p[0],p[1]]):null,
     eraseMask:pr.eraseMask?pr.eraseMask.slice():null, x:snap.x+(dx||0), y:snap.y+(dy||0), dirty:true });
+  // 複製元の「一つ前面（直上）」へ移動（最前面に置かない）。複製元が残っていれば直後に挿入。
+  if(snap.srcId!=null){ const si=State.layers.findIndex(l=>l.id===snap.srcId);
+    if(si>=0){ const ni=State.layers.findIndex(l=>l.id===nf.id);
+      if(ni>=0 && ni!==si+1){ const [moved]=State.layers.splice(ni,1); State.layers.splice(ni<si?si:si+1,0,moved); } } }
   rebuildFurniture(nf); syncFurnitureUI(nf); renderLayers(); render(); return nf; }
 on($('fDup'),'click',()=>{ const f=selectedFurniture(); if(!f) return; placeFurnitureSnapshot(snapshotFurniture(f),30,30); });
 
