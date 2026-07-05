@@ -45,7 +45,8 @@ SHOPIFY_STORES = {
 def imgproxy_hosts():
     """Allowed image host suffixes for /imgproxy in private mode."""
     return ("ikea.com", "cdtapps.com", "shopify.com",
-            "rughaus.jp", "kanademono.design", "officialbauhaus.jp")
+            "rughaus.jp", "kanademono.design", "officialbauhaus.jp",
+            "flymee.jp", "hay-japan.com")
 
 
 def _ikea(type_, taste, count):
@@ -148,12 +149,109 @@ def _shopify(type_, taste, count, base_url, shop_name, source):
     return items
 
 
+def _flymee(type_, taste, count):
+    """FLYMEe (flymee.jp) — internal search JSON API (no key). Keyword search + paging."""
+    kw = (taste.strip() + " " + IKEA_TYPE_KW.get(type_, type_).split()[0]).strip()  # 主キーワードのみ（複合語のAND検索で絞りすぎるのを回避）
+    items, seen, page = [], set(), 1
+    while len(items) < count and page <= 4:
+        url = "https://flymee.jp/api/search?" + urllib.parse.urlencode({"keyword": kw, "page": page})
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except Exception as e:  # noqa: BLE001
+            if items:
+                break
+            raise CollectError(502, f"FLYMEe取得に失敗: {e}")
+        arr = data.get("data") or []
+        if not arr:
+            break
+        for it in arr:
+            pid = it.get("product_id")
+            if not pid or pid in seen:
+                continue
+            seen.add(pid)
+            name = it.get("name") or ""
+            if not _relevant(name, type_):
+                continue
+            img = (it.get("img_path") or "").lstrip("/")
+            if not img:
+                continue
+            imgurl = "https://static2.flymee.jp/" + img
+            url_ = it.get("url") or ""
+            items.append({
+                "name": name[:80], "price": it.get("min_price") or 0, "shop": "FLYMEe",
+                "productUrl": url_, "affiliateUrl": url_,
+                "imageUrl": imgurl, "imageUrls": [imgurl], "itemCode": str(pid), "source": "flymee",
+            })
+            if len(items) >= count:
+                break
+        if page >= (data.get("lastPage") or 1):
+            break
+        page += 1
+    return items
+
+
+_HAY = "https://www.hay-japan.com"
+
+
+def _hay(type_, taste, count):
+    """HAY Japan (ebisumart) — server-rendered /item_list.html search. Parse product cards."""
+    import re
+    kw = (taste.strip() + " " + IKEA_TYPE_KW.get(type_, type_).split()[0]).strip()  # 主キーワードのみ（複合語のAND検索で絞りすぎるのを回避）
+    items, seen, page = [], set(), 1
+    while len(items) < count and page <= 5:
+        url = _HAY + "/item_list.html?" + urllib.parse.urlencode({"keyword": kw, "page": page})
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                html = r.read().decode("utf-8", "ignore")
+        except Exception as e:  # noqa: BLE001
+            if items:
+                break
+            raise CollectError(502, f"HAY取得に失敗: {e}")
+        new = 0
+        for seg in html.split('<li class="box">')[1:]:
+            m = re.search(r'/item/([A-Z0-9_]+)\.html"\s+title="([^"]*)"', seg)
+            if not m:
+                continue
+            code, name = m.group(1), m.group(2).strip()
+            if code in seen:
+                continue
+            seen.add(code)
+            if not _relevant(name, type_):
+                continue
+            im = re.search(r'src="(/client_info/HAYJAPAN/itemimage/[^"]+)"', seg)
+            imgurl = _HAY + (im.group(1) if im else
+                             "/client_info/HAYJAPAN/itemimage/%s/main-%s.jpg" % (code, code))
+            pr = re.search(r'class="price_en">\s*([\d,]+)', seg)
+            price = int(pr.group(1).replace(",", "")) if pr else 0
+            purl = _HAY + "/item/%s.html" % code
+            items.append({
+                "name": name[:80], "price": price, "shop": "HAY",
+                "productUrl": purl, "affiliateUrl": purl,
+                "imageUrl": imgurl, "imageUrls": [imgurl], "itemCode": code, "source": "hay",
+            })
+            new += 1
+            if len(items) >= count:
+                break
+        if new == 0:
+            break
+        page += 1
+    return items
+
+
 def search(type_, taste="", count=50, shop="", referer=None):
-    """`shop` selects the storefront: 'ikea' (default) | 'rughaus' | 'kanademono' | 'bauhaus'."""
+    """`shop` selects the storefront: 'ikea' (default) | 'rughaus' | 'kanademono' | 'bauhaus'
+    | 'flymee' | 'hay'."""
     store = (shop or "ikea").strip().lower()
     if store in SHOPIFY_STORES:
         base_url, name = SHOPIFY_STORES[store]
         return _shopify(type_, taste, count, base_url, name, store)
+    if store == "flymee":
+        return _flymee(type_, taste, count)
+    if store == "hay":
+        return _hay(type_, taste, count)
     return _ikea(type_, taste, count)
 
 

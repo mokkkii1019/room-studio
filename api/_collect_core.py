@@ -84,7 +84,7 @@ def _shop_for(prov, source, shop):
     """Map the frontend's legacy `source` into the provider's `shop` selector."""
     src = (source or "").strip().lower()
     if getattr(prov, "PROVIDER_NAME", "official") == "crawler":
-        return src if src in ("ikea", "rughaus", "kanademono", "bauhaus") else (shop or "")
+        return src if src in ("ikea", "rughaus", "kanademono", "bauhaus", "flymee", "hay") else (shop or "")
     # official (Rakuten): 'artofblack' is a shopCode; otherwise pass the given shopCode through.
     return "artofblack" if src == "artofblack" else (shop or "")
 
