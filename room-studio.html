@@ -626,12 +626,12 @@
             <option value="dining_table">ダイニングテーブル</option>
             <option value="sofa" selected>ソファ</option>
             <option value="bed">ベッド</option>
-            <option value="coffee_table">ローテーブル</option>
+            <option value="coffee_table">ローテーブル/リビングテーブル</option>
             <option value="lampshade">ランプシェード</option>
             <option value="table_lamp">テーブルランプ</option>
             <option value="carpet">カーペット/ラグ</option>
             <option value="plant">観葉植物</option>
-            <option value="chest">サイドボード</option>
+            <option value="chest">サイドボード/リビングボード</option>
             <option value="art">アート</option>
             <option value="floor_lamp">フロアランプ</option>
             <option value="mirror">鏡</option>
@@ -2132,7 +2132,7 @@ function addToFurniLib(canvas, name, meta){ meta=meta||{};
     source:meta.source||'upload',                 // 'upload' | 'rakuten' | 'ikea'（provenance）
     itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'' };
   State.furniLib.push(it); if(!meta.defer) renderFurniLib(); return it; }
-const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット/ラグ',plant:'観葉植物',chest:'サイドボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',shelf:'シェルフ',cushion:'ブランケット/クッション',upload:'自分の画像から追加'};
+const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット/ラグ',plant:'観葉植物',chest:'サイドボード/リビングボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',shelf:'シェルフ',cushion:'ブランケット/クッション',upload:'自分の画像から追加'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
   if(row) row.style.display = State.furniLib.length>0 ? 'flex' : 'none';
