@@ -24,7 +24,10 @@ PROVIDER_NAME = "official"
 # ---- Rakuten config (env; loaded via _provider_base._load_dotenv) ------------
 RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APP_ID", "").strip()          # applicationId (UUID)
 RAKUTEN_ACCESS_KEY = os.environ.get("RAKUTEN_ACCESS_KEY", "").strip()  # accessKey (required by new API)
-RAKUTEN_AFFILIATE_ID = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
+# 楽天アフィリエイトID。必ずリクエストに含める（未指定だと affiliateUrl が hb.afl の
+# アフィリンクにならず、rafcid にアプリIDが入る＝報酬が発生しない）。既定値を埋め込み、
+# 環境変数 RAKUTEN_AFFILIATE_ID で上書き可（アフィリIDは公開情報＝秘密ではない）。
+RAKUTEN_AFFILIATE_ID = os.environ.get("RAKUTEN_AFFILIATE_ID", "553d27b1.3fab40d2.553d27b2.4375e9f6").strip()
 # new API requires Referer + Origin matching the registered "allowed website"
 RAKUTEN_REFERER = os.environ.get("RAKUTEN_REFERER", "https://github.com/").strip()
 _rp = urllib.parse.urlsplit(RAKUTEN_REFERER)
