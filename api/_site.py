@@ -64,6 +64,20 @@ OPERATOR_CONTACT = os.environ.get("OPERATOR_CONTACT", "").strip()
 OPERATOR_ADDRESS = os.environ.get("OPERATOR_ADDRESS", "").strip()
 
 
+# ---- analytics (GA4) ---------------------------------------------------------
+# Set env GA4_ID (e.g. G-XXXXXXXXXX) to enable analytics: the id is stamped into
+# the served HTML, where the app then loads gtag.js. Unset = nothing is sent.
+GA4_ID = os.environ.get("GA4_ID", "").strip()
+
+
+def inject_ga4(html):
+    """Stamp the GA4 measurement id into the app HTML (no-op when unset)."""
+    if not GA4_ID:
+        return html
+    safe = GA4_ID.replace("\\", "").replace("'", "").replace("<", "")
+    return html.replace("const GA4_ID=''", "const GA4_ID='" + safe + "'", 1)
+
+
 def log_track(event):
     """Emit one structured click/impression line. Best-effort; never raises.
     On Vercel this lands in the function logs; locally it prints to the server console.

@@ -2182,11 +2182,17 @@ function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込
 const COARSE_POINTER = (()=>{ try{ return matchMedia('(pointer:coarse)').matches; }catch(e){ return false; } })();
 /* クリック計測（購入/アフィリンク）。自己クリックは URL の ?notrack=1 で除外（localStorage保存）。
    GA4 は GA4_ID を設定すると gtag イベントも送る（既定は無効）。/track は 0-6 で追加。 */
-const GA4_ID=''; // 例: 'G-XXXXXXX' を設定すると GA4 イベントも送信
+const GA4_ID=''; // GA4測定ID。サーバーが環境変数 GA4_ID から自動注入（inject_ga4）。直接 'G-XXXX' を書いてもOK
 try{ const _p=new URLSearchParams(location.search);
   if(_p.get('notrack')==='1') localStorage.setItem('rs_notrack','1');
   if(_p.get('notrack')==='0') localStorage.removeItem('rs_notrack'); }catch(e){}
 function trackingOptedOut(){ try{ return localStorage.getItem('rs_notrack')==='1'; }catch(e){ return false; } }
+if(GA4_ID && !trackingOptedOut()){ try{ // GA4本体の読み込み（IDがある時だけ・自己クリック除外設定を尊重）
+  const s=document.createElement('script'); s.async=true; s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(GA4_ID);
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[]; window.gtag=function(){window.dataLayer.push(arguments);};
+  gtag('js',new Date()); gtag('config',GA4_ID);
+}catch(e){} }
 function trackClick(id, type, url){
   if(trackingOptedOut()) return; // 自己クリック等は除外
   try{ const q=new URLSearchParams({id:id||'', type:type||'', url:url||'', src:'web'}); const u=(SERVER.url||'')+'/track?'+q.toString();

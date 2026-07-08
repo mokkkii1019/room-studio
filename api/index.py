@@ -132,7 +132,7 @@ def _html():
     global _HTML
     if _HTML is None:
         with open(os.path.join(ROOT, "room-studio.html"), encoding="utf-8") as f:
-            _HTML = f.read()
+            _HTML = _site.inject_ga4(f.read())
     return _HTML
 
 
