@@ -105,6 +105,26 @@ def tokushoho():
     return HTMLResponse(_site.legal_html("tokushoho"))
 
 
+def _png(name):
+    path = os.path.join(ROOT, name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="not found")
+    with open(path, "rb") as f:
+        data = f.read()
+    return Response(content=data, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/og.png")
+def og_png():
+    return _png("og.png")
+
+
+@app.get("/apple-touch-icon.png")
+def apple_touch_icon():
+    return _png("apple-touch-icon.png")
+
+
 _HTML = None
 
 
