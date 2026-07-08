@@ -54,11 +54,14 @@ button{padding:11px;border:0;border-radius:8px;background:#2A2824;color:#FBFAF8;
 <input name="key" type="password" placeholder="アクセスキー" autofocus autocomplete="current-password">
 <button type="submit">入る</button></form></body></html>""")
 
-# ---- operator info (fill via env on the deployment; safe placeholders otherwise) ----
+# ---- operator info (overridable via env per deployment) -----------------------
+# Defaults are publish-safe: a trade-name style operator line, and empty contact /
+# address (legal_html skips empty rows — contact disclosure is optional for an
+# affiliate-only site; 特商法 applies only when we sell something ourselves).
 SITE_NAME = os.environ.get("SITE_NAME", "Room Studio")
-OPERATOR_NAME = os.environ.get("OPERATOR_NAME", "（運営者名を SITE 環境変数で設定してください）")
-OPERATOR_CONTACT = os.environ.get("OPERATOR_CONTACT", "（連絡先メール等を設定してください）")
-OPERATOR_ADDRESS = os.environ.get("OPERATOR_ADDRESS", "（所在地。特商法表記が必要な場合に記載）")
+OPERATOR_NAME = os.environ.get("OPERATOR_NAME", "Room Studio 運営者（個人運営）")
+OPERATOR_CONTACT = os.environ.get("OPERATOR_CONTACT", "").strip()
+OPERATOR_ADDRESS = os.environ.get("OPERATOR_ADDRESS", "").strip()
 
 
 def log_track(event):
@@ -108,7 +111,7 @@ def legal_html(kind):
     title, rows = _PAGES.get(kind, _PAGES["about"])
     esc = _html.escape
     body = "\n".join(
-        f'<section><h2>{esc(k)}</h2><p>{esc(v)}</p></section>' for k, v in rows)
+        f'<section><h2>{esc(k)}</h2><p>{esc(v)}</p></section>' for k, v in rows if (v or "").strip())
     return f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)}｜{esc(SITE_NAME)}</title>
