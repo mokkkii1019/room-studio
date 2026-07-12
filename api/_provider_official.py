@@ -226,8 +226,12 @@ def search_shops(query, type_="", referer=None):
             code = ic.split(":", 1)[0] if ":" in ic else ""
         if not code:
             continue
+        name = it.get("shopName") or code
+        # ふるさと納税（自治体）ショップは「メーカー選択」にそぐわないので除外
+        if "納税" in name or "ふるさと" in name or re.search(r"[都道府県].*[市区町村]$", name):
+            continue
         if code not in counts:
-            counts[code] = [it.get("shopName") or code, 0]
+            counts[code] = [name, 0]
         counts[code][1] += 1
     shops = [{"code": c, "name": v[0], "count": v[1]} for c, v in counts.items()]
     shops.sort(key=lambda s: -s["count"])
