@@ -354,6 +354,9 @@
   .ct-cat:hover{border-color:var(--accent-line); background:var(--accent-weak)}
   .ct-cat.sel{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700}
   .ct-shop-head{font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.03em}
+  /* 収集フォーム: ラベル付きの各入力欄 */
+  .cf-row{display:block; margin-top:9px}
+  .cf-lbl{display:block; font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.03em; margin-bottom:3px}
 
   /* my-projects (favorites) drawer */
   .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
@@ -656,9 +659,14 @@
             <option value="hay">HAY（デザイン家具・雑貨／キー不要）</option>
             <option value="flymee">FLYMEe（国内家具EC・大量／キー不要）</option>
           </select>
-          <input type="hidden" id="collectType" value="sofa">
-          <div class="collect-tree" id="collectTypeTree"></div>
-          <p id="collectGenreNote" class="hint" style="margin:6px 0 0; display:none"></p>
+          <label class="cf-row"><span class="cf-lbl">ジャンル</span>
+            <select class="field" id="collectGenre" style="margin:0">
+              <option value="furniture">家具</option>
+              <option value="appliance">家電</option>
+              <option value="daily">日用品・インテリア雑貨</option>
+            </select></label>
+          <label class="cf-row"><span class="cf-lbl">カテゴリ</span>
+            <select class="field" id="collectType" style="margin:0"></select></label>
           <div id="makerBox" style="display:none; margin-top:8px">
             <div class="ct-shop-head" id="makerBoxHead">主なメーカー（複数選択・任意）</div>
             <div class="row" style="margin:6px 0 4px; align-items:center; gap:8px">
@@ -672,8 +680,9 @@
             <div class="maker-list" id="makerList"></div>
             <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">主なメーカー各15社（掲載規模の大きい順）。選択した各メーカーから枚数を按分して収集します。未選択なら楽天市場全体から検索します。</p>
           </div>
-          <input type="text" class="field" id="collectTaste" placeholder="フリーワードで検索（任意・例: 北欧 / ホワイト / 4K / 遮光）" style="margin-top:8px">
-          <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
+          <label class="cf-row"><span class="cf-lbl">フリーワード検索（任意）</span>
+            <input type="text" class="field" id="collectTaste" placeholder="例: 北欧 / ホワイト / 4K / 遮光" style="margin:0"></label>
+          <div class="slider" style="margin-top:10px"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
           <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
             <span class="lbl">家具を収集</span>
@@ -1580,22 +1589,14 @@ const COLLECT_TAXONOMY=[
 ];
 function genreOfType(t){ for(const g of COLLECT_TAXONOMY){ if(g.cats.some(c=>c[0]===t)) return g.id; } return 'furniture'; }
 function collectTypeLabel(t){ for(const g of COLLECT_TAXONOMY){ for(const c of g.cats){ if(c[0]===t) return c[1]; } } return t; }
-function selectCollectType(v){ const inp=$('collectType'); if(inp) inp.value=v;
-  document.querySelectorAll('#collectTypeTree .ct-cat').forEach(el=>el.classList.toggle('sel', el.getAttribute('data-v')===v));
-  applyCollectMode();
-}
-function renderCollectTree(){ const host=$('collectTypeTree'); if(!host) return; host.innerHTML='';
-  const cur=($('collectType')||{}).value||'sofa'; const curGenre=genreOfType(cur);
-  for(const g of COLLECT_TAXONOMY){ const sec=document.createElement('div'); sec.className='ct-genre'+(g.id===curGenre?' open':'');
-    const head=document.createElement('button'); head.type='button'; head.className='ct-head';
-    head.innerHTML='<span>'+g.label+'</span><span class="ct-count">'+g.cats.length+'種</span><span class="chev">▶</span>';
-    on(head,'click',()=>{ sec.classList.toggle('open'); });
-    const box=document.createElement('div'); box.className='ct-cats';
-    for(const pair of g.cats){ const chip=document.createElement('button'); chip.type='button';
-      chip.className='ct-cat'+(pair[0]===cur?' sel':''); chip.setAttribute('data-v',pair[0]); chip.textContent=pair[1];
-      on(chip,'click',()=>selectCollectType(pair[0])); box.appendChild(chip); }
-    sec.appendChild(head); sec.appendChild(box); host.appendChild(sec);
-  }
+/* ジャンル選択に応じてカテゴリ（品目）ドロップダウンを再構築。 */
+function renderCategoryOptions(){
+  const gsel=$('collectGenre'), csel=$('collectType'); if(!gsel||!csel) return;
+  const g=COLLECT_TAXONOMY.find(x=>x.id===gsel.value)||COLLECT_TAXONOMY[0];
+  const prev=csel.value;
+  csel.innerHTML='';
+  for(const pair of g.cats){ const o=document.createElement('option'); o.value=pair[0]; o.textContent=pair[1]; csel.appendChild(o); }
+  csel.value = g.cats.some(c=>c[0]===prev) ? prev : g.cats[0][0];
 }
 
 function applyCollectMode(){
@@ -1614,7 +1615,6 @@ function applyCollectMode(){
     if(head){ const gl = genre==='appliance' ? '家電' : genre==='daily' ? '日用品' : '家具'; head.textContent = gl + 'の主なメーカー（複数選択・任意）'; }
   }
   if(credit) credit.style.display = official ? 'block' : 'none';
-  const note=$('collectGenreNote'); if(note){ note.style.display='none'; note.textContent=''; }
   if(lbl) lbl.textContent = official ? '楽天市場から収集' : 'アイテムを収集';
   const btnLbl=document.querySelector('#collectBtn .lbl');
   if(btnLbl) btnLbl.textContent = official ? '収集する' : '家具店から収集';
@@ -3033,7 +3033,9 @@ on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.le
 on($('collectCount'),'input',e=>{ $('collectCountV').textContent=e.target.value; });
 on($('collectBtn'),'click',doCollect);
 on($('collectSource'),'change',applyCollectMode); // ソース変更時はモード再適用（メーカー箱の表示もジャンル依存）
-renderCollectTree();  // ジャンル→カテゴリのブレイクダウンを描画
+on($('collectGenre'),'change',()=>{ renderCategoryOptions(); applyCollectMode(); }); // ジャンル変更→カテゴリ再構築＋メーカー切替
+on($('collectType'),'change',applyCollectMode);   // カテゴリ変更→モード再適用
+renderCategoryOptions();  // ジャンルに応じたカテゴリ選択肢を生成
 applyCollectMode(); // 初期は official 既定（ソース選択を隠す）。probeServer 完了後に mode に応じ再適用。
 on($('makerFilter'),'input',e=>renderMakers(e.target.value));
 on($('makerAll'),'click',()=>{ currentShops().forEach(m=>State.makers.add(m.code)); renderMakers($('makerFilter').value); updateMakerCount(); });
