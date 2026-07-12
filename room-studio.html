@@ -357,6 +357,12 @@
   /* 収集フォーム: ラベル付きの各入力欄 */
   .cf-row{display:block; margin-top:9px}
   .cf-lbl{display:block; font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.03em; margin-bottom:3px}
+  /* 選択中のメーカー/ショップ chip */
+  #makerChips{display:none}
+  .shop-chip{display:inline-flex; align-items:center; gap:5px; padding:3px 6px 3px 10px; border-radius:999px;
+    background:var(--accent-weak); color:var(--accent-ink); font-size:11.5px; font-weight:700}
+  .shop-chip button{border:0; background:none; color:var(--accent-ink); cursor:pointer; font-size:13px; line-height:1; padding:0 2px}
+  .shop-chip button:hover{color:var(--warn)}
 
   /* my-projects (favorites) drawer */
   .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
@@ -670,15 +676,16 @@
           <div id="makerBox" style="display:none; margin-top:8px">
             <div class="ct-shop-head" id="makerBoxHead">主なメーカー（複数選択・任意）</div>
             <div class="row" style="margin:6px 0 4px; align-items:center; gap:8px">
-              <input type="text" class="field" id="makerFilter" placeholder="メーカー名で検索" style="margin:0;flex:1">
+              <input type="text" class="field" id="makerFilter" placeholder="楽天のメーカー/ショップ名で検索" style="margin:0;flex:1">
             </div>
+            <div id="makerChips" style="display:none; flex-wrap:wrap; gap:6px; margin:0 0 6px"></div>
             <div class="row" style="margin:0 0 6px; align-items:center; gap:8px">
               <button class="btn" id="makerAll" style="flex:0 0 auto;padding:5px 10px">全選択</button>
               <button class="btn" id="makerNone" style="flex:0 0 auto;padding:5px 10px">全解除</button>
               <span id="makerCount" style="margin-left:auto;font-size:11px;color:var(--muted)">0社選択</span>
             </div>
             <div class="maker-list" id="makerList"></div>
-            <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">主なメーカー各15社（掲載規模の大きい順）。選択した各メーカーから枚数を按分して収集します。未選択なら楽天市場全体から検索します。</p>
+            <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">既定は主なメーカー各15社（掲載規模の大きい順）。検索窓に入力すると<b>楽天の全ショップ</b>から探せます。選択した各メーカーから枚数を按分して収集します（未選択なら楽天市場全体から）。</p>
           </div>
           <label class="cf-row"><span class="cf-lbl">フリーワード検索（任意）</span>
             <input type="text" class="field" id="collectTaste" placeholder="例: 北欧 / ホワイト / 4K / 遮光" style="margin:0"></label>
@@ -922,7 +929,9 @@ const State = {
   poly:{points:[]},                   // in-progress polygon (face) selection
   furniEyedrop:false,                 // eyedropper active for furniture recolor
   furniErase:false,                   // manual background-erase brush active for selected furniture
-  makers:new Set(),                   // selected Rakuten furniture-maker shopCodes (multi-collect)
+  makers:new Set(),                   // selected Rakuten shopCodes (presets or 楽天全店舗検索, multi-collect)
+  shopNames:{},                       // shopCode -> 表示名（プリセット/検索結果から蓄積）
+  shownShops:[],                      // 現在メーカー一覧に表示中の [{code,name}]（全選択用）
   currentFavId:null,                  // id of the IndexedDB favorite currently open (for overwrite-save)
   furniLib:[], libNextId:1, libFilter:'all',  // library of loaded furniture images (staged) + category filter
   eraseMask:null,                     // Uint8 over room
@@ -1605,12 +1614,14 @@ function applyCollectMode(){
   const genre=genreOfType(($('collectType')||{}).value || 'sofa');
   if(sel) sel.style.display = official ? 'none' : '';       // 公開版はソース選択を隠す（=楽天固定）
   // ジャンルが変わったらショップ選択をリセット（家具/家電/日用品でリストが異なるため）
-  if(State.makerGenre!==genre){ State.makers.clear(); State.makerGenre=genre; if($('makerFilter')) $('makerFilter').value=''; }
+  if(State.makerGenre!==genre){ State.makers.clear(); State.shopNames={}; State.makerGenre=genre; if($('makerFilter')) $('makerFilter').value=''; }
   // ショップ絞り込み（任意）は公式モードで全ジャンル表示。私的モードは source=makers のときだけ。
   const showMaker = official || (sel && sel.value==='makers');
   if(makerBox) makerBox.style.display = showMaker ? 'block' : 'none';
   if(showMaker){
-    renderMakers($('makerFilter') ? $('makerFilter').value : ''); updateMakerCount();
+    // 検索入力中はその結果を保持、空ならプリセットを表示
+    const q=$('makerFilter') ? $('makerFilter').value.trim() : '';
+    if(!q) renderMakers(); updateMakerCount(); renderMakerChips();
     const head=$('makerBoxHead');
     if(head){ const gl = genre==='appliance' ? '家電' : genre==='daily' ? '日用品' : '家具'; head.textContent = gl + 'の主なメーカー（複数選択・任意）'; }
   }
@@ -2407,25 +2418,57 @@ const SHOPS_DAILY=[
 function shopsForGenre(g){ return g==='appliance' ? SHOPS_APPLIANCE : g==='daily' ? SHOPS_DAILY : MAKERS; }
 function currentShops(){ return shopsForGenre(genreOfType(($('collectType')||{}).value || 'sofa')); }
 function updateMakerCount(){ const el=$('makerCount'); if(el) el.textContent=State.makers.size+'社選択'; }
-function renderMakers(filter){
-  const host=$('makerList'); if(!host) return; host.innerHTML=''; const f=(filter||'').trim().toLowerCase();
-  const list=currentShops().filter(m=> !f || m.name.toLowerCase().includes(f) || m.kana.includes(f) || m.code.includes(f));
-  if(!list.length){ host.innerHTML='<div class="mk-empty">該当するショップがありません</div>'; return; }
-  for(const m of list){ const lb=document.createElement('label');
+/* 指定した [{code,name}] 一覧をチェックボックスで描画（プリセット or 楽天検索結果）。 */
+function renderShopList(shops){
+  State.shownShops = shops || [];
+  const host=$('makerList'); if(!host) return; host.innerHTML='';
+  if(!State.shownShops.length){ host.innerHTML='<div class="mk-empty">該当するショップがありません</div>'; return; }
+  for(const m of State.shownShops){ const lb=document.createElement('label');
     const cb=document.createElement('input'); cb.type='checkbox'; cb.value=m.code; cb.checked=State.makers.has(m.code);
-    on(cb,'change',()=>{ if(cb.checked) State.makers.add(m.code); else State.makers.delete(m.code); updateMakerCount(); });
-    const sp=document.createElement('span'); sp.textContent=m.name;
+    on(cb,'change',()=>{ if(cb.checked){ State.makers.add(m.code); State.shopNames[m.code]=m.name; } else { State.makers.delete(m.code); }
+      updateMakerCount(); renderMakerChips(); });
+    const sp=document.createElement('span'); sp.textContent=m.name + (m.count?(' ('+m.count+')'):'');
     lb.appendChild(cb); lb.appendChild(sp); host.appendChild(lb); }
+}
+/* 既定のプリセット（主なメーカー15社）を表示。 */
+function renderMakers(){ renderShopList(currentShops()); }
+/* 選択中メーカーを chip 表示（プリセット/検索いずれの選択も可視化）。 */
+function renderMakerChips(){
+  const host=$('makerChips'); if(!host) return; host.innerHTML='';
+  if(!State.makers.size){ host.style.display='none'; return; }
+  host.style.display='flex';
+  for(const code of State.makers){ const name=State.shopNames[code]||code;
+    const chip=document.createElement('span'); chip.className='shop-chip'; chip.textContent=name;
+    const x=document.createElement('button'); x.type='button'; x.textContent='×'; x.title='選択解除';
+    on(x,'click',()=>{ State.makers.delete(code); updateMakerCount(); renderShopList(State.shownShops); renderMakerChips(); });
+    chip.appendChild(x); host.appendChild(chip); }
+}
+/* 楽天の全ショップからメーカー/店舗を検索して一覧に表示（デバウンス）。 */
+let _shopSearchTimer=null, _shopSearchSeq=0;
+function doShopSearch(q){
+  const host=$('makerList'); if(!host) return; const seq=++_shopSearchSeq;
+  host.innerHTML='<div class="mk-empty">楽天のショップを検索中…</div>';
+  const type=($('collectType')||{}).value||'';
+  fetch((SERVER.url||'')+'/shops?'+new URLSearchParams({query:q, type, provider:'official'}), {cache:'no-store'})
+    .then(r=> r.ok ? r.json() : Promise.reject()).then(j=>{ if(seq!==_shopSearchSeq) return;
+      const shops=(j.shops||[]).map(s=>({code:s.code, name:s.name, count:s.count}));
+      renderShopList(shops); if(!shops.length) host.innerHTML='<div class="mk-empty">一致するショップが見つかりません</div>'; })
+    .catch(()=>{ if(seq!==_shopSearchSeq) return; host.innerHTML='<div class="mk-empty">検索に失敗しました（接続を確認）</div>'; });
+}
+function onMakerFilterInput(v){ const q=(v||'').trim(); clearTimeout(_shopSearchTimer);
+  if(!q){ renderMakers(); return; }
+  _shopSearchTimer=setTimeout(()=>doShopSearch(q), 450);
 }
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
   const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value;
   const official=isOfficialCollect();
-  // 選択された楽天ショップ（ジャンル別リストから）。公式モードは全ジャンルでショップ絞り込み可（任意）。
+  // 選択された楽天ショップ（プリセット主なメーカー or 楽天全店舗検索で選んだ店）。公式/私的(makers)いずれも対象。
   let shops=[];
-  if(official) shops=currentShops().filter(m=>State.makers.has(m.code));
-  else if($('collectSource').value==='makers') shops=currentShops().filter(m=>State.makers.has(m.code));
+  if(official || $('collectSource').value==='makers'){
+    shops=[...State.makers].map(code=>({code, name:(State.shopNames[code]||code)}));
+  }
   // 収集モード: 'shops'(選択ショップを按分) / 'rakuten'(楽天市場全体) / 'crawler'(IKEA等)
   const crawlerSource = official ? '' : $('collectSource').value;
   let mode='rakuten';
@@ -3037,9 +3080,9 @@ on($('collectGenre'),'change',()=>{ renderCategoryOptions(); applyCollectMode();
 on($('collectType'),'change',applyCollectMode);   // カテゴリ変更→モード再適用
 renderCategoryOptions();  // ジャンルに応じたカテゴリ選択肢を生成
 applyCollectMode(); // 初期は official 既定（ソース選択を隠す）。probeServer 完了後に mode に応じ再適用。
-on($('makerFilter'),'input',e=>renderMakers(e.target.value));
-on($('makerAll'),'click',()=>{ currentShops().forEach(m=>State.makers.add(m.code)); renderMakers($('makerFilter').value); updateMakerCount(); });
-on($('makerNone'),'click',()=>{ State.makers.clear(); renderMakers($('makerFilter').value); updateMakerCount(); });
+on($('makerFilter'),'input',e=>onMakerFilterInput(e.target.value)); // 楽天全店舗から検索
+on($('makerAll'),'click',()=>{ (State.shownShops||[]).forEach(m=>{ State.makers.add(m.code); State.shopNames[m.code]=m.name; }); renderShopList(State.shownShops); updateMakerCount(); renderMakerChips(); });
+on($('makerNone'),'click',()=>{ State.makers.clear(); renderShopList(State.shownShops); updateMakerCount(); renderMakerChips(); });
 on($('libSave'),'click',exportLib);
 on($('libLoad'),'click',()=>$('fileLib').click());
 on($('fileLib'),'change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ let obj; try{ obj=JSON.parse(r.result); }catch(err){ toast('JSONを解析できませんでした'); return; } importLib(obj); }; r.readAsText(f); e.target.value=''; });

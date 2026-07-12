@@ -180,6 +180,15 @@ def collect(type: str, taste: str = "", count: int = 50, source: str = "", shop:
         raise HTTPException(status_code=e.status, detail=e.detail)
 
 
+@app.get("/shops")
+def shops(query: str = "", type: str = "", provider: str = ""):
+    """楽天の全ショップからメーカー/店舗を検索（[{code,name,count}]）。"""
+    try:
+        return {"shops": core.search_shops(query, type, None, provider or None)}
+    except core.CollectError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+
+
 @app.get("/item")
 def item(code: str = "", source: str = "", provider: str = ""):
     """商品コードで1件再取得（参照のみ保存の再ハイドレーション用）。"""

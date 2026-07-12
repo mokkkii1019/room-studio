@@ -106,6 +106,20 @@ def collect(type_, taste="", count=50, source="", shop="", referer=None, provide
     return {"source": source or getattr(prov, "PROVIDER_NAME", ""), "count": len(items), "items": items}
 
 
+def search_shops(query, type_="", referer=None, provider=None):
+    """楽天の全ショップからメーカー/店舗を検索（official のみ対応）。[{code,name,count}] を返す。"""
+    prov = get_provider(provider)
+    fn = getattr(prov, "search_shops", None)
+    if not fn:
+        return []
+    try:
+        return fn(query, type_, referer=referer)
+    except CollectError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise CollectError(502, f"店舗検索に失敗: {e}")
+
+
 def fetch_item(code, source="", referer=None, provider=None):
     """Re-fetch a single item by provider id (reference-only re-hydration). Returns the
     frontend-shaped item or None. Raises CollectError."""

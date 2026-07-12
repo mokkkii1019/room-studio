@@ -188,6 +188,52 @@ def search(type_, taste="", count=50, shop="", referer=None):
     return items
 
 
+def search_shops(query, type_="", referer=None):
+    """楽天の全ショップから、query に一致するショップ（メーカー/店舗）を探す。
+
+    楽天Ichibaに「店舗名検索API」は無いため、商品検索（IchibaItem/Search）の結果に含まれる
+    shopCode / shopName を集計し、出現頻度の高い順に distinct なショップを返す。カテゴリ(type_)の
+    ジャンルで軽く絞る。戻り値: [{code, name, count}]（最大20件）。"""
+    _require_keys()
+    q = (query or "").strip()
+    if not q:
+        return []
+    _, genre = TYPE_QUERY.get(type_, ("", None))
+    params = {
+        "applicationId": RAKUTEN_APP_ID, "accessKey": RAKUTEN_ACCESS_KEY, "keyword": q,
+        "hits": 30, "page": 1, "imageFlag": 1, "format": "json", "sort": "standard",
+    }
+    if genre:
+        params["genreId"] = genre
+    if RAKUTEN_AFFILIATE_ID:
+        params["affiliateId"] = RAKUTEN_AFFILIATE_ID
+    url = RAKUTEN_ENDPOINT + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers=_headers(referer))
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "ignore")[:200]
+        raise CollectError(502, f"店舗検索に失敗 (HTTP {e.code}): {body}")
+    except Exception as e:  # noqa: BLE001
+        raise CollectError(502, f"店舗検索に失敗: {e}")
+    counts = {}  # shopCode -> [shopName, count]
+    for w in data.get("Items", []) or []:
+        it = w.get("Item", w)
+        code = it.get("shopCode")
+        if not code:  # fallback: itemCode is "shopCode:itemId"
+            ic = it.get("itemCode") or ""
+            code = ic.split(":", 1)[0] if ":" in ic else ""
+        if not code:
+            continue
+        if code not in counts:
+            counts[code] = [it.get("shopName") or code, 0]
+        counts[code][1] += 1
+    shops = [{"code": c, "name": v[0], "count": v[1]} for c, v in counts.items()]
+    shops.sort(key=lambda s: -s["count"])
+    return shops[:20]
+
+
 def fetch_item(item_code, referer=None):
     """Re-fetch a single item by its Rakuten itemCode (for 'reference-only' re-hydration).
     Returns a normalized item or None."""

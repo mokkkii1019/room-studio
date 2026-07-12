@@ -63,6 +63,14 @@ def collect(request: Request, type: str = "", taste: str = "", count: int = 50,
         raise HTTPException(status_code=e.status, detail=e.detail)
 
 
+@app.get("/shops")
+def shops(request: Request, query: str = "", type: str = "", provider: str = ""):
+    try:
+        return {"shops": core.search_shops(query, type, _req_referer(request), provider or None)}
+    except core.CollectError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+
+
 @app.get("/item")
 def item(request: Request, code: str = "", source: str = "", provider: str = ""):
     try:
