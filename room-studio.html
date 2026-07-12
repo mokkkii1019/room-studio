@@ -363,6 +363,9 @@
     background:var(--accent-weak); color:var(--accent-ink); font-size:11.5px; font-weight:700}
   .shop-chip button{border:0; background:none; color:var(--accent-ink); cursor:pointer; font-size:13px; line-height:1; padding:0 2px}
   .shop-chip button:hover{color:var(--warn)}
+  .mk-add{display:block; width:100%; text-align:left; padding:7px 10px; border:1px dashed var(--accent-line,rgba(59,111,224,.35));
+    border-radius:6px; background:var(--accent-weak); color:var(--accent-ink); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; margin-bottom:4px}
+  .mk-add:hover{background:rgba(59,111,224,.18)}
 
   /* my-projects (favorites) drawer */
   .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
@@ -676,16 +679,16 @@
           <div id="makerBox" style="display:none; margin-top:8px">
             <div class="ct-shop-head" id="makerBoxHead">主なメーカー（複数選択・任意）</div>
             <div class="row" style="margin:6px 0 4px; align-items:center; gap:8px">
-              <input type="text" class="field" id="makerFilter" placeholder="楽天のメーカー/ショップ名で検索" style="margin:0;flex:1">
+              <input type="text" class="field" id="makerFilter" placeholder="メーカー名で検索・追加（例: パナソニック）" style="margin:0;flex:1">
             </div>
             <div id="makerChips" style="display:none; flex-wrap:wrap; gap:6px; margin:0 0 6px"></div>
             <div class="row" style="margin:0 0 6px; align-items:center; gap:8px">
               <button class="btn" id="makerAll" style="flex:0 0 auto;padding:5px 10px">全選択</button>
               <button class="btn" id="makerNone" style="flex:0 0 auto;padding:5px 10px">全解除</button>
-              <span id="makerCount" style="margin-left:auto;font-size:11px;color:var(--muted)">0社選択</span>
+              <span id="makerCount" style="margin-left:auto;font-size:11px;color:var(--muted)">0件選択</span>
             </div>
             <div class="maker-list" id="makerList"></div>
-            <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">既定は主なメーカー各15社（掲載規模の大きい順）。検索窓に入力すると<b>楽天の全ショップ</b>から探せます。選択した各メーカーから枚数を按分して収集します（未選択なら楽天市場全体から）。</p>
+            <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">主なメーカー（ブランド）から選択、または検索窓に<b>任意のメーカー名</b>を入れて追加できます。選んだメーカー名で楽天全体から収集します（未選択なら楽天市場全体から）。販売店は含みません。</p>
           </div>
           <label class="cf-row"><span class="cf-lbl">フリーワード検索（任意）</span>
             <input type="text" class="field" id="collectTaste" placeholder="例: 北欧 / ホワイト / 4K / 遮光" style="margin:0"></label>
@@ -2359,80 +2362,88 @@ async function runBgQueue(){ if(bgRunning) return; bgRunning=true;
 
 /* ---- collect furniture images from the web (store products via server.py) ---- */
 function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
-/* 楽天市場の家具メーカー（shopCode は実APIで実在確認済み）。あいうえお順に表示。 */
-/* 各ジャンルの「主なメーカー」= 楽天の主要店 各15社（掲載規模の大きい順・実APIで結果確認済み）。
-   kana はショップ名検索用。順序は掲載点数/知名度の大きい順で維持（あいうえおソートはしない）。 */
+/* 各ジャンルの「主なメーカー」＝実在ブランド名（楽天は店舗単位で家電メーカー直営店が少ないため、
+   店舗指定ではなく“ブランド名”で楽天全体を検索する。code はそのまま検索キーワードに使う）。
+   販売店（ビックカメラ等）は含めない。検索窓に任意のメーカー名を入力して追加もできる。 */
 const MAKERS=[
-  {code:'tansu',       name:'タンスのゲン',      kana:'たんすのげん'},
-  {code:'low-ya',      name:'LOWYA（ロウヤ）',    kana:'ろうや'},
-  {code:'dondon',      name:'モダンデコ',        kana:'もだんでこ'},
-  {code:'irisplaza-r', name:'アイリスオーヤマ',  kana:'あいりすおーやま'},
-  {code:'emoor',       name:'エムール',          kana:'えむーる'},
-  {code:'dinos',       name:'ディノス',          kana:'でぃのす'},
-  {code:'e-kurashi',   name:'くらしのeショップ(山善)', kana:'くらしのいーしょっぷ'},
-  {code:'kagunosato',  name:'家具の里',          kana:'かぐのさと'},
-  {code:'isseiki',     name:'ISSEIKI',          kana:'いっせいき'},
-  {code:'air-rhizome', name:'エア・リゾーム',    kana:'えありぞーむ'},
-  {code:'kagu350',     name:'家具350',           kana:'かぐ350'},
-  {code:'alamode',     name:'ヤマソロ',          kana:'やまそろ'},
-  {code:'rcmdin',      name:'リコメン堂',        kana:'りこめんどう'},
-  {code:'bon-kagu',    name:'ぼん家具',          kana:'ぼんかぐ'},
-  {code:'gekiyasukaguya', name:'インテリアのゲキカグ', kana:'げきかぐ'},
+  {code:'ニトリ',        name:'ニトリ',        kana:'にとり'},
+  {code:'LOWYA',         name:'LOWYA（ロウヤ）', kana:'ろうや'},
+  {code:'タンスのゲン',  name:'タンスのゲン',  kana:'たんすのげん'},
+  {code:'モダンデコ',    name:'モダンデコ',    kana:'もだんでこ'},
+  {code:'カリモク家具',  name:'カリモク家具',  kana:'かりもくかぐ'},
+  {code:'無印良品',      name:'無印良品',      kana:'むじるしりょうひん'},
+  {code:'アイリスオーヤマ', name:'アイリスオーヤマ', kana:'あいりすおーやま'},
+  {code:'エムール',      name:'エムール',      kana:'えむーる'},
+  {code:'東京インテリア',name:'東京インテリア',kana:'とうきょういんてりあ'},
+  {code:'ヤマソロ',      name:'ヤマソロ',      kana:'やまそろ'},
+  {code:'ISSEIKI',       name:'ISSEIKI',       kana:'いっせいき'},
+  {code:'関家具',        name:'関家具',        kana:'せきかぐ'},
+  {code:'大塚家具',      name:'大塚家具',      kana:'おおつかかぐ'},
+  {code:'不二貿易',      name:'不二貿易',      kana:'ふじぼうえき'},
+  {code:'山善',          name:'山善',          kana:'やまぜん'},
 ];
-/* 家電の主なメーカー（大手家電量販・家電通販）各15社。 */
+/* 家電の主なメーカー（ブランド名）。 */
 const SHOPS_APPLIANCE=[
-  {code:'biccamera',   name:'ビックカメラ',      kana:'びっくかめら'},
-  {code:'edion',       name:'エディオン',        kana:'えでぃおん'},
-  {code:'yamada-denki',name:'ヤマダデンキ',      kana:'やまだでんき'},
-  {code:'irisplaza-r', name:'アイリスオーヤマ',  kana:'あいりすおーやま'},
-  {code:'e-kurashi',   name:'くらしのeショップ(山善)', kana:'くらしのいーしょっぷ'},
-  {code:'rcmdin',      name:'リコメン堂',        kana:'りこめんどう'},
-  {code:'premoa',      name:'プレモア',          kana:'ぷれもあ'},
-  {code:'a-price',     name:'A-PRICE',           kana:'えーぷらいす'},
-  {code:'ec-current',  name:'イーシーカレント',  kana:'いーしーかれんと'},
-  {code:'e-zoa',       name:'e-ZOA',             kana:'いーぞあ'},
-  {code:'tantan',      name:'タンタンショップ',  kana:'たんたんしょっぷ'},
-  {code:'jism',        name:'JISM（上新電機）',   kana:'じすむ'},
-  {code:'beisia',      name:'ベイシア',          kana:'べいしあ'},
-  {code:'excellar',    name:'エクセラー',        kana:'えくせらー'},
-  {code:'e-price',     name:'イープライス',      kana:'いーぷらいす'},
+  {code:'パナソニック',  name:'パナソニック',  kana:'ぱなそにっく'},
+  {code:'ソニー',        name:'ソニー',        kana:'そにー'},
+  {code:'シャープ',      name:'シャープ',      kana:'しゃーぷ'},
+  {code:'東芝',          name:'東芝',          kana:'とうしば'},
+  {code:'日立',          name:'日立',          kana:'ひたち'},
+  {code:'三菱電機',      name:'三菱電機',      kana:'みつびしでんき'},
+  {code:'アイリスオーヤマ', name:'アイリスオーヤマ', kana:'あいりすおーやま'},
+  {code:'山善',          name:'山善',          kana:'やまぜん'},
+  {code:'バルミューダ',  name:'バルミューダ',  kana:'ばるみゅーだ'},
+  {code:'ツインバード',  name:'ツインバード',  kana:'ついんばーど'},
+  {code:'象印',          name:'象印',          kana:'ぞうじるし'},
+  {code:'タイガー',      name:'タイガー',      kana:'たいがー'},
+  {code:'コイズミ',      name:'コイズミ',      kana:'こいずみ'},
+  {code:'ハイアール',    name:'ハイアール',    kana:'はいあーる'},
+  {code:'デロンギ',      name:'デロンギ',      kana:'でろんぎ'},
 ];
-/* 日用品・インテリア雑貨の主なメーカー（生活雑貨・インテリア通販）各15社。 */
+/* 日用品・インテリア雑貨の主なメーカー（ブランド名）。 */
 const SHOPS_DAILY=[
-  {code:'rakuten24',       name:'楽天24',            kana:'らくてん24'},
-  {code:'dinos',           name:'ディノス',          kana:'でぃのす'},
-  {code:'irisplaza-r',     name:'アイリスオーヤマ',  kana:'あいりすおーやま'},
-  {code:'e-kurashi',       name:'くらしのeショップ(山善)', kana:'くらしのいーしょっぷ'},
-  {code:'livingut',        name:'リビングート',      kana:'りびんぐーと'},
-  {code:'interior-palette',name:'インテリアパレット',kana:'いんてりあぱれっと'},
-  {code:'receno',          name:'Re:CENO（リセノ）',  kana:'りせの'},
-  {code:'arne-interior',   name:'アーネインテリア',  kana:'あーねいんてりあ'},
-  {code:'rcmdin',          name:'リコメン堂',        kana:'りこめんどう'},
-  {code:'kaguin',          name:'KAGUIN',            kana:'かぐいん'},
-  {code:'favoritestyle',   name:'favoritestyle',     kana:'ふぇいばりっとすたいる'},
-  {code:'cocoterior',      name:'ココテリア',        kana:'ここてりあ'},
-  {code:'rack-kan',        name:'収納宅配館',        kana:'しゅうのうたくはいかん'},
-  {code:'curtainsakuranbo',name:'カーテンさくらんぼ',kana:'かーてんさくらんぼ'},
-  {code:'kurenai',         name:'カーテンくれない',  kana:'かーてんくれない'},
+  {code:'アイリスオーヤマ', name:'アイリスオーヤマ', kana:'あいりすおーやま'},
+  {code:'無印良品',      name:'無印良品',      kana:'むじるしりょうひん'},
+  {code:'山崎実業',      name:'山崎実業（tower）', kana:'やまざきじつぎょう'},
+  {code:'ニトリ',        name:'ニトリ',        kana:'にとり'},
+  {code:'レック',        name:'レック',        kana:'れっく'},
+  {code:'平安伸銅',      name:'平安伸銅',      kana:'へいあんしんどう'},
+  {code:'パール金属',    name:'パール金属',    kana:'ぱーるきんぞく'},
+  {code:'山善',          name:'山善',          kana:'やまぜん'},
+  {code:'カインズ',      name:'カインズ',      kana:'かいんず'},
+  {code:'マーナ',        name:'マーナ',        kana:'まーな'},
+  {code:'サンコー',      name:'サンコー',      kana:'さんこー'},
+  {code:'ドウシシャ',    name:'ドウシシャ',    kana:'どうししゃ'},
+  {code:'貝印',          name:'貝印',          kana:'かいじるし'},
+  {code:'オカ',          name:'オカ（OKA）',    kana:'おか'},
+  {code:'DULTON',        name:'DULTON（ダルトン）', kana:'だるとん'},
 ];
 function shopsForGenre(g){ return g==='appliance' ? SHOPS_APPLIANCE : g==='daily' ? SHOPS_DAILY : MAKERS; }
 function currentShops(){ return shopsForGenre(genreOfType(($('collectType')||{}).value || 'sofa')); }
-function updateMakerCount(){ const el=$('makerCount'); if(el) el.textContent=State.makers.size+'社選択'; }
-/* 指定した [{code,name}] 一覧をチェックボックスで描画（プリセット or 楽天検索結果）。 */
-function renderShopList(shops){
+function updateMakerCount(){ const el=$('makerCount'); if(el) el.textContent=State.makers.size+'件選択'; }
+/* メーカー（ブランド名）一覧をチェックボックスで描画。addQuery があれば「任意のメーカーを追加」行も出す。 */
+function renderShopList(shops, addQuery){
   State.shownShops = shops || [];
   const host=$('makerList'); if(!host) return; host.innerHTML='';
-  if(!State.shownShops.length){ host.innerHTML='<div class="mk-empty">該当するショップがありません</div>'; return; }
+  const q=(addQuery||'').trim();
+  if(q && !State.shownShops.some(m=>m.code===q) && !State.makers.has(q)){
+    const add=document.createElement('button'); add.type='button'; add.className='mk-add';
+    add.textContent='＋「'+q+'」で探す';
+    on(add,'click',()=>{ State.makers.add(q); State.shopNames[q]=q; if($('makerFilter')) $('makerFilter').value='';
+      renderMakers(); updateMakerCount(); renderMakerChips(); });
+    host.appendChild(add);
+  }
+  if(!State.shownShops.length){ if(!q) host.innerHTML='<div class="mk-empty">該当するメーカーがありません</div>'; return; }
   for(const m of State.shownShops){ const lb=document.createElement('label');
     const cb=document.createElement('input'); cb.type='checkbox'; cb.value=m.code; cb.checked=State.makers.has(m.code);
     on(cb,'change',()=>{ if(cb.checked){ State.makers.add(m.code); State.shopNames[m.code]=m.name; } else { State.makers.delete(m.code); }
       updateMakerCount(); renderMakerChips(); });
-    const sp=document.createElement('span'); sp.textContent=m.name + (m.count?(' ('+m.count+')'):'');
+    const sp=document.createElement('span'); sp.textContent=m.name;
     lb.appendChild(cb); lb.appendChild(sp); host.appendChild(lb); }
 }
-/* 既定のプリセット（主なメーカー15社）を表示。 */
+/* 既定のプリセット（主なメーカー15）を表示。 */
 function renderMakers(){ renderShopList(currentShops()); }
-/* 選択中メーカーを chip 表示（プリセット/検索いずれの選択も可視化）。 */
+/* 選択中メーカーを chip 表示。 */
 function renderMakerChips(){
   const host=$('makerChips'); if(!host) return; host.innerHTML='';
   if(!State.makers.size){ host.style.display='none'; return; }
@@ -2443,51 +2454,43 @@ function renderMakerChips(){
     on(x,'click',()=>{ State.makers.delete(code); updateMakerCount(); renderShopList(State.shownShops); renderMakerChips(); });
     chip.appendChild(x); host.appendChild(chip); }
 }
-/* 楽天の全ショップからメーカー/店舗を検索して一覧に表示（デバウンス）。 */
-let _shopSearchTimer=null, _shopSearchSeq=0;
-function doShopSearch(q){
-  const host=$('makerList'); if(!host) return; const seq=++_shopSearchSeq;
-  host.innerHTML='<div class="mk-empty">楽天のショップを検索中…</div>';
-  const type=($('collectType')||{}).value||'';
-  fetch((SERVER.url||'')+'/shops?'+new URLSearchParams({query:q, type, provider:'official'}), {cache:'no-store'})
-    .then(r=> r.ok ? r.json() : Promise.reject()).then(j=>{ if(seq!==_shopSearchSeq) return;
-      const shops=(j.shops||[]).map(s=>({code:s.code, name:s.name, count:s.count}));
-      renderShopList(shops); if(!shops.length) host.innerHTML='<div class="mk-empty">一致するショップが見つかりません</div>'; })
-    .catch(()=>{ if(seq!==_shopSearchSeq) return; host.innerHTML='<div class="mk-empty">検索に失敗しました（接続を確認）</div>'; });
-}
-function onMakerFilterInput(v){ const q=(v||'').trim(); clearTimeout(_shopSearchTimer);
+/* 検索窓: プリセットのメーカーを絞り込み、一致が無ければ任意のメーカー名を追加できる。 */
+function onMakerFilterInput(v){ const q=(v||'').trim();
   if(!q){ renderMakers(); return; }
-  _shopSearchTimer=setTimeout(()=>doShopSearch(q), 450);
+  const ql=q.toLowerCase();
+  const matches=currentShops().filter(m=> m.name.toLowerCase().includes(ql) || (m.kana||'').includes(q) || m.code.toLowerCase().includes(ql));
+  renderShopList(matches, q);
 }
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
   const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value;
   const official=isOfficialCollect();
-  // 選択された楽天ショップ（プリセット主なメーカー or 楽天全店舗検索で選んだ店）。公式/私的(makers)いずれも対象。
-  let shops=[];
+  // 選択された「メーカー（ブランド名）」。プリセット or 検索窓で追加した任意ブランド。
+  let brands=[];
   if(official || $('collectSource').value==='makers'){
-    shops=[...State.makers].map(code=>({code, name:(State.shopNames[code]||code)}));
+    brands=[...State.makers].map(code=>({code, name:(State.shopNames[code]||code)}));
   }
-  // 収集モード: 'shops'(選択ショップを按分) / 'rakuten'(楽天市場全体) / 'crawler'(IKEA等)
+  // 収集モード: 'brands'(選択ブランド名で按分検索) / 'rakuten'(楽天市場全体) / 'crawler'(IKEA等)
   const crawlerSource = official ? '' : $('collectSource').value;
   let mode='rakuten';
-  if(shops.length) mode='shops';
+  if(brands.length) mode='brands';
   else if(!official) mode=(crawlerSource==='makers'||crawlerSource==='rakuten'||crawlerSource==='artofblack')?'rakuten':'crawler';
   const source = (mode==='crawler') ? crawlerSource : 'rakuten'; // addToFurniLib のフォールバック用
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
     let items=[];
-    if(mode==='shops'){
-      const per=Math.max(1, Math.floor(count/shops.length)); let lastErr='';
-      for(let i=0;i<shops.length;i++){ setCollectStatus(`ショップ ${i+1}/${shops.length}：${shops[i].name} を収集中…（各${per}枚）`);
+    if(mode==='brands'){
+      const per=Math.max(1, Math.floor(count/brands.length)); let lastErr='';
+      for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
         try{
-          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), source:'rakuten', shop:shops[i].code, provider:'official'}), {cache:'no-store'});
+          const kw=(brands[i].name+' '+taste).trim(); // ブランド名をキーワードに含めて楽天全体を検索
+          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), {cache:'no-store'});
           if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
-          const j=await r.json(); (j.items||[]).forEach(it=>{ it.shop=it.shop||shops[i].name; it.source='rakuten'; items.push(it); });
+          const j=await r.json(); (j.items||[]).forEach(it=>{ it.source='rakuten'; items.push(it); });
         }catch(e){ lastErr=String(e&&e.message||e); }
       }
-      if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（ショップ/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
+      if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
     } else if(mode==='rakuten'){
       const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source:'rakuten', provider:'official'}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
