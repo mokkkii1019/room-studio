@@ -11,6 +11,7 @@ Amazon / Moshimo etc. can be added later as sibling functions; this phase ships 
 
 import os
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
