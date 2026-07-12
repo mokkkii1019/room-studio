@@ -36,23 +36,43 @@ RAKUTEN_ORIGIN = os.environ.get("RAKUTEN_ORIGIN", "").strip() or (
 RAKUTEN_ENDPOINT = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
 INTERIOR_GENRE = "100804"  # interior / bedding / storage (fewer people/scenery shots)
 
-# type key -> (search keyword, genreId or None). Must match the frontend's <select>.
+# type key -> (search keyword, genreId or None). Must match the frontend's category tree.
+# 家電(appliance) は楽天の家電ジャンルIDに縛らず genre=None の全体キーワード検索にして確実に結果を返し、
+# カテゴリ精度は TYPE_MATCH / TYPE_EXCLUDE_BY_TYPE の語で担保する（インテリアジャンル固定だと家電が0件になるため）。
 TYPE_QUERY = {
+    # --- 家具 furniture ---
     "chair": ("椅子 チェア", INTERIOR_GENRE),
     "dining_table": ("ダイニングテーブル", INTERIOR_GENRE),
     "sofa": ("ソファ", INTERIOR_GENRE),
     "bed": ("ベッド フレーム", INTERIOR_GENRE),
     "coffee_table": ("ローテーブル リビングテーブル センターテーブル", INTERIOR_GENRE),
-    "lampshade": ("ランプシェード", INTERIOR_GENRE),
-    "table_lamp": ("テーブルランプ", INTERIOR_GENRE),
-    "carpet": ("ラグ カーペット", INTERIOR_GENRE),
-    "plant": ("観葉植物", None),
     "chest": ("サイドボード リビングボード キャビネット", INTERIOR_GENRE),
-    "art": ("アートポスター 絵画 ウォールアート", INTERIOR_GENRE),
-    "floor_lamp": ("フロアランプ スタンドライト", INTERIOR_GENRE),
-    "mirror": ("鏡 ミラー", INTERIOR_GENRE),
     "shelf": ("シェルフ 棚 オープンシェルフ ラック", INTERIOR_GENRE),
+    "desk": ("デスク 机 パソコンデスク 学習机", INTERIOR_GENRE),
+    # --- 家電 home appliances (genre=None: 楽天全体をキーワード検索) ---
+    "tv": ("テレビ 液晶テレビ", None),
+    "refrigerator": ("冷蔵庫", None),
+    "washing_machine": ("洗濯機 ドラム式洗濯機", None),
+    "air_conditioner": ("エアコン ルームエアコン", None),
+    "microwave": ("電子レンジ オーブンレンジ", None),
+    "rice_cooker": ("炊飯器", None),
+    "air_purifier": ("空気清浄機", None),
+    "fan": ("扇風機 サーキュレーター", None),
+    "humidifier": ("加湿器", None),
+    "vacuum": ("掃除機 コードレスクリーナー", None),
+    # --- 日用品・インテリア雑貨 daily goods / accessories ---
+    "carpet": ("ラグ カーペット", INTERIOR_GENRE),
+    "curtain": ("カーテン ドレープカーテン 遮光カーテン", INTERIOR_GENRE),
+    "table_lamp": ("テーブルランプ", INTERIOR_GENRE),
+    "floor_lamp": ("フロアランプ スタンドライト", INTERIOR_GENRE),
+    "lampshade": ("ランプシェード ペンダントライト", INTERIOR_GENRE),
+    "plant": ("観葉植物", None),
+    "art": ("アートポスター 絵画 ウォールアート", INTERIOR_GENRE),
+    "mirror": ("鏡 ミラー", INTERIOR_GENRE),
     "cushion": ("クッション ブランケット スロー", INTERIOR_GENRE),
+    "clock": ("掛け時計 置き時計 ウォールクロック", None),
+    "storage_box": ("収納ボックス 収納ケース 収納バスケット", INTERIOR_GENRE),
+    "trash_can": ("ゴミ箱 ダストボックス くずかご", None),
 }
 
 

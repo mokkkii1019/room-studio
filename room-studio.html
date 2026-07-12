@@ -337,6 +337,22 @@
   .maker-list label:hover{background:var(--panel-2)}
   .maker-list input{width:16px; height:16px; flex:0 0 auto; accent-color:var(--accent)}
   .maker-list .mk-empty{padding:10px; color:var(--muted); font-size:12px; text-align:center}
+  /* 収集: ジャンル→カテゴリのブレイクダウン（アコーディオン） */
+  .collect-tree{border:1px solid var(--line); border-radius:8px; background:var(--panel); overflow:hidden}
+  .ct-genre + .ct-genre{border-top:1px solid var(--line)}
+  .ct-head{display:flex; align-items:center; gap:8px; width:100%; padding:9px 11px; background:var(--panel-2);
+    border:0; font-family:inherit; font-weight:700; font-size:12.5px; color:var(--ink); cursor:pointer; text-align:left}
+  .ct-head:hover{background:var(--panel-3)}
+  .ct-head .chev{margin-left:auto; transition:transform .15s; color:var(--muted); font-size:11px}
+  .ct-genre.open .ct-head .chev{transform:rotate(90deg)}
+  .ct-genre.open .ct-head{color:var(--accent-ink)}
+  .ct-count{font-size:10.5px; color:var(--muted); font-weight:600}
+  .ct-cats{display:none; flex-wrap:wrap; gap:6px; padding:9px 10px; background:var(--panel)}
+  .ct-genre.open .ct-cats{display:flex}
+  .ct-cat{padding:6px 11px; border:1px solid var(--line); border-radius:999px; background:var(--panel);
+    font-size:12px; color:var(--ink); cursor:pointer; font-family:inherit; line-height:1.2}
+  .ct-cat:hover{border-color:var(--accent-line); background:var(--accent-weak)}
+  .ct-cat.sel{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700}
 
   /* my-projects (favorites) drawer */
   .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
@@ -651,23 +667,9 @@
             <div class="maker-list" id="makerList"></div>
             <p style="margin:6px 0 0;font-size:11px;color:var(--muted)">選択した各メーカーから、枚数をメーカー数で按分して収集します。</p>
           </div>
-          <select class="field" id="collectType">
-            <option value="chair">椅子</option>
-            <option value="dining_table">ダイニングテーブル</option>
-            <option value="sofa" selected>ソファ</option>
-            <option value="bed">ベッド</option>
-            <option value="coffee_table">ローテーブル/リビングテーブル</option>
-            <option value="lampshade">ランプシェード</option>
-            <option value="table_lamp">テーブルランプ</option>
-            <option value="carpet">カーペット/ラグ</option>
-            <option value="plant">観葉植物</option>
-            <option value="chest">サイドボード/リビングボード</option>
-            <option value="art">アート</option>
-            <option value="floor_lamp">フロアランプ</option>
-            <option value="mirror">鏡</option>
-            <option value="shelf">シェルフ</option>
-            <option value="cushion">ブランケット/クッション</option>
-          </select>
+          <input type="hidden" id="collectType" value="sofa">
+          <div class="collect-tree" id="collectTypeTree"></div>
+          <p id="collectGenreNote" class="hint" style="margin:6px 0 0; display:none"></p>
           <input type="text" class="field" id="collectTaste" placeholder="テイスト（任意・例: 北欧 / ナチュラル / ミッドセンチュリー）">
           <div class="slider"><label>枚数</label><input type="range" id="collectCount" min="10" max="80" value="50"><span class="val" id="collectCountV">50</span></div>
           <button class="btn primary" id="collectBtn" style="width:100%;justify-content:center">
@@ -1556,17 +1558,66 @@ async function probeServer(){
 /* 収集UIをプロバイダに合わせて出し分ける（公開=official）。公開版は特定メーカー名を前面に
    出さず「楽天市場」モール単位で表示し、クレジットを出す。私的版(crawler)は従来のソース選択を表示。 */
 function isOfficialCollect(){ return SERVER.mode!=='private'; }  // 公開/未接続は official 扱い（安全側）
+
+/* 収集カテゴリのジャンル分類（ブレイクダウン表示用）。値キーはバックエンド TYPE_QUERY/TYPE_MATCH と一致。 */
+const COLLECT_TAXONOMY=[
+  {id:'furniture', label:'家具', cats:[
+    ['sofa','ソファ'],['dining_table','ダイニングテーブル'],['coffee_table','ローテーブル/リビングテーブル'],
+    ['chair','椅子'],['bed','ベッド'],['desk','デスク'],['chest','サイドボード/リビングボード'],['shelf','シェルフ/棚'],
+  ]},
+  {id:'appliance', label:'家電', cats:[
+    ['tv','テレビ'],['refrigerator','冷蔵庫'],['washing_machine','洗濯機'],['air_conditioner','エアコン'],
+    ['microwave','電子レンジ'],['rice_cooker','炊飯器'],['air_purifier','空気清浄機'],['fan','扇風機'],
+    ['humidifier','加湿器'],['vacuum','掃除機'],
+  ]},
+  {id:'daily', label:'日用品・インテリア雑貨', cats:[
+    ['carpet','カーペット/ラグ'],['curtain','カーテン'],['table_lamp','テーブルランプ'],['floor_lamp','フロアランプ'],
+    ['lampshade','ランプシェード'],['plant','観葉植物'],['art','アート/ポスター'],['mirror','鏡'],
+    ['cushion','クッション/ブランケット'],['clock','時計'],['storage_box','収納ボックス'],['trash_can','ゴミ箱'],
+  ]},
+];
+function genreOfType(t){ for(const g of COLLECT_TAXONOMY){ if(g.cats.some(c=>c[0]===t)) return g.id; } return 'furniture'; }
+function collectTypeLabel(t){ for(const g of COLLECT_TAXONOMY){ for(const c of g.cats){ if(c[0]===t) return c[1]; } } return t; }
+function selectCollectType(v){ const inp=$('collectType'); if(inp) inp.value=v;
+  document.querySelectorAll('#collectTypeTree .ct-cat').forEach(el=>el.classList.toggle('sel', el.getAttribute('data-v')===v));
+  applyCollectMode();
+}
+function renderCollectTree(){ const host=$('collectTypeTree'); if(!host) return; host.innerHTML='';
+  const cur=($('collectType')||{}).value||'sofa'; const curGenre=genreOfType(cur);
+  for(const g of COLLECT_TAXONOMY){ const sec=document.createElement('div'); sec.className='ct-genre'+(g.id===curGenre?' open':'');
+    const head=document.createElement('button'); head.type='button'; head.className='ct-head';
+    head.innerHTML='<span>'+g.label+'</span><span class="ct-count">'+g.cats.length+'種</span><span class="chev">▶</span>';
+    on(head,'click',()=>{ sec.classList.toggle('open'); });
+    const box=document.createElement('div'); box.className='ct-cats';
+    for(const pair of g.cats){ const chip=document.createElement('button'); chip.type='button';
+      chip.className='ct-cat'+(pair[0]===cur?' sel':''); chip.setAttribute('data-v',pair[0]); chip.textContent=pair[1];
+      on(chip,'click',()=>selectCollectType(pair[0])); box.appendChild(chip); }
+    sec.appendChild(head); sec.appendChild(box); host.appendChild(sec);
+  }
+}
+
 function applyCollectMode(){
   const official=isOfficialCollect();
   const sel=$('collectSource'), makerBox=$('makerBox'), credit=$('collectCredit'), lbl=$('collectSubLbl');
-  if(sel) sel.style.display = official ? 'none' : '';       // 公開版はソース選択を隠す（=楽天メーカー固定）
-  // 公開版は常時、私的版もソースが「楽天メーカー」のとき、複数選択UIを表示（既定を makers に）。
-  const showMaker = official || (sel && sel.value==='makers');
+  const genre=genreOfType(($('collectType')||{}).value || 'sofa');
+  const isFurniture = genre==='furniture';
+  if(sel) sel.style.display = official ? 'none' : '';       // 公開版はソース選択を隠す（=楽天固定）
+  // メーカー按分は「家具ジャンル」のときだけ。家電/日用品は楽天市場全体の一般検索（メーカー選択不要）。
+  const showMaker = isFurniture && (official || (sel && sel.value==='makers'));
   if(makerBox) makerBox.style.display = showMaker ? 'block' : 'none';
   if(showMaker && $('makerList') && !$('makerList').children.length) renderMakers();
   if(credit) credit.style.display = official ? 'block' : 'none';
-  if(lbl) lbl.textContent = official ? '楽天 家具メーカーから収集' : '家具を収集';
-  const btnLbl=document.querySelector('#collectBtn .lbl'); if(btnLbl) btnLbl.textContent = official ? '選択したメーカーから収集' : '家具店から収集';
+  const note=$('collectGenreNote');
+  if(official){
+    if(lbl) lbl.textContent = isFurniture ? '楽天 家具メーカーから収集' : '楽天市場から収集';
+    if(note){ if(isFurniture){ note.style.display='none'; note.textContent=''; }
+      else { note.style.display='block'; note.textContent='家電・日用品は楽天市場全体から検索します（メーカー選択は不要）。'; } }
+  } else {
+    if(lbl) lbl.textContent = 'アイテムを収集';
+    if(note){ note.style.display='none'; note.textContent=''; }
+  }
+  const btnLbl=document.querySelector('#collectBtn .lbl');
+  if(btnLbl) btnLbl.textContent = official ? (isFurniture ? '選択したメーカーから収集' : '楽天市場から収集') : '家具店から収集';
 }
 function updateEraseBadge(){ const b=$('eraseEngine'); if(!b) return;
   if(SERVER.inpaint){ b.textContent='● AI補完エンジン（LaMa）に接続済み — 高品質'; b.className='engine ok'; }
@@ -2167,7 +2218,7 @@ function addToFurniLib(canvas, name, meta){ meta=meta||{};
     source:meta.source||'upload',                 // 'upload' | 'rakuten' | 'ikea'（provenance）
     itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'' };
   State.furniLib.push(it); if(!meta.defer) renderFurniLib(); return it; }
-const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',lampshade:'ランプシェード',table_lamp:'テーブルランプ',carpet:'カーペット/ラグ',plant:'観葉植物',chest:'サイドボード/リビングボード',art:'アート',floor_lamp:'フロアランプ',mirror:'鏡',shelf:'シェルフ',cushion:'ブランケット/クッション',upload:'自分の画像から追加'};
+const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',chest:'サイドボード/リビングボード',shelf:'シェルフ',desk:'デスク',lampshade:'ランプシェード',table_lamp:'テーブルランプ',floor_lamp:'フロアランプ',carpet:'カーペット/ラグ',curtain:'カーテン',plant:'観葉植物',art:'アート',mirror:'鏡',cushion:'ブランケット/クッション',clock:'時計',storage_box:'収納ボックス',trash_can:'ゴミ箱',tv:'テレビ',refrigerator:'冷蔵庫',washing_machine:'洗濯機',air_conditioner:'エアコン',microwave:'電子レンジ',rice_cooker:'炊飯器',air_purifier:'空気清浄機',fan:'扇風機',humidifier:'加湿器',vacuum:'掃除機',upload:'自分の画像から追加'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
   if(row) row.style.display = State.furniLib.length>0 ? 'flex' : 'none';
@@ -2342,8 +2393,11 @@ async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
   const type=$('collectType').value, taste=$('collectTaste').value.trim(), count=+$('collectCount').value;
-  // 公開版(official)は「楽天 家具メーカー」複数選択で収集。私的版のみUIのソース選択を尊重。
-  const source = isOfficialCollect() ? 'makers' : $('collectSource').value;
+  const genre=genreOfType(type);
+  // 家具ジャンル=楽天家具メーカーから複数選択で按分収集。家電/日用品はメーカーに無いため楽天市場全体を一般検索。
+  let source;
+  if(isOfficialCollect()){ source = (genre==='furniture') ? 'makers' : 'rakuten'; }
+  else { source = $('collectSource').value; if(genre!=='furniture' && source==='makers') source='rakuten'; }
   $('collectBtn').disabled=true; setCollectStatus('検索中…');
   try{
     let items=[];
@@ -2942,7 +2996,8 @@ on($('addFurniture'),'click',()=>$('fileFurniture').click());
 on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.length){ setMode('furniture'); files.forEach(f=> loadImageFile(f, c=> addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')))); toast(files.length+'件をライブラリに追加しました'); } e.target.value=''; });
 on($('collectCount'),'input',e=>{ $('collectCountV').textContent=e.target.value; });
 on($('collectBtn'),'click',doCollect);
-on($('collectSource'),'change',e=>{ const isMakers=e.target.value==='makers'; $('makerBox').style.display=isMakers?'block':'none'; if(isMakers && !$('makerList').children.length) renderMakers(); });
+on($('collectSource'),'change',applyCollectMode); // ソース変更時はモード再適用（メーカー箱の表示もジャンル依存）
+renderCollectTree();  // ジャンル→カテゴリのブレイクダウンを描画
 applyCollectMode(); // 初期は official 既定（ソース選択を隠す）。probeServer 完了後に mode に応じ再適用。
 on($('makerFilter'),'input',e=>renderMakers(e.target.value));
 on($('makerAll'),'click',()=>{ MAKERS.forEach(m=>State.makers.add(m.code)); renderMakers($('makerFilter').value); updateMakerCount(); });
