@@ -114,7 +114,7 @@ def sitemap():
 
 @app.get("/lp/{slug}", response_class=HTMLResponse)
 def landing(slug: str):
-    page = _site.landing_html(slug)
+    page = _site.landing_html(slug, os.path.join(ROOT, "lp-assets"))
     if page is None:
         raise HTTPException(status_code=404, detail="not found")
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})

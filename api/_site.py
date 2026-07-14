@@ -311,22 +311,25 @@ def landing_slugs():
     return [p["slug"] for p in LANDING_PAGES]
 
 
-def _img_ph(name, alt, note, cls):
-    """An image slot that gracefully degrades to a labelled placeholder until the
-    file exists. `name` is a base filename under /lp-assets (extension optional).
-    The <img> hides the note on load and removes itself on 404 (no broken icon)."""
+def _img(name, alt, cls):
+    """An image slot. Rendered ONLY when the file exists (see landing_html), so a
+    live page never shows author-facing placeholder text. Space is reserved via the
+    container's aspect-ratio; alt + lazy-loading keep it accessible and light."""
     esc = _html.escape
-    return (f'<figure class="ph {cls}">'
-            f'<img src="/lp-assets/{esc(name)}" alt="{esc(alt)}" loading="lazy" '
-            "onload=\"this.parentNode.querySelector('.ph-note').hidden=true\" onerror=\"this.remove()\">"
-            f'<figcaption class="ph-note">{esc(note)}</figcaption></figure>')
+    return (f'<figure class="ph {cls}"><img src="/lp-assets/{esc(name)}" '
+            f'alt="{esc(alt)}" loading="lazy"></figure>')
 
 
-def landing_html(slug):
-    """Render a single landing page, or None if the slug is unknown."""
+def landing_html(slug, assets_dir=None):
+    """Render a single landing page, or None if the slug is unknown.
+    `assets_dir` (the /lp-assets directory): image slots render only for files that
+    exist there — missing images are omitted cleanly rather than shown as empty
+    boxes, so the page reads as intentional before the operator adds photos."""
     p = _LP_BY_SLUG.get(slug)
     if not p:
         return None
+    def _has(nm):
+        return bool(assets_dir) and _lp_asset_path(assets_dir, nm) is not None
     esc = _html.escape
     url = f"{SITE_BASE_URL}/lp/{slug}"
     app_url = f"/?ref=lp-{slug}"
@@ -340,12 +343,13 @@ def landing_html(slug):
     # Hero photo (free-stock room, slot A) + before/after app captures (slot B) — both
     # degrade to labelled placeholders until the operator drops files in /lp-assets.
     hero = p.get("hero") or {}
-    hero_fig = _img_ph(f"{slug}-hero", hero.get("alt", ""), hero.get("note", ""), "hero-ph") if hero else ""
+    hero_fig = _img(f"{slug}-hero", hero.get("alt", ""), "hero-ph") if _has(f"{slug}-hero") else ""
+    hero_media = f'<div class="hero-media">{hero_fig}</div>' if hero_fig else ""
     ba = p.get("ba")
     ba_html = ""
-    if ba:
-        fb = _img_ph(f"{slug}-before", ba["alt_b"], ba["note_b"], "")
-        fa = _img_ph(f"{slug}-after", ba["alt_a"], ba["note_a"], "")
+    if ba and _has(f"{slug}-before") and _has(f"{slug}-after"):
+        fb = _img(f"{slug}-before", ba["alt_b"], "")
+        fa = _img(f"{slug}-after", ba["alt_a"], "")
         ba_html = (
             f'<section class="ba"><h2>{esc(ba["heading"])}</h2>\n<div class="ba-grid">'
             f'<div class="ba-item before">{fb}<span class="ba-label">{esc(ba["label_b"])}</span></div>'
@@ -411,7 +415,6 @@ def landing_html(slug):
   .ph{{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;place-items:center}}
   .ph.hero-ph{{aspect-ratio:16/9}}
   .ph img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
-  .ph-note{{color:var(--muted);font-size:12.5px;line-height:1.7;padding:18px 16px;text-align:center;max-width:82%}}
   section.block{{padding:56px 0;border-top:1px solid var(--line)}}
   .block h2,.ba h2,.faqwrap>h2,.relwrap>h2{{font-size:21px;font-weight:700;line-height:1.6;margin:0 0 16px}}
   .block p{{font-size:15px;color:#4a3f3a;margin:0}}
@@ -450,7 +453,7 @@ def landing_html(slug):
 <h1>{esc(p['h1'])}</h1>
 <p class="lead">{esc(p['lead'])}</p>
 <a class="cta" href="{esc(app_url)}">{cta} →</a>
-<div class="hero-media">{hero_fig}</div>
+{hero_media}
 </div></header>
 <main class="wrap">
 {sec0}
@@ -473,23 +476,30 @@ _LP_ASSET_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpe
                 ".png": "image/png", ".avif": "image/avif"}
 
 
-def lp_asset(assets_dir, name):
-    """Resolve a landing-page image under assets_dir by (base) name.
-    Returns (bytes, content_type) or None. Path-safe: only a bare filename is
-    accepted; a name without extension matches any supported image type."""
+def _lp_asset_path(assets_dir, name):
+    """Resolve an LP image to an existing file path under assets_dir, or None.
+    Path-safe: only a bare filename is accepted; a name without extension matches
+    any supported image type (webp/jpg/jpeg/png/avif)."""
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name or ""):
         return None
     ext = os.path.splitext(name)[1].lower()
     names = [name] if ext in _LP_ASSET_CT else [name + e for e in _LP_ASSET_CT]
     for fn in names:
-        ct = _LP_ASSET_CT.get(os.path.splitext(fn)[1].lower())
-        if not ct:
+        if os.path.splitext(fn)[1].lower() not in _LP_ASSET_CT:
             continue
         path = os.path.join(assets_dir, fn)
         if os.path.isfile(path):
-            with open(path, "rb") as f:
-                return f.read(), ct
+            return path
     return None
+
+
+def lp_asset(assets_dir, name):
+    """Return (bytes, content_type) for an LP image, or None if not found."""
+    path = _lp_asset_path(assets_dir, name)
+    if not path:
+        return None
+    with open(path, "rb") as f:
+        return f.read(), _LP_ASSET_CT[os.path.splitext(path)[1].lower()]
 
 
 # ---- robots.txt / sitemap.xml -------------------------------------------------
