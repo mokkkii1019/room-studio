@@ -373,6 +373,16 @@
   .mat-collect-grid .mc-item:hover{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak)}
   .mat-collect-grid .mc-buy{position:absolute; right:2px; bottom:2px; background:rgba(0,0,0,.6); color:#fff; font-size:9px; padding:1px 5px; border-radius:4px; text-decoration:none}
   .mat-collect-grid .mc-buy:hover{background:rgba(0,0,0,.8)}
+  /* 収集画像から素材にする範囲を選ぶオーバーレイ */
+  .mc-crop-ov{position:fixed; inset:0; z-index:9998; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px}
+  .mc-crop-box{background:var(--panel); border-radius:12px; overflow:hidden; max-width:600px; box-shadow:var(--shadow)}
+  .mc-crop-head{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 14px; font-weight:700; font-size:12.5px; border-bottom:1px solid var(--line)}
+  .mc-crop-stage{position:relative; margin:12px auto; touch-action:none; background:var(--panel-2); user-select:none}
+  .mc-crop-img{display:block; pointer-events:none; -webkit-user-drag:none}
+  .mc-crop-sel{position:absolute; border:2px solid var(--accent); box-shadow:0 0 0 9999px rgba(0,0,0,.4); cursor:move; touch-action:none; box-sizing:border-box}
+  .mc-crop-sel::after{content:''; position:absolute; right:-2px; bottom:-2px; width:16px; height:16px; background:var(--accent); border:2px solid #fff; border-radius:3px; cursor:nwse-resize}
+  .mc-crop-actions{padding:0 14px 14px}
+  .mc-crop-actions .btn{width:100%; justify-content:center}
 
   /* my-projects (favorites) drawer */
   .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
@@ -660,7 +670,7 @@
               </button>
               <div class="engine" id="matCollectStatus" style="display:none"></div>
               <div class="mat-collect-grid" id="matCollectGrid" style="margin-top:8px"></div>
-              <p id="matCollectCredit" style="display:none;margin:8px 0 0;font-size:10.5px;color:var(--faint);line-height:1.5">収集画像は各商品ページの写真です（商品情報提供：楽天ウェブサービス）。画像をクリックすると中央部分をタイル化して素材に取り込み、選択中の表面に塗ります。</p>
+              <p id="matCollectCredit" style="display:none;margin:8px 0 0;font-size:10.5px;color:var(--faint);line-height:1.5">収集画像は各商品ページの写真です（商品情報提供：楽天ウェブサービス）。人物・文字が主体の画像は自動で除外します。画像をクリックし、素材にしたい平らな部分（床/壁）を四角で選ぶと、タイル化して選択中の表面に塗ります。</p>
             </div>
             </div>
           </div>
@@ -2559,31 +2569,80 @@ async function doCollectMaterial(){
   const taste=[genre,color].filter(Boolean).join(' ');  // ジャンル＋色をキーワードに
   $('matCollectBtn').disabled=true; setMatCollectStatus('検索中…'); $('matCollectCredit').style.display='block';
   try{
-    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type:cat, taste, count:'18', source:'rakuten', provider:'official'}), {cache:'no-store'});
+    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type:cat, taste, count:'26', source:'rakuten', provider:'official'}), {cache:'no-store'});
     if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
     const j=await r.json(); const items=j.items||[];
     if(!items.length){ setMatCollectStatus('見つかりませんでした。ジャンル/色を変えてみてください','err'); return; }
     State.matCollected=[]; let done=0;
-    await pool(items, 5, it=> new Promise(res=>{
-      loadImageURL(SERVER.url+(it.proxy||''), cv=>{ State.matCollected.push({canvas:downscaleCanvas(cv,700), title:it.title, link:it.link}); done++; setMatCollectStatus(`画像を読み込み中… ${done}/${items.length}`); res(); }, ()=>{ done++; res(); });
+    await pool(items, 5, it=> new Promise(async res=>{
+      // 各商品の候補画像を数枚読み、人物(肌)・文字/白背景の少ない最も素材らしい1枚を選ぶ。明らかな余計画像は除外。
+      const urls=(it.cands&&it.cands.length? it.cands.slice(0,3):[it.proxy]).map(u=>SERVER.url+u);
+      const cvs=(await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(u,c=>r(c),()=>r(null)))))).filter(Boolean);
+      if(cvs.length){
+        let best=cvs[0], bestScore=9, bestJ=null;
+        for(const cv of cvs){ const jk=matCandJunk(cv); const s=jk.white*1.2+jk.skin*2.2; if(s<bestScore){ bestScore=s; best=cv; bestJ=jk; } }
+        if(!(bestJ && (bestJ.skin>0.22 || bestJ.white>0.5))){ // 人物/文字・パッケージ主体はスキップ
+          State.matCollected.push({canvas:downscaleCanvas(best,760), title:it.title, link:it.link});
+        }
+      }
+      done++; setMatCollectStatus(`素材らしい画像を選定中… ${done}/${items.length}`); res();
     }));
     renderMatCollected();
-    setMatCollectStatus(State.matCollected.length? `完了: ${State.matCollected.length}件。画像をクリックすると素材にして塗れます` : '画像を取得できませんでした','ok');
+    setMatCollectStatus(State.matCollected.length? `${State.matCollected.length}件。画像をクリック→素材にする範囲を選んで塗れます` : '素材向きの画像が見つかりませんでした。ジャンル/色を変えてみてください','ok');
   }catch(e){ console.error('mat collect failed',e); setMatCollectStatus(e.message||'収集に失敗しました（サーバー/ネットワークを確認）','err'); }
   finally{ $('matCollectBtn').disabled=false; }
 }
 function renderMatCollected(){ const host=$('matCollectGrid'); if(!host) return; host.innerHTML='';
-  (State.matCollected||[]).forEach(it=>{ const d=document.createElement('div'); d.className='mc-item'; d.title=(it.title||'素材にする')+' — クリックで素材化して塗る';
+  (State.matCollected||[]).forEach(it=>{ const d=document.createElement('div'); d.className='mc-item'; d.title=(it.title||'素材にする')+' — クリックして範囲を選ぶ';
     const img=document.createElement('img'); img.src=it.canvas.toDataURL('image/jpeg',0.85); d.appendChild(img);
-    on(d,'click',()=>applyCollectedMaterial(it));
+    on(d,'click',()=>openMaterialCrop(it));
     if(it.link){ const a=document.createElement('a'); a.className='mc-buy'; a.href=it.link; a.target='_blank'; a.rel='noopener'; a.textContent='商品'; on(a,'click',ev=>ev.stopPropagation()); d.appendChild(a); }
     host.appendChild(d); });
 }
-function applyCollectedMaterial(it){
-  const key=addExtractedMaterial(it.canvas, it.title||'収集素材'); // 中央をシームレスタイル化して素材登録
-  const a=activeSurface();
-  if(a){ pushHistory(); a.material=key; markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('収集した素材を表面に塗りました'); }
-  else { toast('素材一覧に追加しました。表面を追加/選択すると塗れます'); }
+/* 中央正方形の 肌(人物)/白(文字・背景) 割合。低いほど素材向き。 */
+function matCandJunk(cv){ const N=40, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d',{willReadFrequently:true});
+  const w=cv.width,h=cv.height,m=Math.min(w,h); x.drawImage(cv,(w-m)/2,(h-m)/2,m,m,0,0,N,N);
+  const d=x.getImageData(0,0,N,N).data, tot=N*N; let white=0,skin=0;
+  for(let i=0;i<d.length;i+=4){ const r=d[i],g=d[i+1],b=d[i+2]; if(r>235&&g>235&&b>235) white++;
+    const mn=Math.min(r,g,b); if(r>95&&g>40&&b>20&&r>g&&r>b&&(r-mn)>15&&Math.abs(r-g)>15) skin++; }
+  return {white:white/tot, skin:skin/tot};
+}
+/* 収集画像から「素材にする範囲」を四角ドラッグで選択 → シームレス素材化 → 表面へ適用。 */
+function openMaterialCrop(it){
+  const cv=it.canvas, iw=cv.width, ih=cv.height;
+  const maxW=Math.min(560,(window.innerWidth||600)-40), maxH=(window.innerHeight||700)-190;
+  const scale=Math.min(maxW/iw, maxH/ih, 1), dw=Math.max(1,Math.round(iw*scale)), dh=Math.max(1,Math.round(ih*scale));
+  const ov=document.createElement('div'); ov.className='mc-crop-ov';
+  ov.innerHTML='<div class="mc-crop-box"><div class="mc-crop-head"><span>素材にする範囲をドラッグで選択（床/壁の平らな部分）</span><button class="btn" id="mcX" style="padding:4px 10px">✕</button></div>'
+    +'<div class="mc-crop-stage" style="width:'+dw+'px;height:'+dh+'px"><img class="mc-crop-img" src="'+cv.toDataURL('image/jpeg',0.9)+'" style="width:'+dw+'px;height:'+dh+'px"><div class="mc-crop-sel" id="mcSel"></div></div>'
+    +'<div class="mc-crop-actions"><button class="btn dark" id="mcApply">この範囲を素材にして塗る</button></div></div>';
+  document.body.appendChild(ov);
+  let sz=Math.round(Math.min(dw,dh)*0.55), sx=Math.round((dw-sz)/2), sy=Math.round((dh-sz)/2);
+  const sel=ov.querySelector('#mcSel'), stage=ov.querySelector('.mc-crop-stage');
+  function draw(){ sel.style.left=sx+'px'; sel.style.top=sy+'px'; sel.style.width=sz+'px'; sel.style.height=sz+'px'; }
+  draw();
+  function ptOf(e){ const r=stage.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+  let drag=null;
+  on(sel,'pointerdown',e=>{ e.preventDefault(); const p=ptOf(e), lx=p.x-sx, ly=p.y-sy;
+    drag=(lx>sz-22&&ly>sz-22)?{mode:'resize',px:p.x,py:p.y,s0:sz}:{mode:'move',px:p.x,py:p.y,sx0:sx,sy0:sy};
+    try{ sel.setPointerCapture(e.pointerId); }catch(_){}});
+  on(sel,'pointermove',e=>{ if(!drag) return; const p=ptOf(e);
+    if(drag.mode==='move'){ sx=clamp(drag.sx0+(p.x-drag.px),0,dw-sz); sy=clamp(drag.sy0+(p.y-drag.py),0,dh-sz); }
+    else { const dd=Math.max(p.x-drag.px, p.y-drag.py); sz=clamp(drag.s0+dd, 36, Math.min(dw-sx,dh-sy)); }
+    draw(); });
+  on(sel,'pointerup',()=>{ drag=null; });
+  const close=()=>ov.remove();
+  on(ov.querySelector('#mcX'),'click',close);
+  on(ov,'click',e=>{ if(e.target===ov) close(); });
+  on(ov.querySelector('#mcApply'),'click',()=>{
+    const rx=Math.round(sx/scale), ry=Math.round(sy/scale), rs=Math.max(8,Math.round(sz/scale));
+    const crop=document.createElement('canvas'); crop.width=crop.height=rs; crop.getContext('2d').drawImage(cv, rx,ry,rs,rs, 0,0,rs,rs);
+    const key=addExtractedMaterial(crop, it.title||'収集素材');
+    const a=activeSurface();
+    if(a){ pushHistory(); a.material=key; markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('選んだ範囲を素材にして塗りました'); }
+    else { toast('素材一覧に追加しました。表面を選択すると塗れます'); }
+    close();
+  });
 }
 
 /* ---- save / load the furniture library as a JSON list ---- */
