@@ -157,7 +157,7 @@ async def _access_gate(request, call_next):
     if not _site.ACCESS_TOKEN:
         return await call_next(request)
     path = request.url.path
-    if path == "/health":
+    if path in ("/health", "/robots.txt"):
         return await call_next(request)
     key = request.query_params.get("key")
     if _site.access_ok(request.cookies.get(_site.ACCESS_COOKIE), key):
@@ -213,10 +213,43 @@ def imgproxy(url: str):
 
 
 @app.get("/track")
-def track(id: str = "", type: str = "", url: str = "", src: str = ""):
-    """購入/アフィリンクのクリック計測（自己クリックはクライアント側で除外）。"""
-    _site.log_track({"id": id, "type": type, "url": url, "src": src})
+def track(id: str = "", type: str = "", url: str = "", src: str = "", shop: str = ""):
+    """購入/アフィリンクのクリック計測（自己クリックはクライアント側で除外）。
+    shop（メーカー/店舗）はメーカー別のクリック分析に使う。"""
+    _site.log_track({"id": id, "type": type, "url": url, "src": src, "shop": shop})
     return Response(status_code=204)
+
+
+@app.get("/robots.txt")
+def robots():
+    """検索エンジン向けクロール許可＋sitemapの提示（私的版=ACCESS_TOKEN時は全拒否）。"""
+    return Response(_site.robots_txt(), media_type="text/plain; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/sitemap.xml")
+def sitemap():
+    """トップ・法務ページ・全LPを列挙する sitemap（SITE_BASE_URL 基準）。"""
+    return Response(_site.sitemap_xml(_app_lastmod()), media_type="application/xml; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/lp/{slug}", response_class=HTMLResponse)
+def landing(slug: str):
+    """検索意図別ランディングページ（サーバーレンダリング・GA4対応）。"""
+    page = _site.landing_html(slug)
+    if page is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
+
+
+def _app_lastmod():
+    """room-studio.html の更新日時（YYYY-MM-DD）。sitemap の <lastmod> に使う。"""
+    try:
+        return time.strftime("%Y-%m-%d", time.localtime(
+            os.path.getmtime(os.path.join(APP_DIR, "room-studio.html"))))
+    except Exception:
+        return None
 
 
 @app.get("/about", response_class=HTMLResponse)
@@ -264,7 +297,7 @@ def index():
         return HTMLResponse("<h1>room-studio.html が見つかりません</h1>"
                             "<p>server.py と同じフォルダに置いてください。</p>", status_code=404)
     with open(path, encoding="utf-8") as f:
-        return HTMLResponse(_site.inject_ga4(f.read()),
+        return HTMLResponse(_site.render_app_html(f.read()),
                             headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"})
 
 
