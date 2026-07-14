@@ -9,6 +9,7 @@ Operator details are read from env so they can be set per-deployment without cod
 """
 
 import os
+import re
 import json
 import time
 import hmac
@@ -215,6 +216,13 @@ LANDING_PAGES = [
             ("狭い部屋を広く見せるには何色がいいですか？", "壁や大きな家具を明るく淡いトーンでそろえ、差し色は少しだけにするのが基本です。実際の部屋の写真で色を変えて見比べると、自分の部屋に合うトーンが見つけやすくなります。"),
         ],
         "related": ["hitorigurashi-sofa", "hokuo-interior", "chintai-kabe-makeover"],
+        "hero": {"alt": "明るい小さめのワンルームのイメージ",
+                 "note": "画像が入ります：明るく片付いた小さめの無人ワンルーム（横長・人物やブランドの写り込みなし）"},
+        "ba": {"heading": "明るい配色で、広く見せる", "label_b": "Before", "label_a": "After",
+               "note_b": "編集前：ふつうの6畳ワンルーム", "note_a": "編集後：明るい配色でまとめた6畳",
+               "alt_b": "Room Studioで配色を変える前の6畳の部屋",
+               "alt_a": "Room Studioで明るい配色にまとめた後の6畳の部屋",
+               "cap": "Room Studioで壁・床・家具の色を明るくまとめた例（Before → After）"},
         "cta": "6畳の部屋づくりを試す",
     },
     {
@@ -234,6 +242,13 @@ LANDING_PAGES = [
             ("買う前に部屋に合うか確認できますか？", "はい。Room Studioなら、部屋の写真に気になるソファを置いて、色や素材を変えながら馴染むかを試せます。しっくりきたら商品リンクから詳細を確認できます。"),
         ],
         "related": ["6jo-hitorigurashi-layout", "hokuo-interior"],
+        "hero": {"alt": "ソファのある明るいリビングのイメージ",
+                 "note": "画像が入ります：ソファのある明るい無人のリビング（横長・人物やブランドの写り込みなし）"},
+        "ba": {"heading": "色ちがいを、同じ部屋で見比べる", "label_b": "色ちがい ①", "label_a": "色ちがい ②",
+               "note_b": "例①：ベージュのソファを置いた部屋", "note_a": "例②：グレーのソファを置いた部屋",
+               "alt_b": "Room Studioで部屋にベージュのソファを置いた例",
+               "alt_a": "Room Studioで部屋にグレーのソファを置いた例",
+               "cap": "同じ部屋にソファの色ちがいを置いて見比べた例"},
         "cta": "色違いのソファを部屋で見比べる",
     },
     {
@@ -252,6 +267,13 @@ LANDING_PAGES = [
             ("Room Studioで壁の色を変えると、実際に貼らずに確認できますか？", "はい。写真の中の壁だけを選んで色や素材を変えられるので、実際に壁紙を貼る前に「部屋に合う色か」「派手すぎないか」を確かめられます。あくまで画面上の仕上がりイメージなので、実際の製品の色や質感は商品ページでも確認してください。"),
         ],
         "related": ["6jo-hitorigurashi-layout", "hokuo-interior"],
+        "hero": {"alt": "白い壁の明るい部屋のイメージ",
+                 "note": "画像が入ります：白い壁の明るい無人の部屋（横長・人物やブランドの写り込みなし）"},
+        "ba": {"heading": "壁の色を、貼る前に見比べる", "label_b": "Before", "label_a": "After",
+               "note_b": "編集前：もとの白い壁", "note_a": "編集後：壁の色を変えたイメージ",
+               "alt_b": "Room Studioで壁の色を変える前の部屋",
+               "alt_a": "Room Studioで壁の色を変えた後の部屋",
+               "cap": "Room Studioで壁だけ色を変えた例（Before → After）"},
         "cta": "壁の色を試してみる",
     },
     {
@@ -270,6 +292,13 @@ LANDING_PAGES = [
             ("北欧風の家具はどうやって探せますか？", "Room Studioの収集機能で、テイスト欄に「北欧」と入れて家具を集められます。集めた家具を部屋の写真に置き、色や素材を調整しながら雰囲気を試せます。"),
         ],
         "related": ["hitorigurashi-sofa", "6jo-hitorigurashi-layout", "chintai-kabe-makeover"],
+        "hero": {"alt": "北欧テイストの明るいリビングのイメージ",
+                 "note": "画像が入ります：明るい木の質感の北欧テイストな無人リビング（横長・人物やブランドの写り込みなし）"},
+        "ba": {"heading": "北欧トーンにする前と、後", "label_b": "Before", "label_a": "After",
+               "note_b": "編集前：ふつうの部屋", "note_a": "編集後：床と壁を北欧トーンに",
+               "alt_b": "Room Studioで北欧トーンにする前の部屋",
+               "alt_a": "Room Studioで床と壁を北欧トーンに変えた部屋",
+               "cap": "Room Studioで床と壁を明るい北欧トーンに変えた例（Before → After）"},
         "cta": "北欧の部屋づくりを試す",
     },
 ]
@@ -282,6 +311,17 @@ def landing_slugs():
     return [p["slug"] for p in LANDING_PAGES]
 
 
+def _img_ph(name, alt, note, cls):
+    """An image slot that gracefully degrades to a labelled placeholder until the
+    file exists. `name` is a base filename under /lp-assets (extension optional).
+    The <img> hides the note on load and removes itself on 404 (no broken icon)."""
+    esc = _html.escape
+    return (f'<figure class="ph {cls}">'
+            f'<img src="/lp-assets/{esc(name)}" alt="{esc(alt)}" loading="lazy" '
+            "onload=\"this.parentNode.querySelector('.ph-note').hidden=true\" onerror=\"this.remove()\">"
+            f'<figcaption class="ph-note">{esc(note)}</figcaption></figure>')
+
+
 def landing_html(slug):
     """Render a single landing page, or None if the slug is unknown."""
     p = _LP_BY_SLUG.get(slug)
@@ -291,30 +331,48 @@ def landing_html(slug):
     url = f"{SITE_BASE_URL}/lp/{slug}"
     app_url = f"/?ref=lp-{slug}"
     ga4 = ga4_head_snippet()
-    sections = "\n".join(
-        f"<section><h2>{esc(h)}</h2><p>{esc(body)}</p></section>"
-        for h, body in p["sections"])
-    # FAQ block + FAQPage structured data (only when the LP defines questions).
+    # Body sections: the first is the intro, the rest sit after the before/after visual.
+    secs = p["sections"]
+    sec0 = "".join(
+        f'<section class="block"><h2>{esc(h)}</h2><p>{esc(b)}</p></section>' for h, b in secs[:1])
+    sec_rest = "\n".join(
+        f'<section class="block"><h2>{esc(h)}</h2><p>{esc(b)}</p></section>' for h, b in secs[1:])
+    # Hero photo (free-stock room, slot A) + before/after app captures (slot B) — both
+    # degrade to labelled placeholders until the operator drops files in /lp-assets.
+    hero = p.get("hero") or {}
+    hero_fig = _img_ph(f"{slug}-hero", hero.get("alt", ""), hero.get("note", ""), "hero-ph") if hero else ""
+    ba = p.get("ba")
+    ba_html = ""
+    if ba:
+        fb = _img_ph(f"{slug}-before", ba["alt_b"], ba["note_b"], "")
+        fa = _img_ph(f"{slug}-after", ba["alt_a"], ba["note_a"], "")
+        ba_html = (
+            f'<section class="ba"><h2>{esc(ba["heading"])}</h2>\n<div class="ba-grid">'
+            f'<div class="ba-item before">{fb}<span class="ba-label">{esc(ba["label_b"])}</span></div>'
+            f'<div class="ba-item after">{fa}<span class="ba-label">{esc(ba["label_a"])}</span></div>'
+            f'</div>\n<p class="ba-cap">{esc(ba["cap"])}</p></section>')
+    # FAQ block (styled as cards) + FAQPage structured data (unchanged content).
     faq = p.get("faq") or []
     faq_html = faq_jsonld = ""
     if faq:
         items = "\n".join(
-            f'<section class="faq"><h3>{esc(q)}</h3><p>{esc(a)}</p></section>'
-            for q, a in faq)
-        faq_html = f'<h2 class="faq-h">よくある質問</h2>\n{items}'
+            f'<div class="faq"><h3>{esc(q)}</h3><p>{esc(a)}</p></div>' for q, a in faq)
+        faq_html = f'<section class="faqwrap"><h2>よくある質問</h2>\n{items}</section>'
         faq_jsonld = '<script type="application/ld+json">' + json.dumps({
             "@context": "https://schema.org", "@type": "FAQPage",
             "mainEntity": [
                 {"@type": "Question", "name": q,
                  "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faq],
         }, ensure_ascii=False) + "</script>"
-    # Internal links to related LPs (anchor text = each target's H1).
+    # Internal links to related LPs (anchor text = each target's H1), as cards.
     related = [s for s in (p.get("related") or []) if s in _LP_BY_SLUG]
     rel_html = ""
     if related:
-        links = "\n".join(
-            f'<li><a href="/lp/{s}">{esc(_LP_BY_SLUG[s]["h1"])}</a></li>' for s in related)
-        rel_html = f'<section class="related"><h2>関連ページ</h2>\n<ul>\n{links}\n</ul></section>'
+        cards = "\n".join(
+            f'<a class="rel-card" href="/lp/{s}">{esc(_LP_BY_SLUG[s]["h1"])} <span class="arw">→</span></a>'
+            for s in related)
+        rel_html = f'<section class="relwrap"><h2>関連ページ</h2>\n<div class="rel-grid">\n{cards}\n</div></section>'
+    cta = esc(p["cta"])
     jsonld = json.dumps({
         "@context": "https://schema.org", "@type": "WebPage",
         "name": p["title"], "description": p["desc"], "url": url, "inLanguage": "ja",
@@ -334,35 +392,104 @@ def landing_html(slug):
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">{jsonld}</script>{faq_jsonld}{ga4}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  body{{margin:0;background:#FBFAF8;color:#2A2824;font-family:"Zen Kaku Gothic New",system-ui,sans-serif;line-height:1.8}}
-  .wrap{{max-width:760px;margin:0 auto;padding:40px 20px 72px}}
-  a{{color:#3B6FE0}}
-  h1{{font-size:24px;margin:0 0 10px;line-height:1.4}}
-  .lead{{font-size:15px;color:#57534c;margin:0 0 8px}}
-  .pr{{font-size:12px;color:#7C776E;margin:0 0 28px}}
-  section{{border-top:1px solid rgba(0,0,0,.1);padding:20px 0}}
-  h2{{font-size:16px;margin:0 0 8px}}
-  h3{{font-size:14.5px;margin:0 0 6px;font-weight:700}}
-  p{{margin:0;font-size:14px;color:#3f3b36}}
-  .faq-h{{margin-top:8px}}
-  .faq{{padding:16px 0}}
-  .related{{border-top:1px solid rgba(0,0,0,.1);padding-top:18px}}
-  .related ul{{margin:8px 0 0;padding-left:1.1em}}
-  .related li{{font-size:14px;margin:5px 0}}
-  .cta{{display:block;text-align:center;margin:28px 0 8px;padding:15px 20px;background:#2A2824;color:#FBFAF8;
-        text-decoration:none;border-radius:10px;font-weight:700;font-size:15px}}
-  nav{{margin-top:32px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap;color:#7C776E}}
-</style></head><body><div class="wrap">
+  :root{{--bg:#FBF9F6;--panel:#F3EEE8;--text:#3A2E2A;--muted:#6B615C;--acc:#B85042;--acc-h:#8F3D32;--acc2:#6E8E7D;--line:#E5DDD4}}
+  *{{box-sizing:border-box}}
+  body{{margin:0;background:var(--bg);color:var(--text);font-family:"Zen Kaku Gothic New",system-ui,sans-serif;line-height:1.85;-webkit-font-smoothing:antialiased}}
+  .wrap{{max-width:860px;margin:0 auto;padding:0 20px}}
+  a{{color:var(--acc)}}
+  h1,h2{{font-family:"Zen Old Mincho","Zen Kaku Gothic New",serif;letter-spacing:.02em}}
+  .hero{{padding:76px 0 8px;text-align:center}}
+  .hero h1{{font-size:30px;font-weight:700;line-height:1.55;margin:0 0 18px}}
+  .lead{{font-size:16px;color:var(--muted);max-width:620px;margin:0 auto 26px;line-height:1.95}}
+  .cta{{display:inline-block;background:var(--acc);color:#fff;text-decoration:none;padding:15px 34px;border-radius:10px;font-weight:700;font-size:15.5px;box-shadow:0 2px 12px rgba(0,0,0,.06);transition:background .2s}}
+  .cta:hover{{background:var(--acc-h)}}
+  .hero-media{{margin:44px 0 0}}
+  .ph{{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;place-items:center}}
+  .ph.hero-ph{{aspect-ratio:16/9}}
+  .ph img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
+  .ph-note{{color:var(--muted);font-size:12.5px;line-height:1.7;padding:18px 16px;text-align:center;max-width:82%}}
+  section.block{{padding:56px 0;border-top:1px solid var(--line)}}
+  .block h2,.ba h2,.faqwrap>h2,.relwrap>h2{{font-size:21px;font-weight:700;line-height:1.6;margin:0 0 16px}}
+  .block p{{font-size:15px;color:#4a3f3a;margin:0}}
+  .ba{{padding:56px 0;border-top:1px solid var(--line)}}
+  .ba h2{{text-align:center;margin-bottom:22px}}
+  .ba-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+  .ba-item .ph{{aspect-ratio:4/3}}
+  .ba-label{{display:inline-block;margin:10px 0 0;font-size:12px;font-weight:700;color:#fff;background:var(--acc2);padding:3px 12px;border-radius:999px}}
+  .ba-item.after .ba-label{{background:var(--acc)}}
+  .ba-cap{{text-align:center;color:var(--muted);font-size:13px;margin:20px 0 0}}
+  .faqwrap{{padding:56px 0;border-top:1px solid var(--line)}}
+  .faqwrap>h2{{text-align:center}}
+  .faq{{border:1px solid var(--line);border-radius:10px;background:#fff;padding:18px 20px;margin:0 0 12px}}
+  .faq h3{{font-family:"Zen Kaku Gothic New",sans-serif;font-size:15px;font-weight:700;margin:0 0 8px}}
+  .faq p{{font-size:14px;color:#4a3f3a;margin:0}}
+  .relwrap{{padding:56px 0;border-top:1px solid var(--line)}}
+  .relwrap>h2{{text-align:center;font-size:19px}}
+  .rel-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}}
+  .rel-card{{display:block;border:1px solid var(--line);border-radius:10px;background:#fff;padding:18px;text-decoration:none;color:var(--text);font-weight:700;font-size:14.5px;line-height:1.6;transition:border-color .2s,box-shadow .2s}}
+  .rel-card:hover{{border-color:var(--acc2);box-shadow:0 2px 12px rgba(0,0,0,.06)}}
+  .arw{{color:var(--acc2)}}
+  .foot{{padding:66px 0 24px;text-align:center;border-top:1px solid var(--line)}}
+  .foot h2{{font-size:20px;margin:0 0 22px}}
+  .pr{{font-size:11.5px;color:var(--muted);margin:30px auto 0;max-width:640px;line-height:1.7}}
+  nav.legal{{margin-top:16px;font-size:12px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center}}
+  nav.legal a{{color:var(--muted)}}
+  a:focus-visible,.cta:focus-visible{{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}}
+  @media (prefers-reduced-motion:reduce){{*{{transition:none!important;scroll-behavior:auto!important}}}}
+  @media (max-width:640px){{
+    .hero{{padding:48px 0 4px}} .hero h1{{font-size:24px}} .lead{{font-size:15px}}
+    section.block,.ba,.faqwrap,.relwrap{{padding:40px 0}}
+    .ba-grid{{grid-template-columns:1fr;gap:22px}} .foot{{padding:48px 0 24px}}
+  }}
+</style></head><body>
+<header class="hero"><div class="wrap">
 <h1>{esc(p['h1'])}</h1>
 <p class="lead">{esc(p['lead'])}</p>
-<p class="pr">{esc(_PR_LINE)}</p>
-{sections}
+<a class="cta" href="{esc(app_url)}">{cta} →</a>
+<div class="hero-media">{hero_fig}</div>
+</div></header>
+<main class="wrap">
+{sec0}
+{ba_html}
+{sec_rest}
 {faq_html}
-<a class="cta" href="{esc(app_url)}">{esc(p['cta'])} →</a>
 {rel_html}
-<nav><a href="/">アプリを開く</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
-</div></body></html>"""
+<section class="foot">
+<h2>あなたの部屋で、試してみませんか？</h2>
+<a class="cta" href="{esc(app_url)}">{cta} →</a>
+<p class="pr">{esc(_PR_LINE)}</p>
+<nav class="legal"><a href="/">アプリを開く</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
+</section>
+</main>
+</body></html>"""
+
+
+# ---- landing-page image assets (/lp-assets/<name>) ---------------------------
+_LP_ASSET_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".png": "image/png", ".avif": "image/avif"}
+
+
+def lp_asset(assets_dir, name):
+    """Resolve a landing-page image under assets_dir by (base) name.
+    Returns (bytes, content_type) or None. Path-safe: only a bare filename is
+    accepted; a name without extension matches any supported image type."""
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name or ""):
+        return None
+    ext = os.path.splitext(name)[1].lower()
+    names = [name] if ext in _LP_ASSET_CT else [name + e for e in _LP_ASSET_CT]
+    for fn in names:
+        ct = _LP_ASSET_CT.get(os.path.splitext(fn)[1].lower())
+        if not ct:
+            continue
+        path = os.path.join(assets_dir, fn)
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                return f.read(), ct
+    return None
 
 
 # ---- robots.txt / sitemap.xml -------------------------------------------------

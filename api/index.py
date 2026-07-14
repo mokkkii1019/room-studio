@@ -120,6 +120,16 @@ def landing(slug: str):
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 
 
+@app.get("/lp-assets/{name}")
+def lp_asset(name: str):
+    # Landing-page images (hero photos / before-after captures) dropped in lp-assets/.
+    res = _site.lp_asset(os.path.join(ROOT, "lp-assets"), name)
+    if res is None:
+        raise HTTPException(status_code=404, detail="not found")
+    data, ctype = res
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/about", response_class=HTMLResponse)
 def about():
     return HTMLResponse(_site.legal_html("about"))
