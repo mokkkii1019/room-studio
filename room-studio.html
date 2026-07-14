@@ -371,8 +371,14 @@
   .mat-collect-grid .mc-item{position:relative; aspect-ratio:1; border:1px solid var(--line); border-radius:8px; overflow:hidden; cursor:pointer; background:var(--panel-2)}
   .mat-collect-grid .mc-item img{width:100%; height:100%; object-fit:cover; display:block}
   .mat-collect-grid .mc-item:hover{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak)}
-  .mat-collect-grid .mc-buy{position:absolute; right:2px; bottom:2px; background:rgba(0,0,0,.6); color:#fff; font-size:9px; padding:1px 5px; border-radius:4px; text-decoration:none}
+  .mat-collect-grid .mc-buy{position:absolute; right:2px; bottom:2px; z-index:3; background:rgba(0,0,0,.6); color:#fff; font-size:9px; padding:1px 5px; border-radius:4px; text-decoration:none}
   .mat-collect-grid .mc-buy:hover{background:rgba(0,0,0,.8)}
+  /* クリックすると範囲選択できることを予め伝える表示 */
+  .mat-collect-grid .mc-corner{position:absolute; top:3px; left:3px; z-index:2; color:#fff; opacity:.92; filter:drop-shadow(0 1px 2px rgba(0,0,0,.75)); pointer-events:none; line-height:0}
+  .mat-collect-grid .mc-pick{position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    background:rgba(0,0,0,.42); color:#fff; font-size:9.5px; font-weight:700; opacity:0; transition:opacity .12s; pointer-events:none; text-shadow:0 1px 2px rgba(0,0,0,.7)}
+  .mat-collect-grid .mc-item:hover .mc-pick{opacity:1}
+  .mat-collect-grid .mc-item:hover .mc-corner{opacity:0}
   /* 収集画像から素材にする範囲を選ぶオーバーレイ */
   .mc-crop-ov{position:fixed; inset:0; z-index:9998; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px}
   .mc-crop-box{background:var(--panel); border-radius:12px; overflow:hidden; max-width:600px; box-shadow:var(--shadow)}
@@ -669,6 +675,10 @@
                 <span class="lbl">壁紙・床を収集</span>
               </button>
               <div class="engine" id="matCollectStatus" style="display:none"></div>
+              <p id="matCollectHint" style="display:none;align-items:center;gap:5px;margin:8px 0 2px;font-size:11.5px;font-weight:700;color:var(--accent-ink)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12a3 3 0 0 0 3 3h12M3 6h12a3 3 0 0 1 3 3v12"/></svg>
+                画像をクリック → 素材にする範囲を選べます
+              </p>
               <div class="mat-collect-grid" id="matCollectGrid" style="margin-top:8px"></div>
               <p id="matCollectCredit" style="display:none;margin:8px 0 0;font-size:10.5px;color:var(--faint);line-height:1.5">収集画像は各商品ページの写真です（商品情報提供：楽天ウェブサービス）。人物・文字が主体の画像は自動で除外します。画像をクリックし、素材にしたい平らな部分（床/壁）を四角で選ぶと、タイル化して選択中の表面に塗ります。</p>
             </div>
@@ -2592,9 +2602,13 @@ async function doCollectMaterial(){
   }catch(e){ console.error('mat collect failed',e); setMatCollectStatus(e.message||'収集に失敗しました（サーバー/ネットワークを確認）','err'); }
   finally{ $('matCollectBtn').disabled=false; }
 }
+const _CROP_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12a3 3 0 0 0 3 3h12M3 6h12a3 3 0 0 1 3 3v12"/></svg>';
 function renderMatCollected(){ const host=$('matCollectGrid'); if(!host) return; host.innerHTML='';
-  (State.matCollected||[]).forEach(it=>{ const d=document.createElement('div'); d.className='mc-item'; d.title=(it.title||'素材にする')+' — クリックして範囲を選ぶ';
+  const list=State.matCollected||[]; const hint=$('matCollectHint'); if(hint) hint.style.display=list.length? 'flex':'none';
+  list.forEach(it=>{ const d=document.createElement('div'); d.className='mc-item'; d.title=(it.title||'素材にする')+' — クリックして範囲を選ぶ';
     const img=document.createElement('img'); img.src=it.canvas.toDataURL('image/jpeg',0.85); d.appendChild(img);
+    const corner=document.createElement('div'); corner.className='mc-corner'; corner.style.width='13px'; corner.style.height='13px'; corner.innerHTML=_CROP_SVG; d.appendChild(corner);
+    const pick=document.createElement('div'); pick.className='mc-pick'; pick.innerHTML='<span style="width:16px;height:16px">'+_CROP_SVG+'</span><span>範囲を選ぶ</span>'; d.appendChild(pick);
     on(d,'click',()=>openMaterialCrop(it));
     if(it.link){ const a=document.createElement('a'); a.className='mc-buy'; a.href=it.link; a.target='_blank'; a.rel='noopener'; a.textContent='商品'; on(a,'click',ev=>ev.stopPropagation()); d.appendChild(a); }
     host.appendChild(d); });
