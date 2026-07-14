@@ -190,7 +190,8 @@ def legal_html(kind):
 # Landing pages (search-intent SEO). Server-rendered, self-contained, GA4-aware.
 #
 # All landing pages are defined in ONE place (LANDING_PAGES) so sitemap_xml()
-# picks them up automatically. Each section is (heading, body) with real copy.
+# picks them up automatically. Each dict: sections=[(heading, body)] real copy,
+# faq=[(q, a)] (→ FAQPage JSON-LD), related=[slug] (→ internal links, anchor=H1).
 # Keep copy honest: general interior guidance + the app's real features; avoid
 # fabricated statistics or hard product claims (hedge where it depends).
 # The CTA links to the app at /?ref=lp-<slug> (attribution via GA4 page_location;
@@ -206,9 +207,14 @@ LANDING_PAGES = [
         "lead": "6畳ワンルームは、家具や壁の色みで「広く見えるか」が大きく変わります。Room Studioなら、部屋の写真に家具を置いて、壁や床の色まで変えながら、すっきり見えるバランスを先に試せます。",
         "sections": [
             ("6畳を広く見せる色の使い方", "限られた6畳を広く見せるコツは、色にあります。壁や大きな家具を明るめ・淡めの色でそろえると圧迫感が出にくく、部屋が広く感じられます。逆に濃い色や色数が多いとごちゃつきがち。まずは「ベースは明るい色、差し色は少しだけ」を意識すると、6畳でもすっきりまとまります。"),
-            ("写真に家具を置いて、配置と色を試す", "Room Studioは、あなたの部屋の写真に家具を置いて、大きさや向きを調整しながらレイアウトを試せます。さらに置いた家具の色も変えられるので、「この位置にこの色を置いたら広く見えるか」を、実際の部屋で確かめられます。"),
-            ("壁・床の色でも印象を変える", "家具だけでなく、壁や床の色を変えると部屋全体の印象は大きく変わります。床を明るい木目にする、壁を淡いトーンにする——そんな「もし変えたら」を写真の上で試せるので、模様替えの方向性を決めやすくなります。"),
+            ("写真に家具を置いて、配置と色を試す", "Room Studioは、あなたの部屋の写真に家具を置いて、大きさや向きを調整しながらレイアウトを試せます。さらに置いた家具の色も変えられるので、「この位置にこの色を置いたら広く見えるか」を、実際の部屋で確かめられます。これから買う家具だけでなく、いま使っているテレビや収納を写真に撮って背景を切り抜けば、それも部屋に置いて模様替え後の6畳を具体的にイメージできます。"),
+            ("壁・床の色や雑貨でも印象を変える", "家具だけでなく、壁や床の色を変えると部屋全体の印象は大きく変わります。床を明るい木目にする、壁を淡いトーンにする——そんな「もし変えたら」を写真の上で試せます。ソファやテーブルだけでなく、ラグやカーテン、フロアランプといった雑貨の色みも6畳の見え方を左右するので、大きな家具は淡めに、ラグやクッションで差し色を少し、といった調整もまとめて確かめられます。"),
         ],
+        "faq": [
+            ("6畳のワンルームでも家具は置けますか？", "置き方しだいで十分に暮らせます。大きな家具は壁沿いにまとめ、色を明るめでそろえると圧迫感が出にくくなります。Room Studioなら、置いてみてから広く見えるかを写真で確かめられます。"),
+            ("狭い部屋を広く見せるには何色がいいですか？", "壁や大きな家具を明るく淡いトーンでそろえ、差し色は少しだけにするのが基本です。実際の部屋の写真で色を変えて見比べると、自分の部屋に合うトーンが見つけやすくなります。"),
+        ],
+        "related": ["hitorigurashi-sofa", "hokuo-interior", "chintai-kabe-makeover"],
         "cta": "6畳の部屋づくりを試す",
     },
     {
@@ -219,9 +225,15 @@ LANDING_PAGES = [
         "lead": "ソファは部屋のなかでも存在感が大きい家具。だからこそ、色や素材が部屋に合っていないと、せっかく選んでも浮いて見えてしまいます。Room Studioなら、自分の部屋の写真に気になるソファを置いて、色や素材を変えながら「部屋に馴染むか」を先に確かめられます。",
         "sections": [
             ("一人暮らしのソファは「色と雰囲気」で決まる", "ソファは面積が大きいぶん、色や素材で部屋全体の印象がぐっと変わります。ナチュラルにまとめたいなら明るいファブリック、引き締めたいならダークカラーやレザー調、と「どんな雰囲気の部屋にしたいか」から考えると色を絞りやすくなります。サイズは置ける範囲で選べば大丈夫。まずは色と質感からイメージを固めましょう。"),
-            ("部屋の写真で、色・素材を変えて試す", "「ベージュとグレー、どっちが部屋に合う？」——頭の中で迷うより、実際の部屋で見比べるのが一番です。Room Studioは、あなたの部屋の写真に置いたソファの色や素材をその場で変えられるので、気になる色をいくつも並べて確かめられます。"),
-            ("床・壁・カーテンと合わせて、全体で決める", "ソファ単体では良く見えても、部屋に置くと意外と浮くことがあります。Room Studioなら床や壁の色も一緒に変えられるので、カーテンやラグを含めた「部屋全体のトーン」で判断できます。しっくりくる組み合わせが見つかったら、商品リンクからそのまま詳細をチェックできます。"),
+            ("部屋の写真で、色・素材を変えて試す", "「ベージュとグレー、どっちが部屋に合う？」——頭の中で迷うより、実際の部屋で見比べるのが一番です。Room Studioは、あなたの部屋の写真に置いたソファの色や素材をその場で変えられるので、気になる色をいくつも並べて確かめられます。いま使っているテレビ台やローテーブルを写真に撮って背景を切り抜き、一緒に並べれば、ソファを買い替えた後の部屋を具体的に見られます。"),
+            ("床・壁・カーテンや小物と合わせて、全体で決める", "ソファ単体では良く見えても、部屋に置くと意外と浮くことがあります。Room Studioなら床や壁の色も一緒に変えられるので、カーテンやラグを含めた「部屋全体のトーン」で判断できます。ソファに合わせてラグやクッション、フロアランプの色をそろえるとまとまりが出るので、こうした小物も一緒に置いて見比べましょう。しっくりくる組み合わせが見つかったら、商品リンクからそのまま詳細をチェックできます。"),
         ],
+        "faq": [
+            ("一人暮らしにはどんなソファが人気ですか？", "省スペースな2人掛けやコンパクトソファなど、部屋を広く使える設計のものがよく選ばれます。大きさよりまず、部屋に合う色や質感から絞るのがおすすめです。"),
+            ("ソファの色は何色が部屋に合わせやすいですか？", "ベージュやグレーなどのニュートラルカラーは、床やカーテンと合わせやすく失敗しにくい色です。実際の部屋の写真で色を変えて見比べると安心して選べます。"),
+            ("買う前に部屋に合うか確認できますか？", "はい。Room Studioなら、部屋の写真に気になるソファを置いて、色や素材を変えながら馴染むかを試せます。しっくりきたら商品リンクから詳細を確認できます。"),
+        ],
+        "related": ["6jo-hitorigurashi-layout", "hokuo-interior"],
         "cta": "色違いのソファを部屋で見比べる",
     },
     {
@@ -232,9 +244,14 @@ LANDING_PAGES = [
         "lead": "貼ってはがせる壁紙やウォールシート。気になるけれど、「部屋に合うか」「思ったより派手にならないか」は貼ってみないと分からない…。Room Studioなら、部屋の写真の壁だけ色や素材を変えて、仕上がりの雰囲気を先に確かめられます。",
         "sections": [
             ("賃貸でも楽しめる壁の模様替え", "賃貸では原状回復が前提ですが、貼ってはがせるタイプの壁紙やシートなど、退去時に戻しやすい方法もいろいろあります（対応可否や仕上がりは製品によって異なるので、購入前に商品ページの説明を確認しましょう）。まずは「どんな色・雰囲気にしたいか」を決めるのが、失敗しない第一歩です。"),
-            ("壁だけ色・素材を変えてみる", "Room Studioは、写真のなかの壁だけを選んで色や素材を変えられます。一面だけアクセントカラーにする、木目や漆喰風の質感を試す——といった「貼ったらどう見えるか」を、部屋の実際の光や家具ごと確認できます。"),
-            ("家具やカーテンと合うかを見比べる", "壁の色は、家具やカーテンとの組み合わせで印象が変わります。Room Studioの比較機能を使えば、変える前と後を並べて見比べられるので、「本当にこの色でいいか」を落ち着いて判断できます。"),
+            ("壁だけ色・素材を変えてみる", "Room Studioは、写真のなかの壁だけを選んで色や素材を変えられます。一面だけアクセントカラーにする、木目や漆喰風の質感を試す——といった「貼ったらどう見えるか」を、部屋の実際の光や家具ごと確認できます。壁の色を変えたうえで、いま置いている家具を写真で一緒に並べれば、家具と新しい壁色の相性も先に確認できます。"),
+            ("家具やカーテンと合うかを見比べる", "壁の色は、家具やカーテンとの組み合わせで印象が変わります。Room Studioの比較機能を使えば、変える前と後を並べて見比べられるので、壁に合わせてカーテンやアートの色みまで含めて、「本当にこの色でいいか」を落ち着いて判断できます。"),
         ],
+        "faq": [
+            ("貼ってはがせる壁紙なら、賃貸でも必ず元に戻せますか？", "「はがせる」とされる壁紙でも、貼る期間や下地の状態によっては、はがす際に既存の壁紙を傷めたり、のり跡が残ったりすることがあります。原状回復できるかは製品や物件によって異なるため、購入前に商品説明を確認し、心配な場合は目立たない場所で試すのがおすすめです。賃貸借契約書の原状回復の取り決めも確認しておくと安心です。"),
+            ("Room Studioで壁の色を変えると、実際に貼らずに確認できますか？", "はい。写真の中の壁だけを選んで色や素材を変えられるので、実際に壁紙を貼る前に「部屋に合う色か」「派手すぎないか」を確かめられます。あくまで画面上の仕上がりイメージなので、実際の製品の色や質感は商品ページでも確認してください。"),
+        ],
+        "related": ["6jo-hitorigurashi-layout", "hokuo-interior"],
         "cta": "壁の色を試してみる",
     },
     {
@@ -245,9 +262,14 @@ LANDING_PAGES = [
         "lead": "明るい木の質感、白やグレーのベースに効かせる差し色。北欧テイストは「色と素材の組み合わせ」で決まります。Room Studioなら、部屋の写真で家具や床・壁の色を変えながら、北欧らしい雰囲気になるかを先に試せます。",
         "sections": [
             ("北欧インテリアは色と質感でつくる", "北欧テイストは、明るい木の質感、白やグレーのニュートラルカラー、そこに少しだけ差し色を効かせるのが定番です。派手さより「明るさと素材感」でまとめるのがポイント。まずは目指したいトーンを決めると、家具や色の選び方が定まってきます。"),
-            ("「北欧」で家具を集めて置いてみる", "Room Studioの収集機能で、テイスト欄に「北欧」と入れて家具を集められます。気になった家具を部屋の写真に置き、色や素材を調整しながら、自分の部屋が北欧の雰囲気になるかを試せます。"),
-            ("床・壁の色で世界観を仕上げる", "北欧らしさは、床や壁のトーンでぐっと近づきます。床を明るい木目に、壁を白やグレーに——写真の上で変えて、家具と合わせた全体の世界観を確かめましょう。しっくりきたら、商品リンクから家具の詳細もチェックできます。"),
+            ("「北欧」で家具を集めて置いてみる", "Room Studioの収集機能で、テイスト欄に「北欧」と入れて家具を集められます。気になった家具を部屋の写真に置き、色や素材を調整しながら、自分の部屋が北欧の雰囲気になるかを試せます。新しく買う家具だけでなく、いま持っている家具を写真に撮って置き、北欧テイストに馴染むかを試すこともできます。"),
+            ("床・壁の色や雑貨で世界観を仕上げる", "北欧らしさは、床や壁のトーンでぐっと近づきます。床を明るい木目に、壁を白やグレーに——写真の上で変えて、家具と合わせた全体の世界観を確かめましょう。観葉植物やアート、あたたかみのある照明を加えると北欧らしさがぐっと増すので、こうした雑貨も「北欧」のテイストで集めて部屋に合わせられます。しっくりきたら、商品リンクから家具の詳細もチェックできます。"),
         ],
+        "faq": [
+            ("北欧インテリアはどんな色でまとめればいいですか？", "白やグレーなどの明るいベースに、木の質感を合わせ、差し色を少しだけ効かせるのが定番です。実際の部屋の写真で床や壁の色を変えて、明るさと素材感を確かめると近づけやすくなります。"),
+            ("北欧風の家具はどうやって探せますか？", "Room Studioの収集機能で、テイスト欄に「北欧」と入れて家具を集められます。集めた家具を部屋の写真に置き、色や素材を調整しながら雰囲気を試せます。"),
+        ],
+        "related": ["hitorigurashi-sofa", "6jo-hitorigurashi-layout", "chintai-kabe-makeover"],
         "cta": "北欧の部屋づくりを試す",
     },
 ]
@@ -272,6 +294,27 @@ def landing_html(slug):
     sections = "\n".join(
         f"<section><h2>{esc(h)}</h2><p>{esc(body)}</p></section>"
         for h, body in p["sections"])
+    # FAQ block + FAQPage structured data (only when the LP defines questions).
+    faq = p.get("faq") or []
+    faq_html = faq_jsonld = ""
+    if faq:
+        items = "\n".join(
+            f'<section class="faq"><h3>{esc(q)}</h3><p>{esc(a)}</p></section>'
+            for q, a in faq)
+        faq_html = f'<h2 class="faq-h">よくある質問</h2>\n{items}'
+        faq_jsonld = '<script type="application/ld+json">' + json.dumps({
+            "@context": "https://schema.org", "@type": "FAQPage",
+            "mainEntity": [
+                {"@type": "Question", "name": q,
+                 "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faq],
+        }, ensure_ascii=False) + "</script>"
+    # Internal links to related LPs (anchor text = each target's H1).
+    related = [s for s in (p.get("related") or []) if s in _LP_BY_SLUG]
+    rel_html = ""
+    if related:
+        links = "\n".join(
+            f'<li><a href="/lp/{s}">{esc(_LP_BY_SLUG[s]["h1"])}</a></li>' for s in related)
+        rel_html = f'<section class="related"><h2>関連ページ</h2>\n<ul>\n{links}\n</ul></section>'
     jsonld = json.dumps({
         "@context": "https://schema.org", "@type": "WebPage",
         "name": p["title"], "description": p["desc"], "url": url, "inLanguage": "ja",
@@ -290,7 +333,7 @@ def landing_html(slug):
 <meta property="og:image" content="{esc(SITE_BASE_URL)}/og.png">
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{jsonld}</script>{ga4}
+<script type="application/ld+json">{jsonld}</script>{faq_jsonld}{ga4}
 <style>
   body{{margin:0;background:#FBFAF8;color:#2A2824;font-family:"Zen Kaku Gothic New",system-ui,sans-serif;line-height:1.8}}
   .wrap{{max-width:760px;margin:0 auto;padding:40px 20px 72px}}
@@ -300,7 +343,13 @@ def landing_html(slug):
   .pr{{font-size:12px;color:#7C776E;margin:0 0 28px}}
   section{{border-top:1px solid rgba(0,0,0,.1);padding:20px 0}}
   h2{{font-size:16px;margin:0 0 8px}}
+  h3{{font-size:14.5px;margin:0 0 6px;font-weight:700}}
   p{{margin:0;font-size:14px;color:#3f3b36}}
+  .faq-h{{margin-top:8px}}
+  .faq{{padding:16px 0}}
+  .related{{border-top:1px solid rgba(0,0,0,.1);padding-top:18px}}
+  .related ul{{margin:8px 0 0;padding-left:1.1em}}
+  .related li{{font-size:14px;margin:5px 0}}
   .cta{{display:block;text-align:center;margin:28px 0 8px;padding:15px 20px;background:#2A2824;color:#FBFAF8;
         text-decoration:none;border-radius:10px;font-weight:700;font-size:15px}}
   nav{{margin-top:32px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap;color:#7C776E}}
@@ -309,7 +358,9 @@ def landing_html(slug):
 <p class="lead">{esc(p['lead'])}</p>
 <p class="pr">{esc(_PR_LINE)}</p>
 {sections}
+{faq_html}
 <a class="cta" href="{esc(app_url)}">{esc(p['cta'])} →</a>
+{rel_html}
 <nav><a href="/">アプリを開く</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
 </div></body></html>"""
 
