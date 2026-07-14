@@ -6,6 +6,7 @@ shared stdlib core. The heavy LaMa /inpaint is NOT here (the browser falls back 
 PatchMatch on the hosted site). Local dev still uses server.py (LaMa included)."""
 import os
 import sys
+import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
@@ -25,7 +26,7 @@ async def _access_gate(request, call_next):
     if not _site.ACCESS_TOKEN:
         return await call_next(request)
     path = request.url.path
-    if path == "/health":  # health stays open for probes
+    if path in ("/health", "/robots.txt"):  # probes + crawler directives stay open
         return await call_next(request)
     key = request.query_params.get("key")
     if _site.access_ok(request.cookies.get(_site.ACCESS_COOKIE), key):
@@ -92,10 +93,31 @@ def imgproxy(url: str = ""):
 
 
 @app.get("/track")
-def track(id: str = "", type: str = "", url: str = "", src: str = ""):
+def track(id: str = "", type: str = "", url: str = "", src: str = "", shop: str = ""):
     # Purchase/affiliate click logging. Self-clicks are excluded client-side (localStorage opt-out).
-    _site.log_track({"id": id, "type": type, "url": url, "src": src})
+    # `shop` (maker/storefront) enables per-maker click analysis later.
+    _site.log_track({"id": id, "type": type, "url": url, "src": src, "shop": shop})
     return Response(status_code=204)
+
+
+@app.get("/robots.txt")
+def robots():
+    return Response(_site.robots_txt(), media_type="text/plain; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/sitemap.xml")
+def sitemap():
+    return Response(_site.sitemap_xml(_app_lastmod()), media_type="application/xml; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/lp/{slug}", response_class=HTMLResponse)
+def landing(slug: str):
+    page = _site.landing_html(slug)
+    if page is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/about", response_class=HTMLResponse)
@@ -140,8 +162,17 @@ def _html():
     global _HTML
     if _HTML is None:
         with open(os.path.join(ROOT, "room-studio.html"), encoding="utf-8") as f:
-            _HTML = _site.inject_ga4(f.read())
+            _HTML = _site.render_app_html(f.read())
     return _HTML
+
+
+def _app_lastmod():
+    """YYYY-MM-DD mtime of the app HTML, for sitemap <lastmod> (None on failure)."""
+    try:
+        return time.strftime("%Y-%m-%d", time.localtime(
+            os.path.getmtime(os.path.join(ROOT, "room-studio.html"))))
+    except Exception:  # noqa: BLE001
+        return None
 
 
 @app.get("/", response_class=HTMLResponse)

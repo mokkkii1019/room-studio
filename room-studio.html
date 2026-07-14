@@ -2258,12 +2258,12 @@ if(GA4_ID && !trackingOptedOut()){ try{ // GA4本体の読み込み（IDがあ�
   window.dataLayer=window.dataLayer||[]; window.gtag=function(){window.dataLayer.push(arguments);};
   gtag('js',new Date()); gtag('config',GA4_ID);
 }catch(e){} }
-function trackClick(id, type, url){
+function trackClick(id, type, url, shop){
   if(trackingOptedOut()) return; // 自己クリック等は除外
-  try{ const q=new URLSearchParams({id:id||'', type:type||'', url:url||'', src:'web'}); const u=(SERVER.url||'')+'/track?'+q.toString();
+  try{ const q=new URLSearchParams({id:id||'', type:type||'', url:url||'', shop:shop||'', src:'web'}); const u=(SERVER.url||'')+'/track?'+q.toString();
     if(window.fetch){ fetch(u,{method:'GET',keepalive:true,mode:'no-cors'}).catch(()=>{}); } else { new Image().src=u; }
   }catch(e){}
-  try{ if(GA4_ID && window.gtag) window.gtag('event','select_item',{item_id:id||'', link_type:type||'', link_url:url||''}); }catch(e){}
+  try{ if(GA4_ID && window.gtag) window.gtag('event','select_item',{item_id:id||'', link_type:type||'', link_url:url||'', shop:shop||''}); }catch(e){}
 }
 function makeFurniEl(it){
   const el=document.createElement('div'); el.className='furni-item';
@@ -2283,7 +2283,7 @@ function makeFurniEl(it){
   const SRC_LABEL={upload:'自分',rakuten:'楽天市場',ikea:'IKEA',rughaus:'RUGHAUS',kanademono:'KANADEMONO',bauhaus:'BAUHAUS',hay:'HAY',flymee:'FLYMEe'};
   const srcTxt = SRC_LABEL[it.source] || (it.source ? '収集' : '');
   if(srcTxt){ const sb=document.createElement('div'); sb.className='src-badge'+(it.source==='upload'?' up':''); sb.textContent=srcTxt; el.appendChild(sb); }
-  if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(it.itemCode||String(it.id), 'library:'+(it.source||''), it.link); }); buy.draggable=false; el.appendChild(buy); }
+  if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(it.itemCode||String(it.id), 'library:'+(it.source||''), it.link, it.shop); }); buy.draggable=false; el.appendChild(buy); }
   on(el,'click',()=>placeFromLib(it.id));
   on(el,'dragstart',ev=>{ ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
   return el;
@@ -2576,7 +2576,7 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
     row.appendChild(nm);
     if(buyUrl){ const buy=document.createElement('a'); buy.className='ic lbuy'; buy.href=buyUrl; buy.target='_blank'; buy.rel='noopener'; buy.draggable=false; buy.title='商品ページを開く';
       buy.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 3h7v7M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
-      on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(l.itemCode||String(l.id), 'layer:'+(l.source||''), buyUrl); }); row.appendChild(buy); }
+      on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(l.itemCode||String(l.id), 'layer:'+(l.source||''), buyUrl, l.shop); }); row.appendChild(buy); }
     const kind=document.createElement('span'); kind.className='kind'; kind.textContent= l.type==='surface' ? '表面' : ((l.category && l.category!=='upload' && CAT_LABELS[l.category]) ? CAT_LABELS[l.category] : '家具'); row.appendChild(kind);
     const eye=document.createElement('button'); eye.className='ic eye'+(l.visible?'':' off'); eye.title='表示/非表示'; eye.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayers(); render(); });

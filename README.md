@@ -106,6 +106,8 @@ python server.py   # → http://127.0.0.1:7865
    - `RAKUTEN_ACCESS_KEY`（アクセスキー）
    - `RAKUTEN_AFFILIATE_ID`（任意・購入リンクをアフィリエイト化）
    - `APP_MODE=public`・`COLLECT_PROVIDER=official`（**推奨・明示設定**。未設定でも既定が public/official なので同じ挙動。念のため明示しておくとクローラが絶対に有効化されない）
+   - `SITE_BASE_URL`（任意・独自ドメイン移行時に設定。例 `https://roomstudio.jp`。canonical/OGP/JSON-LD/sitemap のURL基準。**未設定なら現行 `https://room-studio-fawn.vercel.app` にフォールバック**）。詳細は `docs/DOMAIN_MIGRATION.md`。
+   - `GA4_ID`（任意・アクセス解析。例 `G-XXXXXXXXXX`。**本番はここVercelの環境変数に設定**。設定すると配信時に gtag.js を注入、未設定なら解析オフ）。詳細は `docs/MEASUREMENT.md`。
    - ※ `RAKUTEN_REFERER` は**不要**（サーバーがリクエスト元ドメインから自動生成）。
 4. **Deploy**。発行ドメイン（例 `room-studio-xxxx.vercel.app`）が出る。
 5. **楽天の「許可されたWebサイト」にそのドメインを追加**（`http(s)://` は付けない＝`room-studio-xxxx.vercel.app`）。新APIは Referer/Origin 一致が必須で、サーバーは**自身のドメインを自動送出**するため、ドメイン登録だけでOK（再デプロイ不要・反映は登録後すぐ）。
