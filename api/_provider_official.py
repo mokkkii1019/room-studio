@@ -74,6 +74,9 @@ TYPE_QUERY = {
     "clock": ("掛け時計 置き時計 ウォールクロック", None),
     "storage_box": ("収納ボックス 収納ケース 収納バスケット", INTERIOR_GENRE),
     "trash_can": ("ゴミ箱 ダストボックス くずかご", None),
+    # --- 表面素材（壁紙・床）: 収集画像をシームレス素材化して塗る ---
+    "wallpaper": ("壁紙 クロス", INTERIOR_GENRE),
+    "floor_tile": ("フロアタイル フローリング 床材", INTERIOR_GENRE),
 }
 
 

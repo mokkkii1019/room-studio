@@ -366,6 +366,13 @@
   .mk-add{display:block; width:100%; text-align:left; padding:7px 10px; border:1px dashed var(--accent-line,rgba(59,111,224,.35));
     border-radius:6px; background:var(--accent-weak); color:var(--accent-ink); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; margin-bottom:4px}
   .mk-add:hover{background:rgba(59,111,224,.18)}
+  /* 収集した壁紙・床のサムネイル（クリックで素材化して塗る） */
+  .mat-collect-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(62px,1fr)); gap:6px}
+  .mat-collect-grid .mc-item{position:relative; aspect-ratio:1; border:1px solid var(--line); border-radius:8px; overflow:hidden; cursor:pointer; background:var(--panel-2)}
+  .mat-collect-grid .mc-item img{width:100%; height:100%; object-fit:cover; display:block}
+  .mat-collect-grid .mc-item:hover{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak)}
+  .mat-collect-grid .mc-buy{position:absolute; right:2px; bottom:2px; background:rgba(0,0,0,.6); color:#fff; font-size:9px; padding:1px 5px; border-radius:4px; text-decoration:none}
+  .mat-collect-grid .mc-buy:hover{background:rgba(0,0,0,.8)}
 
   /* my-projects (favorites) drawer */
   .fav-drawer{position:fixed; inset:0; background:rgba(15,17,20,.5); z-index:2500; display:flex; justify-content:flex-end}
@@ -635,6 +642,25 @@
               <div id="matPerspBox" style="display:none">
                 <button class="btn" id="matPerspReset" style="width:100%;justify-content:center">四隅を選択範囲に合わせる</button>
               </div>
+            </div>
+            <div id="matCollectSection" style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+              <div class="ct-shop-head">壁紙・床をネットから収集して素材にする</div>
+              <label class="cf-row"><span class="cf-lbl">カテゴリ</span>
+                <select class="field" id="matCollectCat" style="margin:0">
+                  <option value="wallpaper">壁紙（クロス）</option>
+                  <option value="floor_tile">床（フロアタイル/フローリング）</option>
+                </select></label>
+              <label class="cf-row"><span class="cf-lbl">ジャンル（素材の種類）</span>
+                <select class="field" id="matCollectGenre" style="margin:0"></select></label>
+              <label class="cf-row"><span class="cf-lbl">色</span>
+                <select class="field" id="matCollectColor" style="margin:0"></select></label>
+              <button class="btn primary" id="matCollectBtn" style="width:100%;justify-content:center;margin-top:8px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
+                <span class="lbl">壁紙・床を収集</span>
+              </button>
+              <div class="engine" id="matCollectStatus" style="display:none"></div>
+              <div class="mat-collect-grid" id="matCollectGrid" style="margin-top:8px"></div>
+              <p id="matCollectCredit" style="display:none;margin:8px 0 0;font-size:10.5px;color:var(--faint);line-height:1.5">収集画像は各商品ページの写真です（商品情報提供：楽天ウェブサービス）。画像をクリックすると中央部分をタイル化して素材に取り込み、選択中の表面に塗ります。</p>
             </div>
             </div>
           </div>
@@ -2517,6 +2543,49 @@ async function doCollect(){
   finally{ $('collectBtn').disabled=false; }
 }
 
+/* ===== 壁紙・床の収集 → シームレス素材化 → 表面へ適用 ===== */
+const MAT_GENRES={
+  wallpaper:[['','指定なし'],['無地','無地・シンプル'],['木目','木目'],['レンガ','レンガ'],['コンクリート','コンクリート'],['大理石','大理石・石目'],['タイル','タイル'],['漆喰','漆喰・塗り壁'],['北欧','北欧・柄'],['ボタニカル','花柄・ボタニカル']],
+  floor_tile:[['','指定なし'],['フローリング','フローリング（木目）'],['フロアタイル','フロアタイル'],['クッションフロア','クッションフロア'],['大理石','大理石・石目'],['タイル','タイル'],['ヘリンボーン','ヘリンボーン'],['コンクリート','コンクリート'],['モルタル','モルタル']],
+};
+const MAT_COLORS=[['','指定なし'],['ホワイト','ホワイト'],['ベージュ','ベージュ'],['グレー','グレー'],['ライトブラウン','ライトブラウン'],['ブラウン','ブラウン'],['ダークブラウン','ダークブラウン'],['ブラック','ブラック'],['ネイビー','ネイビー'],['グリーン','グリーン'],['ブルー','ブルー']];
+function fillSelect(sel, pairs){ if(!sel) return; sel.innerHTML=''; for(const p of pairs){ const o=document.createElement('option'); o.value=p[0]; o.textContent=p[1]; sel.appendChild(o); } }
+function renderMatGenreOptions(){ const cat=($('matCollectCat')||{}).value||'wallpaper'; fillSelect($('matCollectGenre'), MAT_GENRES[cat]||MAT_GENRES.wallpaper); }
+function setMatCollectStatus(msg,kind){ const el=$('matCollectStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg||''; el.className='engine'+(kind==='ok'?' ok':(kind==='err'?' err':'')); }
+async function doCollectMaterial(){
+  if(!SERVER.available) await probeServer();
+  if(!SERVER.available){ setMatCollectStatus('収集サーバーに接続できません（ネット接続を確認）','err'); toast('収集サーバーに接続できません'); return; }
+  const cat=$('matCollectCat').value, genre=$('matCollectGenre').value, color=$('matCollectColor').value;
+  const taste=[genre,color].filter(Boolean).join(' ');  // ジャンル＋色をキーワードに
+  $('matCollectBtn').disabled=true; setMatCollectStatus('検索中…'); $('matCollectCredit').style.display='block';
+  try{
+    const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type:cat, taste, count:'18', source:'rakuten', provider:'official'}), {cache:'no-store'});
+    if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
+    const j=await r.json(); const items=j.items||[];
+    if(!items.length){ setMatCollectStatus('見つかりませんでした。ジャンル/色を変えてみてください','err'); return; }
+    State.matCollected=[]; let done=0;
+    await pool(items, 5, it=> new Promise(res=>{
+      loadImageURL(SERVER.url+(it.proxy||''), cv=>{ State.matCollected.push({canvas:downscaleCanvas(cv,700), title:it.title, link:it.link}); done++; setMatCollectStatus(`画像を読み込み中… ${done}/${items.length}`); res(); }, ()=>{ done++; res(); });
+    }));
+    renderMatCollected();
+    setMatCollectStatus(State.matCollected.length? `完了: ${State.matCollected.length}件。画像をクリックすると素材にして塗れます` : '画像を取得できませんでした','ok');
+  }catch(e){ console.error('mat collect failed',e); setMatCollectStatus(e.message||'収集に失敗しました（サーバー/ネットワークを確認）','err'); }
+  finally{ $('matCollectBtn').disabled=false; }
+}
+function renderMatCollected(){ const host=$('matCollectGrid'); if(!host) return; host.innerHTML='';
+  (State.matCollected||[]).forEach(it=>{ const d=document.createElement('div'); d.className='mc-item'; d.title=(it.title||'素材にする')+' — クリックで素材化して塗る';
+    const img=document.createElement('img'); img.src=it.canvas.toDataURL('image/jpeg',0.85); d.appendChild(img);
+    on(d,'click',()=>applyCollectedMaterial(it));
+    if(it.link){ const a=document.createElement('a'); a.className='mc-buy'; a.href=it.link; a.target='_blank'; a.rel='noopener'; a.textContent='商品'; on(a,'click',ev=>ev.stopPropagation()); d.appendChild(a); }
+    host.appendChild(d); });
+}
+function applyCollectedMaterial(it){
+  const key=addExtractedMaterial(it.canvas, it.title||'収集素材'); // 中央をシームレスタイル化して素材登録
+  const a=activeSurface();
+  if(a){ pushHistory(); a.material=key; markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); toast('収集した素材を表面に塗りました'); }
+  else { toast('素材一覧に追加しました。表面を追加/選択すると塗れます'); }
+}
+
 /* ---- save / load the furniture library as a JSON list ---- */
 async function exportLib(){ if(!State.furniLib.length){ toast('ライブラリが空です'); return; }
   const obj={ app:'room-studio-lib', version:1, items:State.furniLib.map(it=>({ name:it.name, src:canvasToPNG(it.srcCanvas), link:it.link||'', price:it.price||0, shop:it.shop||'', category:it.category||'upload' })) };
@@ -3169,6 +3238,11 @@ on($('fileMat'),'change',e=>{ const file=e.target.files[0]; if(!file) return; bu
         else { toast('素材を抽出しました（表面か家具を選択して適用）'); } }
     }catch(err){ console.error('extract material failed:',err); toast('素材の抽出に失敗しました'); } finally{ busy(false); } });
   e.target.value=''; });
+// 壁紙・床の収集（表面素材）
+on($('matCollectBtn'),'click',doCollectMaterial);
+on($('matCollectCat'),'change',renderMatGenreOptions);
+fillSelect($('matCollectColor'), MAT_COLORS);
+renderMatGenreOptions();
 
 // erase panel
 document.querySelectorAll('#eraseTools button').forEach(b=>on(b,'click',()=>setEraseTool(b.dataset.etool)));
