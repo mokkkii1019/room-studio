@@ -320,6 +320,114 @@ def _img(name, alt, cls):
             f'alt="{esc(alt)}" loading="lazy"></figure>')
 
 
+def _hero_svg(alt):
+    """A calm, clearly-illustrative interior scene as inline SVG (no external file).
+    Shown as the hero visual when no free-stock photo is present, so the page reads
+    as finished rather than empty and upgrades automatically once a real photo is
+    dropped into /lp-assets. Decorative only — it never poses as a real photograph
+    or a Room Studio edit (the before/after proof block stays photo-only)."""
+    label = _html.escape(alt or "部屋のインテリアのイメージイラスト")
+    shapes = (
+        '<rect width="1600" height="900" fill="#F5ECE2"/>'
+        '<circle cx="300" cy="252" r="152" fill="#F3E4CE" opacity=".55"/>'
+        '<rect y="694" width="1600" height="206" fill="#E9DBC9"/>'
+        '<rect y="690" width="1600" height="4" fill="#DDCDB8"/>'
+        # window (left)
+        '<rect x="196" y="150" width="330" height="330" rx="12" fill="#E9F0EB" stroke="#6E8E7D" stroke-width="11"/>'
+        '<path d="M361 156V474" stroke="#6E8E7D" stroke-width="8"/>'
+        '<path d="M202 315H520" stroke="#6E8E7D" stroke-width="8"/>'
+        '<circle cx="298" cy="252" r="52" fill="#ECC998"/>'
+        '<rect x="180" y="476" width="362" height="16" rx="7" fill="#D6C4AE"/>'
+        # plant (left, on floor)
+        '<path d="M118 694l14-96h64l14 96z" fill="#C89A78"/>'
+        '<ellipse cx="150" cy="600" rx="24" ry="58" fill="#6E8E7D" transform="rotate(-16 150 600)"/>'
+        '<ellipse cx="176" cy="596" rx="24" ry="58" fill="#84A090" transform="rotate(15 176 596)"/>'
+        '<ellipse cx="163" cy="580" rx="20" ry="50" fill="#93AC9C"/>'
+        # framed art (upper centre)
+        '<rect x="648" y="212" width="150" height="188" rx="8" fill="#F1E9DD" stroke="#C6B39F" stroke-width="9"/>'
+        '<path d="M666 372l34-52 26 30 30-42 20 64z" fill="#AFC1B4"/>'
+        '<circle cx="762" cy="252" r="14" fill="#E3B587"/>'
+        # floor lamp (right)
+        '<path d="M1340 360h72l-16-66h-40z" fill="#ECC998"/>'
+        '<rect x="1372" y="360" width="8" height="336" rx="4" fill="#6E8E7D"/>'
+        '<ellipse cx="1376" cy="698" rx="34" ry="9" fill="#9CB0A4"/>'
+        # rug + sofa (centre, on floor)
+        '<ellipse cx="1040" cy="744" rx="450" ry="30" fill="#E2D2BF"/>'
+        '<rect x="792" y="470" width="500" height="118" rx="26" fill="#CB897B"/>'
+        '<rect x="770" y="556" width="544" height="150" rx="26" fill="#C68273"/>'
+        '<rect x="800" y="536" width="238" height="120" rx="20" fill="#D79A8C"/>'
+        '<rect x="1046" y="536" width="238" height="120" rx="20" fill="#D79A8C"/>'
+        '<rect x="812" y="560" width="120" height="96" rx="18" fill="#B85042"/>'
+        '<rect x="806" y="700" width="20" height="40" rx="7" fill="#9A7A64"/>'
+        '<rect x="1258" y="700" width="20" height="40" rx="7" fill="#9A7A64"/>'
+    )
+    return ('<figure class="ph hero-ph illus">'
+            '<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" '
+            'role="img" aria-label="' + label + '" xmlns="http://www.w3.org/2000/svg">'
+            + shapes + '</svg></figure>')
+
+
+# Shared "how it works" steps (same for every LP; describes the real app flow).
+# Icons are line SVGs coloured via CSS (stroke:currentColor). Copy is honest:
+# no login/install on the public web app; edits happen on the photo; product links
+# go to the ECs. Kept generic so all 4 LPs stay maintainable from one place.
+_STEPS = [
+    ('<svg viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7H7l1.2-2h7.6L17 7h2.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.3"/></svg>',
+     "01", "部屋の写真をアップ",
+     "スマホで撮った部屋の写真を読み込むだけ。会員登録もアプリのインストールもいりません。"),
+    ('<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg>',
+     "02", "家具を置いて、色や素材を試す",
+     "家具の配置や色、壁・床の色や素材まで、写真の上でその場で自由に変えられます。"),
+    ('<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="8.2" height="15" rx="1.6"/><rect x="12.8" y="4.5" width="8.2" height="15" rx="1.6"/></svg>',
+     "03", "見比べて、リンクから選ぶ",
+     "変える前と後をならべて見比べ、しっくりきたら商品リンクから詳細をチェックできます。"),
+]
+
+
+def _steps_html():
+    """Render the shared 3-step 'how it works' section (same on every LP)."""
+    esc = _html.escape
+    items = "\n".join(
+        f'<div class="step"><div class="step-ic">{ic}</div>'
+        f'<div class="step-no">{esc(no)}</div>'
+        f'<h3>{esc(t)}</h3><p>{esc(b)}</p></div>'
+        for ic, no, t, b in _STEPS)
+    return ('<section class="steps"><h2>使い方は、かんたん3ステップ</h2>\n'
+            f'<div class="steps-grid">\n{items}\n</div></section>')
+
+
+# Shared "what you can do" capability cards (same for every LP). Each line maps to a
+# real app feature described in the LP copy — placing furniture, changing colour /
+# material, editing walls & floors, dropping in cut-out photos of owned furniture,
+# collecting by taste, and the product links. No fabricated features or claims.
+_FEATURES = [
+    ('<svg viewBox="0 0 24 24"><rect x="3" y="10" width="18" height="7" rx="2"/><path d="M6 10V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M6 17v2M18 17v2"/></svg>',
+     "家具を置いて配置を調整", "気になる家具を部屋の写真に置き、大きさや向きを整えられます。"),
+    ('<svg viewBox="0 0 24 24"><path d="M12 3.5c3 3.6 5 6.4 5 8.8a5 5 0 0 1-10 0c0-2.4 2-5.2 5-8.8z"/></svg>',
+     "色や素材を変える", "家具の色や素材をその場で切り替え、部屋に馴染む組み合わせを探せます。"),
+    ('<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 14h17"/></svg>',
+     "壁・床を変える", "壁だけ・床だけを選んで、色や質感を変えた仕上がりを試せます。"),
+    ('<svg viewBox="0 0 24 24"><path d="M6.5 2.5v13a2 2 0 0 0 2 2h13"/><path d="M2.5 6.5h13a2 2 0 0 1 2 2v13"/></svg>',
+     "手持ちの家具も置ける", "いま使っている家具を撮って背景を切り抜き、模様替え後の部屋に並べられます。"),
+    ('<svg viewBox="0 0 24 24"><path d="M4 4.5h7.2L20 13.3l-6.7 6.7L4.5 11.2z"/><circle cx="8" cy="8" r="1.4"/></svg>',
+     "テイストで家具を集める", "「北欧」などのテイストで家具を集めて、まとめて置いて試せます。"),
+    ('<svg viewBox="0 0 24 24"><path d="M6 8.5h12l-1 11H7z"/><path d="M9.2 8.5V6.2a2.8 2.8 0 0 1 5.6 0v2.3"/></svg>',
+     "商品リンクで詳細へ", "しっくりくる組み合わせが見つかったら、商品リンクから詳細を確認できます。"),
+]
+
+
+def _features_html():
+    """Render the shared 'what you can do' capability grid (same on every LP)."""
+    esc = _html.escape
+    cards = "\n".join(
+        f'<div class="feat-card"><div class="feat-ic">{ic}</div>'
+        f'<div><h3>{esc(t)}</h3><p>{esc(b)}</p></div></div>'
+        for ic, t, b in _FEATURES)
+    return ('<section class="feat"><h2>Room Studioでできること</h2>\n'
+            '<p class="feat-sub">写真の上で、模様替えをまるごと試せます。</p>\n'
+            f'<div class="feat-grid">\n{cards}\n</div></section>')
+
+
 def landing_html(slug, assets_dir=None):
     """Render a single landing page, or None if the slug is unknown.
     `assets_dir` (the /lp-assets directory): image slots render only for files that
@@ -343,8 +451,14 @@ def landing_html(slug, assets_dir=None):
     # Hero photo (free-stock room, slot A) + before/after app captures (slot B) — both
     # degrade to labelled placeholders until the operator drops files in /lp-assets.
     hero = p.get("hero") or {}
-    hero_fig = _img(f"{slug}-hero", hero.get("alt", ""), "hero-ph") if _has(f"{slug}-hero") else ""
-    hero_media = f'<div class="hero-media">{hero_fig}</div>' if hero_fig else ""
+    hero_alt = hero.get("alt", "")
+    # Real free-stock photo when the operator has added one; otherwise a calm inline
+    # SVG illustration so the hero is never empty (auto-upgrades to the photo later).
+    hero_fig = (_img(f"{slug}-hero", hero_alt, "hero-ph") if _has(f"{slug}-hero")
+                else _hero_svg(hero_alt))
+    hero_media = f'<div class="hero-media">{hero_fig}</div>'
+    steps_html = _steps_html()
+    feat_html = _features_html()
     ba = p.get("ba")
     ba_html = ""
     if ba and _has(f"{slug}-before") and _has(f"{slug}-after"):
@@ -406,17 +520,38 @@ def landing_html(slug, assets_dir=None):
   .wrap{{max-width:860px;margin:0 auto;padding:0 20px}}
   a{{color:var(--acc)}}
   h1,h2{{font-family:"Zen Old Mincho","Zen Kaku Gothic New",serif;letter-spacing:.02em}}
-  .hero{{padding:76px 0 8px;text-align:center}}
+  .hero{{position:relative;padding:76px 0 8px;text-align:center;background:radial-gradient(120% 78% at 50% -8%,#F7EFE5 0%,rgba(247,239,229,0) 60%)}}
   .hero h1{{font-size:30px;font-weight:700;line-height:1.55;margin:0 0 18px}}
   .lead{{font-size:16px;color:var(--muted);max-width:620px;margin:0 auto 26px;line-height:1.95}}
-  .cta{{display:inline-block;background:var(--acc);color:#fff;text-decoration:none;padding:15px 34px;border-radius:10px;font-weight:700;font-size:15.5px;box-shadow:0 2px 12px rgba(0,0,0,.06);transition:background .2s}}
-  .cta:hover{{background:var(--acc-h)}}
+  .cta{{display:inline-block;background:var(--acc);color:#fff;text-decoration:none;padding:15px 34px;border-radius:10px;font-weight:700;font-size:15.5px;box-shadow:0 2px 12px rgba(0,0,0,.06);transition:background .2s,transform .2s}}
+  .cta:hover{{background:var(--acc-h);transform:translateY(-1px)}}
+  .cta-note{{font-size:12.5px;color:var(--muted);margin:14px 0 0}}
   .hero-media{{margin:44px 0 0}}
   .ph{{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;place-items:center}}
   .ph.hero-ph{{aspect-ratio:16/9}}
   .ph img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
+  .ph.illus{{background:linear-gradient(160deg,#F7F0E7,#F0E7DC)}}
+  .ph svg{{position:absolute;inset:0;width:100%;height:100%;display:block}}
+  .steps{{padding:56px 0;border-top:1px solid var(--line)}}
+  .steps>h2{{text-align:center;margin-bottom:34px}}
+  .steps-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
+  .step{{position:relative;background:#fff;border:1px solid var(--line);border-radius:12px;padding:28px 22px;text-align:center}}
+  .step-ic{{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:var(--panel);color:var(--acc2)}}
+  .step-ic svg{{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}}
+  .step-no{{font-family:"Zen Old Mincho",serif;font-size:12.5px;letter-spacing:.16em;color:var(--acc);font-weight:700;margin-bottom:6px}}
+  .step h3{{font-family:"Zen Kaku Gothic New",sans-serif;font-size:15.5px;font-weight:700;margin:0 0 9px}}
+  .step p{{font-size:13.5px;color:#4a3f3a;line-height:1.8;margin:0}}
+  .feat{{padding:56px 0;border-top:1px solid var(--line)}}
+  .feat>h2{{text-align:center;margin-bottom:8px}}
+  .feat-sub{{text-align:center;color:var(--muted);font-size:14px;margin:0 auto 30px;max-width:560px}}
+  .feat-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:16px}}
+  .feat-card{{display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px 20px}}
+  .feat-ic{{flex:0 0 auto;width:42px;height:42px;border-radius:10px;display:grid;place-items:center;background:var(--panel);color:var(--acc)}}
+  .feat-ic svg{{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}}
+  .feat-card h3{{font-family:"Zen Kaku Gothic New",sans-serif;font-size:14.5px;font-weight:700;margin:0 0 5px}}
+  .feat-card p{{font-size:13px;color:#4a3f3a;line-height:1.75;margin:0}}
   section.block{{padding:56px 0;border-top:1px solid var(--line)}}
-  .block h2,.ba h2,.faqwrap>h2,.relwrap>h2{{font-size:21px;font-weight:700;line-height:1.6;margin:0 0 16px}}
+  .block h2,.ba h2,.faqwrap>h2,.relwrap>h2,.steps>h2,.feat>h2{{font-size:21px;font-weight:700;line-height:1.6;margin:0 0 16px}}
   .block p{{font-size:15px;color:#4a3f3a;margin:0}}
   .ba{{padding:56px 0;border-top:1px solid var(--line)}}
   .ba h2{{text-align:center;margin-bottom:22px}}
@@ -445,20 +580,25 @@ def landing_html(slug, assets_dir=None):
   @media (prefers-reduced-motion:reduce){{*{{transition:none!important;scroll-behavior:auto!important}}}}
   @media (max-width:640px){{
     .hero{{padding:48px 0 4px}} .hero h1{{font-size:24px}} .lead{{font-size:15px}}
-    section.block,.ba,.faqwrap,.relwrap{{padding:40px 0}}
+    section.block,.ba,.faqwrap,.relwrap,.steps,.feat{{padding:40px 0}}
     .ba-grid{{grid-template-columns:1fr;gap:22px}} .foot{{padding:48px 0 24px}}
+    .steps-grid{{grid-template-columns:1fr;gap:14px}} .steps>h2{{margin-bottom:24px}}
+    .feat-grid{{grid-template-columns:1fr}}
   }}
 </style></head><body>
 <header class="hero"><div class="wrap">
 <h1>{esc(p['h1'])}</h1>
 <p class="lead">{esc(p['lead'])}</p>
 <a class="cta" href="{esc(app_url)}">{cta} →</a>
+<p class="cta-note">登録不要・ブラウザでそのまま試せます</p>
 {hero_media}
 </div></header>
 <main class="wrap">
 {sec0}
+{steps_html}
 {ba_html}
 {sec_rest}
+{feat_html}
 {faq_html}
 {rel_html}
 <section class="foot">
