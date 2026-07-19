@@ -1,0 +1,738 @@
+[
+ {
+  "file": "desk_0_0.jpg",
+  "type": "desk",
+  "item": 0,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f802-g1056-100_01___.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_0_1.jpg",
+  "type": "desk",
+  "item": 0,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f802-g1056-100_02___.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "desk_0_2.jpg",
+  "type": "desk",
+  "item": 0,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f802-g1056-100_03___.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_1_0.jpg",
+  "type": "desk",
+  "item": 1,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/sanwadirect/cabinet/event/719_mrtn/main/100-deskf004.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_1_1.jpg",
+  "type": "desk",
+  "item": 1,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/sanwadirect/cabinet/event/719_mrtn/aaaa/100-deskf004.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_1_2.jpg",
+  "type": "desk",
+  "item": 1,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/sanwadirect/cabinet/rank2026/100-deskf004_r1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_2_0.jpg",
+  "type": "desk",
+  "item": 2,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f802-g1024-100_1d.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_2_1.jpg",
+  "type": "desk",
+  "item": 2,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f802-g1024-100_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "desk_2_2.jpg",
+  "type": "desk",
+  "item": 2,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f802-g1024-100_3.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_3_0.jpg",
+  "type": "desk",
+  "item": 3,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/vg-rossy_01_.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_3_1.jpg",
+  "type": "desk",
+  "item": 3,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/vg-rossy_02.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_3_2.jpg",
+  "type": "desk",
+  "item": 3,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/vg-rossy_03_.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_4_0.jpg",
+  "type": "desk",
+  "item": 4,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/dondon/cabinet/event/th/jbs01_5.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_4_1.jpg",
+  "type": "desk",
+  "item": 4,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/dondon/cabinet/table/jbs01/jbs01_cart_co4.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "desk_4_2.jpg",
+  "type": "desk",
+  "item": 4,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/dondon/cabinet/table/jbs01/jbs_update_cart.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_5_0.jpg",
+  "type": "desk",
+  "item": 5,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f803-g1005-100_01_.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_5_1.jpg",
+  "type": "desk",
+  "item": 5,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f803-g1005-100_02_.jpg?_ex=600x600",
+  "label": "person"
+ },
+ {
+  "file": "desk_5_2.jpg",
+  "type": "desk",
+  "item": 5,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f803-g1005-100_03__.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_6_0.jpg",
+  "type": "desk",
+  "item": 6,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/square/101/101-002/101-00234.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "desk_6_1.jpg",
+  "type": "desk",
+  "item": 6,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/1000-03/1000-141010115_1.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "desk_6_2.jpg",
+  "type": "desk",
+  "item": 6,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/1000-03/1000-141010115_2.jpg?_ex=600x600",
+  "label": "person"
+ },
+ {
+  "file": "desk_7_0.jpg",
+  "type": "desk",
+  "item": 7,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/grazia-doris/cabinet/default/item_r02/gaia_r/main_g.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "desk_7_1.jpg",
+  "type": "desk",
+  "item": 7,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/grazia-doris/cabinet/default/item_r02/gaia_r/gaia_r_02.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "desk_7_2.jpg",
+  "type": "desk",
+  "item": 7,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/grazia-doris/cabinet/default/item_r02/gaia_r/gaia_r_03.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_0_0.jpg",
+  "type": "chest",
+  "item": 0,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f514-g1014-100_1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_0_1.jpg",
+  "type": "chest",
+  "item": 0,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f514-g1014-100_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "chest_0_2.jpg",
+  "type": "chest",
+  "item": 0,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f514-g1014-100_3.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_1_0.jpg",
+  "type": "chest",
+  "item": 1,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/03/gtvbr_01.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_1_1.jpg",
+  "type": "chest",
+  "item": 1,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/03/gtvbr_02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "chest_1_2.jpg",
+  "type": "chest",
+  "item": 1,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/03/gtvbr_03.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_2_0.jpg",
+  "type": "chest",
+  "item": 2,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/e-sumail-style/cabinet/craftuchida/547003_01_04b.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "chest_2_1.jpg",
+  "type": "chest",
+  "item": 2,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/e-sumail-style/cabinet/craftuchida/547003_02.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_2_2.jpg",
+  "type": "chest",
+  "item": 2,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/e-sumail-style/cabinet/craftuchida/547003_03.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_3_0.jpg",
+  "type": "chest",
+  "item": 3,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/kd_furniture17/00-100143-11_logo.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_3_1.jpg",
+  "type": "chest",
+  "item": 3,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/renewal1/00-100143_1ranking.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_3_2.jpg",
+  "type": "chest",
+  "item": 3,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/renewal1/00-100143_2.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_4_0.jpg",
+  "type": "chest",
+  "item": 4,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/04/f514-g1013-100_01_.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_4_1.jpg",
+  "type": "chest",
+  "item": 4,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/04/f514-g1013-100_02_.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_4_2.jpg",
+  "type": "chest",
+  "item": 4,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/04/f514-g1013-100_03_.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_5_0.jpg",
+  "type": "chest",
+  "item": 5,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/kd_furniture17/00-100142-11_logo.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_5_1.jpg",
+  "type": "chest",
+  "item": 5,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/renewal1/00-100142_1ranking.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_5_2.jpg",
+  "type": "chest",
+  "item": 5,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/review1/00-100142_rev.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_6_0.jpg",
+  "type": "chest",
+  "item": 6,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/square/101/101-034/101-03494.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "chest_6_1.jpg",
+  "type": "chest",
+  "item": 6,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/square/101/101-034/101-03494_1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "chest_6_2.jpg",
+  "type": "chest",
+  "item": 6,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/square/101/101-034/101-03494_2.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "chest_7_0.jpg",
+  "type": "chest",
+  "item": 7,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/isseiki/cabinet/square/101/101-028/101-02889.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "chest_7_1.jpg",
+  "type": "chest",
+  "item": 7,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/isseiki/cabinet/101/101-028/101-02889_1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "chest_7_2.jpg",
+  "type": "chest",
+  "item": 7,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/isseiki/cabinet/101/101-028/101-02889_2.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_0_0.jpg",
+  "type": "dining_table",
+  "item": 0,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/t-interior/cabinet/mara20260719/qos001_b.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_0_1.jpg",
+  "type": "dining_table",
+  "item": 0,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/t-interior/cabinet/item/images2/qos001_1a.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "dining_table_0_2.jpg",
+  "type": "dining_table",
+  "item": 0,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/t-interior/cabinet/item/images2/qos001_2a.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_1_0.jpg",
+  "type": "dining_table",
+  "item": 1,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-ehira-kagu-e-flat/cabinet/02386316/03588219/imgrc0067888243.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "dining_table_1_1.jpg",
+  "type": "dining_table",
+  "item": 1,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-ehira-kagu-e-flat/cabinet/02386316/03588219/imgrc0087456296.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "dining_table_1_2.jpg",
+  "type": "dining_table",
+  "item": 1,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-ehira-kagu-e-flat/cabinet/02386316/03588219/imgrc0079595540.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "dining_table_2_0.jpg",
+  "type": "dining_table",
+  "item": 2,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lushroom/cabinet/50023.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_2_1.jpg",
+  "type": "dining_table",
+  "item": 2,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lushroom/cabinet/dining/dining/50023-2025_01.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "dining_table_2_2.jpg",
+  "type": "dining_table",
+  "item": 2,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lushroom/cabinet/dining/dining/50023-2025_02.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_3_0.jpg",
+  "type": "dining_table",
+  "item": 3,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/mutuki/cabinet/pic/604-sp-1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_3_1.jpg",
+  "type": "dining_table",
+  "item": 3,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/mutuki/cabinet/ranking/9513-604-2.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_3_2.jpg",
+  "type": "dining_table",
+  "item": 3,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/mutuki/cabinet/toppage/3nian.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_4_0.jpg",
+  "type": "dining_table",
+  "item": 4,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/wooden-japan/cabinet/product01/ik-00-003mq/oakmq01.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_4_1.jpg",
+  "type": "dining_table",
+  "item": 4,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/wooden-japan/cabinet/biiino/award/ik-00-2c9a4377a5.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_4_2.jpg",
+  "type": "dining_table",
+  "item": 4,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/wooden-japan/cabinet/product01/ik-00-003mq/oakmq02.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_5_0.jpg",
+  "type": "dining_table",
+  "item": 5,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/tansu/cabinet/00051966/84400001_10.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_5_1.jpg",
+  "type": "dining_table",
+  "item": 5,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/tansu/cabinet/00323179/84400001_cosia.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "dining_table_5_2.jpg",
+  "type": "dining_table",
+  "item": 5,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/tansu/cabinet/00323179/84400001_newcoe.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_6_0.jpg",
+  "type": "dining_table",
+  "item": 6,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/air-rhizome/cabinet/138/vld-kago1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_6_1.jpg",
+  "type": "dining_table",
+  "item": 6,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/air-rhizome/cabinet/138/vld-kago02.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_6_2.jpg",
+  "type": "dining_table",
+  "item": 6,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/air-rhizome/cabinet/138/vld-kago04.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_7_0.jpg",
+  "type": "dining_table",
+  "item": 7,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/jiyu-ken/cabinet/thum/0036.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_7_1.jpg",
+  "type": "dining_table",
+  "item": 7,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/jiyu-ken/cabinet/review/0036.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "dining_table_7_2.jpg",
+  "type": "dining_table",
+  "item": 7,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/jiyu-ken/cabinet/tac/2000/0036_02.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_0_0.jpg",
+  "type": "curtain",
+  "item": 0,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/aizu-corp-2/cabinet/main/9845627_rank.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_0_1.jpg",
+  "type": "curtain",
+  "item": 0,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/aizu-corp-2/cabinet/20curtain/9845627_ranking.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_0_2.jpg",
+  "type": "curtain",
+  "item": 0,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/aizu-corp-2/cabinet/20curtain/9845627_review.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_1_0.jpg",
+  "type": "curtain",
+  "item": 1,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/runnrunn-shop/cabinet/08743438/09129685/newmain.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_1_1.jpg",
+  "type": "curtain",
+  "item": 1,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/runnrunn-shop/cabinet/08743438/09072648/imgrc0102819444.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_1_2.jpg",
+  "type": "curtain",
+  "item": 1,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/runnrunn-shop/cabinet/08743438/09925193/katten00.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "curtain_2_0.jpg",
+  "type": "curtain",
+  "item": 2,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-yoshietsu/cabinet/item9/dp105-drmain.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "curtain_2_1.jpg",
+  "type": "curtain",
+  "item": 2,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-yoshietsu/cabinet/nishioto/dp105-01.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "curtain_2_2.jpg",
+  "type": "curtain",
+  "item": 2,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-yoshietsu/cabinet/io/clr-eot-000_01.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_3_0.jpg",
+  "type": "curtain",
+  "item": 3,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/aizu-corp-2/cabinet/24curtain/9817818-01.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_3_1.jpg",
+  "type": "curtain",
+  "item": 3,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/aizu-corp-2/cabinet/24curtain/9817818-02.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "curtain_3_2.jpg",
+  "type": "curtain",
+  "item": 3,
+  "slot": 2,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/aizu-corp-2/cabinet/24curtain/9817818-03.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_4_0.jpg",
+  "type": "curtain",
+  "item": 4,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/11/s7802468.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_4_1.jpg",
+  "type": "curtain",
+  "item": 4,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/11/s7802468_1.jpg?_ex=600x600",
+  "label": "swatch"
+ },
+ {
+  "file": "curtain_5_0.jpg",
+  "type": "curtain",
+  "item": 5,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/13/s7811070.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_5_1.jpg",
+  "type": "curtain",
+  "item": 5,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/13/s7811070_1.jpg?_ex=600x600",
+  "label": "swatch"
+ },
+ {
+  "file": "curtain_6_0.jpg",
+  "type": "curtain",
+  "item": 6,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/11/s7803684.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_6_1.jpg",
+  "type": "curtain",
+  "item": 6,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/11/s7803684_1.jpg?_ex=600x600",
+  "label": "swatch"
+ },
+ {
+  "file": "curtain_7_0.jpg",
+  "type": "curtain",
+  "item": 7,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/11/s7804126.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "curtain_7_1.jpg",
+  "type": "curtain",
+  "item": 7,
+  "slot": 1,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/keyuca/cabinet/11/s7804126_1.jpg?_ex=600x600",
+  "label": "swatch"
+ }
+]
