@@ -2492,7 +2492,42 @@ function scoreCandidate(cv){
          -0.8*Math.min(2, candGutterScore(d))
          -Math.min(0.8, candVividScore(d)*12);
 }
-/* 複数候補（先頭3枚＋連番補完）から最も単体・正面らしい1枚を {canvas, url} で返す。404はスキップ。
+/* ---- 収集の絞り込み ----------------------------------------------------------
+   楽天が1商品につき返す画像は最大3枚で、そのうち使える写真がある商品は3〜4割しかない
+   （実測。連番でURLを推測する手は91%が404だったので廃止済み）。つまり選別を賢くしても
+   1商品あたりの上限は動かない。**上限を超える唯一の手は「商品ごと捨てる」こと。**
+
+   そこで要求数の COLLECT_OVERFETCH 倍を取得し、スコア順に上位 count 件だけ採用する。
+   固定閾値での足切りも試したが、在庫が枯れて要求数に届かないだけで精度は同じだった:
+
+   | 納品率と精度 | dev(40件) | holdout(32件) |
+   |---|---|---|
+   | 現状（全件採用）      | 100% / 35% | 100% / 31% |
+   | 3倍取得→上位1/3     | 100% / **62%** | 100% / **64%** |
+   | 3倍取得→閾値 -1.2   | 77% / 70%  | 100% / 64% |
+
+   判定は128pxのサムネイルで行う（実測で精度はほぼ落ちない）。3倍の商品を見ても通信量は
+   むしろ減る: 30件納品で 1商品あたり 2.6枚×60KB=156KB → 2.6枚×7KB＋本命60KB=78KB。
+   測り直しは tools/collect-audit/eval_imgscore.py。 */
+const COLLECT_OVERFETCH=3, COLLECT_FETCH_MAX=90; // 90 = /collect の上限（楽天3ページ）
+function overfetchCount(n){ return Math.max(n, Math.min(COLLECT_FETCH_MAX, n*COLLECT_OVERFETCH)); }
+/* 候補URLの楽天画像サイズ指定を判定用の128pxに落とす。楽天以外のURLはそのまま返す。 */
+function candThumbUrl(u){ try{
+    const abs=new URL(u, location.origin), raw=abs.searchParams.get('url');
+    if(!raw || !/_ex=\d+x\d+/.test(raw)) return u;
+    abs.searchParams.set('url', raw.replace(/_ex=\d+x\d+/, '_ex=128x128'));
+    return abs.toString();
+  }catch(e){ return u; } }
+/* サムネイルだけ読んで {url（原寸のまま）, score} を返す。原寸は勝った1枚しか読まない。 */
+function pickBestCandidateThumb(urls){ return new Promise(async resolve=>{
+  const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(candThumbUrl(u), c=>r({canvas:c, url:u}), ()=>r(null)))));
+  const valid=cvs.filter(Boolean);
+  if(!valid.length){ resolve(null); return; }
+  let best=valid[0], bestScore=-Infinity;
+  for(const v of valid){ const sc=scoreCandidate(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
+  resolve({ url:best.url, score:bestScore });
+}); }
+/* 複数候補から最も単体・正面らしい1枚を {canvas, url} で返す（原寸を読む版）。404はスキップ。
    url は勝った候補のロード元（/imgproxy?url=… 形式）— /bgcut 用の元URL復元に使う。 */
 function pickBestCandidate(urls){ return new Promise(async resolve=>{
   const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(u, c=>r({canvas:c, url:u}), ()=>r(null)))));
@@ -2671,7 +2706,7 @@ async function doCollect(){
   try{
     let items=[];
     if(mode==='brands'){
-      const per=Math.max(1, Math.floor(count/brands.length)); let lastErr='';
+      const per=overfetchCount(Math.max(1, Math.floor(count/brands.length))); let lastErr='';
       for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
         try{
           const kw=(brands[i].name+' '+taste).trim(); // ブランド名をキーワードに含めて楽天全体を検索
@@ -2682,23 +2717,34 @@ async function doCollect(){
       }
       if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
     } else if(mode==='rakuten'){
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source:'rakuten', provider:'official'}), {cache:'no-store'});
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:'rakuten', provider:'official'}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source='rakuten'; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やキーワードを変えてみてください'); $('collectBtn').disabled=false; return; }
     } else {
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source:crawlerSource, provider:'crawler'}), {cache:'no-store'});
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:crawlerSource, provider:'crawler'}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source=crawlerSource; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やキーワードを変えてみてください'); $('collectBtn').disabled=false; return; }
     }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
+    // 1) 全件をサムネイルだけで採点する（原寸はまだ読まない）
+    let seen=0; const scored=[];
+    await pool(items, 6, it=> new Promise(async res=>{
+      const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
+      const pick=urls.length? await pickBestCandidateThumb(urls) : null;
+      if(pick) scored.push({it, url:pick.url, score:pick.score});
+      seen++; setCollectStatus(`画像を選別しています… ${seen}/${items.length}`); res();
+    }));
+    // 2) スコア上位だけ原寸で読み込む。取得数 > 要求数のぶんがここで捨てられる
+    scored.sort((a,b)=>b.score-a.score);
+    const keep=scored.slice(0, count);
     let done=0, ok=0; const added=[];
-    await pool(items, 5, it=> new Promise(async res=>{
-      const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
-      const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
-      if(best){ const li=addToFurniLib(downscaleCanvas(best.canvas,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(best.url), defer:true}); added.push(li); ok++; }
-      done++; setCollectStatus(`最適な画像を選んでいます… ${done}/${items.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
+    await pool(keep, 5, k=> new Promise(async res=>{
+      const it=k.it;
+      const cv=await new Promise(r=>loadImageURL(k.url, c=>r(c), ()=>r(null)));
+      if(cv){ const li=addToFurniLib(downscaleCanvas(cv,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true}); added.push(li); ok++; }
+      done++; setCollectStatus(`画像を読み込んでいます… ${done}/${keep.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
     }));
     renderFurniLib(); // 収集完了時に一括描画
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
