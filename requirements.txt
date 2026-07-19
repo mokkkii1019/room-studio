@@ -1,1 +1,6 @@
 fastapi
+# /bgcut（サーバ側AI背景切り抜き・ISNet）用。バンドル実測 ~138MB / Vercel上限250MB。
+# モデル重み(~46MB)はバンドル外 — 初回コールドスタート時に BGCUT_MODEL_URL から /tmp へDL。
+onnxruntime>=1.17
+numpy>=1.26
+pillow>=10.0

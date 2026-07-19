@@ -267,6 +267,7 @@
   /* provenance badge: collected (dark) vs your uploads (blue) */
   .furni-item .src-badge{position:absolute; top:40px; left:3px; background:rgba(0,0,0,.55); color:#fff; font-size:8.5px; font-weight:700; padding:1px 5px; border-radius:4px; z-index:2; pointer-events:none; letter-spacing:.02em}
   .furni-item .src-badge.up{background:rgba(59,111,224,.9)}
+  .furni-item .cut-spin{position:absolute; top:21px; left:3px; width:13px; height:13px; border:2px solid rgba(255,255,255,.7); border-top-color:var(--accent); border-radius:50%; background:rgba(0,0,0,.28); z-index:2; pointer-events:none; animation:sp .9s linear infinite}
   .furni-item .buy{position:absolute; top:3px; left:3px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-decoration:none; display:none; z-index:2}
   .furni-item:hover .buy{display:block}
   .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -1499,13 +1500,30 @@ async function aiCutCanvas(srcCanvas){
   const url=URL.createObjectURL(outBlob);
   const cutSmall=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
   URL.revokeObjectURL(url);
-  // 縮小した切り抜き結果のアルファを、原寸の元画像に適用（色は原寸＝鮮明、寸法は元画像と同じ）
+  return applyCutAlpha(srcCanvas, cutSmall);
+}
+/* 縮小した切り抜き結果のアルファだけを原寸の元画像に適用（色は原寸＝鮮明、寸法は元画像と同じ）。
+   ブラウザ内AI(aiCutCanvas)とサーバ切り抜き(serverCutCanvas)で共通。 */
+function applyCutAlpha(srcCanvas, cutImg){
   const c=document.createElement('canvas'); c.width=srcCanvas.width; c.height=srcCanvas.height; const x=c.getContext('2d');
   x.drawImage(srcCanvas,0,0);
   x.globalCompositeOperation='destination-in';
-  x.drawImage(cutSmall,0,0,c.width,c.height);
+  x.drawImage(cutImg,0,0,c.width,c.height);
   x.globalCompositeOperation='source-over';
   return c;
+}
+/* サーバ側AI切り抜き(/bgcut)。収集品（元画像URLあり）専用 — サーバが返す透過PNG（長辺≤1024）の
+   アルファを手元の srcCanvas に適用して返す。失敗は throw（呼び出し側でフォールバック）。 */
+const BGCUT_VERSION='1'; // モデル更新時にサーバ側と対で上げる（エッジキャッシュのバージョンキー）
+async function serverCutCanvas(srcCanvas, imgUrl){
+  const r=await fetch(SERVER.url+'/bgcut?'+new URLSearchParams({url:imgUrl, v:BGCUT_VERSION}));
+  if(!r.ok) throw new Error('bgcut HTTP '+r.status);
+  const blob=await r.blob();
+  const url=URL.createObjectURL(blob);
+  try{
+    const im=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+    return applyCutAlpha(srcCanvas, im);
+  } finally { URL.revokeObjectURL(url); }
 }
 async function aiCutFurniture(layer){
   busy(true,'AIで背景を切り抜き中…（初回はモデル読み込みで時間がかかります）');
@@ -1614,15 +1632,16 @@ function buildWarpCanvas(l){
    INPAINT — LaMa local server (best, CPU-friendly) with in-browser PatchMatch fallback
    ========================================================================= */
 // available = API（収集/画像リレー）に到達できるか。 inpaint = 高品質LaMaが使えるか（公開版は無し→PatchMatch）。
-const SERVER = { available:false, url:'', inpaint:false, provider:'official', mode:'public' };
+// bgcut = サーバ側AI背景切り抜き(/bgcut)が使えるか（無ければブラウザ内AIにフォールバック）。
+const SERVER = { available:false, url:'', inpaint:false, bgcut:false, provider:'official', mode:'public' };
 async function probeServer(){
   const cands = ['', 'http://127.0.0.1:7865', 'http://localhost:7865'];
   for(const base of cands){
     try{ const r=await fetch(base+'/health',{cache:'no-store'}); if(r.ok){ const j=await r.json(); SERVER.available=true; SERVER.url=base; SERVER.inpaint=!!(j&&j.inpaint);
-      SERVER.provider=(j&&j.provider)||'official'; SERVER.mode=(j&&j.mode)||'public';
-      updateEraseBadge(); applyCollectMode(); return; } }catch(e){}
+      SERVER.bgcut=!!(j&&j.bgcut); SERVER.provider=(j&&j.provider)||'official'; SERVER.mode=(j&&j.mode)||'public';
+      updateEraseBadge(); applyCollectMode(); queuePendingCuts(); return; } }catch(e){}
   }
-  SERVER.available=false; SERVER.inpaint=false; updateEraseBadge(); applyCollectMode();
+  SERVER.available=false; SERVER.inpaint=false; SERVER.bgcut=false; updateEraseBadge(); applyCollectMode();
 }
 /* 収集UIをプロバイダに合わせて出し分ける（公開=official）。公開版は特定メーカー名を前面に
    出さず「楽天市場」モール単位で表示し、クレジットを出す。私的版(crawler)は従来のソース選択を表示。 */
@@ -2261,7 +2280,8 @@ function addFurnitureLayer(srcCanvas, name, px, py, meta){
   const layer={ id, type:'furniture', name:name||`家具 ${State.layers.filter(l=>l.type==='furniture').length+1}`,
     srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1, category:meta.category||null,
     source:meta.source||'upload', itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'', shop:meta.shop||'',
-    bgRemove:false, bgTol:30, aiCutCanvas:null, recolor:false, color:'#7d8aa0', strength:0.8,
+    bgRemove:false, bgTol:30, aiCutCanvas:meta.cutCanvas?copyCanvas(meta.cutCanvas):null, // 事前切り抜き済みなら透過で配置（解除ボタンで元に戻せる）
+    recolor:false, color:'#7d8aa0', strength:0.8,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
   // fit initial size so it's ~40% of room width
   layer.scale = clamp((State.W*0.4)/layer.natW, 0.08, 2);
@@ -2276,8 +2296,10 @@ function addToFurniLib(canvas, name, meta){ meta=meta||{};
   const it={ id:State.libNextId++, name:(name||('家具 '+State.libNextId)).slice(0,60), srcCanvas:canvas,
     link:meta.link||'', price:meta.price||0, shop:meta.shop||'', category:meta.category||'upload',
     source:meta.source||'upload',                 // 'upload' | 'rakuten' | 'ikea'（provenance）
-    itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'' };
-  State.furniLib.push(it); if(!meta.defer) renderFurniLib(); return it; }
+    itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'',
+    imgUrl:meta.imgUrl||'',                       // 収集品の元画像URL（サーバ切り抜き /bgcut 用。アップロード品は空）
+    cutCanvas:meta.cutCanvas||null };             // サーバ/AI切り抜き結果（srcCanvas＝オリジナルは温存）
+  State.furniLib.push(it); cutQueueAdd(it); if(!meta.defer) renderFurniLib(); return it; }
 const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',chest:'サイドボード/リビングボード',shelf:'シェルフ',desk:'デスク',lampshade:'ランプシェード',table_lamp:'テーブルランプ',floor_lamp:'フロアランプ',carpet:'カーペット/ラグ',curtain:'カーテン',plant:'観葉植物',art:'アート',mirror:'鏡',cushion:'ブランケット/クッション',clock:'時計',storage_box:'収納ボックス',trash_can:'ゴミ箱',tv:'テレビ',refrigerator:'冷蔵庫',washing_machine:'洗濯機',air_conditioner:'エアコン',microwave:'電子レンジ',rice_cooker:'炊飯器',air_purifier:'空気清浄機',fan:'扇風機',humidifier:'加湿器',vacuum:'掃除機',upload:'自分の画像から追加'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
@@ -2289,7 +2311,25 @@ function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(
   sel.value=State.libFilter;
 }
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
-function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return; addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py, it); const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); } toast('部屋に配置しました。ドラッグで移動できます'); }
+async function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return;
+  let note='';
+  if(!it.cutCanvas && it.imgUrl && SERVER.bgcut && it._cutState!=='failed'){
+    // 収集品で切り抜き未完了 → 優先実行して待つ（キュー待ちを追い越す）。タイムアウトは元画像で配置
+    busy(true,'背景を切り抜いています…');
+    try{ await requestCutNow(it, 15000); }finally{ busy(false); }
+    if(!it.cutCanvas && it._cutState!=='failed') note='切り抜きに時間がかかっています。完了後にもう一度配置すると透過になります';
+  }
+  if(!it.cutCanvas && it.imgUrl && !it._browserCutTried && (it._cutState==='failed' || !SERVER.bgcut)){
+    // サーバ不可/失敗 → ブラウザ内AIへ1回だけフォールバック（結果はライブラリに保存して再利用）
+    it._browserCutTried=true;
+    busy(true,'AIで背景を切り抜き中…（初回はモデル読み込みで時間がかかります）');
+    try{ it.cutCanvas=await aiCutCanvas(it.srcCanvas); it._cutState='done'; it._thumb=null; refreshLibCard(it); }
+    catch(e){ console.warn('browser bgcut fallback failed:', e); note='切り抜きに失敗しました。右パネルの「AIで背景を切り抜く」で再試行できます'; }
+    finally{ busy(false); }
+  }
+  addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py, it);
+  const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); }
+  toast(note||'部屋に配置しました。ドラッグで移動できます'); }
 const COARSE_POINTER = (()=>{ try{ return matchMedia('(pointer:coarse)').matches; }catch(e){ return false; } })();
 /* クリック計測（購入/アフィリンク）。自己クリックは URL の ?notrack=1 で除外（localStorage保存）。
    GA4 は GA4_ID を設定すると gtag イベントも送る（既定は無効）。/track は 0-6 で追加。 */
@@ -2313,18 +2353,22 @@ function trackClick(id, type, url, shop){
 }
 function makeFurniEl(it){
   const el=document.createElement('div'); el.className='furni-item';
+  el.dataset.libId=it.id; // 切り抜き完了時の in-place 差し替え（refreshLibCard）用
   el.draggable=!COARSE_POINTER; // タッチ端末ではネイティブのドラッグ無効（タップ誤判定でサムネが伸びる/崩れるのを防止）。配置はタップでOK
   el.title=it.name+(COARSE_POINTER?' — タップで配置':' — クリックで配置 / ステージへドラッグで位置指定');
   let cv=it._thumb; // サムネはキャッシュ（再描画を避ける＝ライブラリが大きくても再表示が軽い）
-  if(!cv){ cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
-    const s=Math.min(cv.width/it.srcCanvas.width, cv.height/it.srcCanvas.height), dw=it.srcCanvas.width*s, dh=it.srcCanvas.height*s;
-    x.drawImage(it.srcCanvas,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); it._thumb=cv; }
+  if(!cv){ const src=it.cutCanvas||it.srcCanvas; // 切り抜き済みがあれば透過版を見せる
+    cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96; cv.height=58; const x=cv.getContext('2d');
+    const s=Math.min(cv.width/src.width, cv.height/src.height), dw=src.width*s, dh=src.height*s;
+    x.drawImage(src,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); it._thumb=cv; }
   el.appendChild(cv);
+  if(it._cutState==='pending'||it._cutState==='processing'){ // 切り抜き待ち/処理中の控えめなスピナー
+    const sp=document.createElement('div'); sp.className='cut-spin'; sp.title='背景を切り抜いています…'; el.appendChild(sp); }
   const add=document.createElement('div'); add.className='add'; add.textContent='＋ 配置'; el.appendChild(add);
   const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
   if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
   const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
-  const sav=document.createElement('button'); sav.className='save'; sav.textContent='⤓'; sav.title='画像をPCに保存（PNG）'; on(sav,'click',ev=>{ ev.stopPropagation(); saveCanvasPNG(it.srcCanvas, it.name); }); el.appendChild(sav);
+  const sav=document.createElement('button'); sav.className='save'; sav.textContent='⤓'; sav.title='画像をPCに保存（PNG）'; on(sav,'click',ev=>{ ev.stopPropagation(); saveCanvasPNG(it.cutCanvas||it.srcCanvas, it.name); }); el.appendChild(sav);
   // provenance badge: 自分のアップロード vs 収集元（モール単位表現）
   const SRC_LABEL={upload:'自分',rakuten:'楽天市場',ikea:'IKEA',rughaus:'RUGHAUS',kanademono:'KANADEMONO',bauhaus:'BAUHAUS',hay:'HAY',flymee:'FLYMEe'};
   const srcTxt = SRC_LABEL[it.source] || (it.source ? '収集' : '');
@@ -2376,35 +2420,53 @@ function scoreSingleItem(cv){
   const skinFrac=skin/tot, skinPen=skinFrac>0.06?(skinFrac-0.06)*5:0;
   return uniform*0.5 + lightness*0.25 + centerDetail*0.25 - skinPen;
 }
-/* 複数候補（先頭3枚＋連番補完）から最も単体・正面らしい1枚のcanvasを返す。404はスキップ。 */
+/* 複数候補（先頭3枚＋連番補完）から最も単体・正面らしい1枚を {canvas, url} で返す。404はスキップ。
+   url は勝った候補のロード元（/imgproxy?url=… 形式）— /bgcut 用の元URL復元に使う。 */
 function pickBestCandidate(urls){ return new Promise(async resolve=>{
-  const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(u, c=>r(c), ()=>r(null)))));
+  const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(u, c=>r({canvas:c, url:u}), ()=>r(null)))));
   const valid=cvs.filter(Boolean);
   if(valid.length<=1){ resolve(valid[0]||null); return; }
   let best=valid[0], bestScore=-Infinity;
-  for(const cv of valid){ const sc=scoreSingleItem(cv); if(sc>bestScore){ bestScore=sc; best=cv; } }
+  for(const v of valid){ const sc=scoreSingleItem(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
   resolve(best);
 }); }
+/* /imgproxy?url=<enc> 形式（相対/絶対どちらも）から元画像URLを取り出す */
+function rawUrlFromProxy(u){ try{ return new URL(u, location.origin).searchParams.get('url')||''; }catch(e){ return ''; } }
 function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, done=0; const total=items.length; if(!total) return resolve();
   function next(){ while(active<n && i<total){ const it=items[i++]; active++; Promise.resolve(fn(it)).catch(()=>{}).then(()=>{ active--; done++; if(done>=total) resolve(); else next(); }); } } next(); }); }
 
-/* ---- background queue: auto-remove backgrounds of collected items, one at a time ---- */
-const bgQueue=[]; let bgRunning=false;
+/* ---- 自動切り抜きキュー: 収集品はサーバ(/bgcut)でバックグラウンドで透過化 ----
+   結果は it.cutCanvas に保持（it.srcCanvas＝オリジナルは温存）。カードのサムネは完了次第
+   透過版に差し替わり、配置時は layer.aiCutCanvas に入る（既存の解除ボタンで元に戻せる）。 */
 function setBgStatus(msg, kind){ const el=$('bgStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg||''; el.className='engine'+(kind==='ok'?' ok':''); }
-function enqueueBgRemoval(libItems, method){ for(const it of libItems){ if(it && !it._bgDone && !it._bgQueued){ it._bgQueued=true; it._bgMethod=method||'fast'; bgQueue.push(it); } } runBgQueue(); }
-async function runBgQueue(){ if(bgRunning) return; bgRunning=true;
-  const yield_=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0))); // let the UI breathe between items
-  while(bgQueue.length){ const it=bgQueue.shift();
-    if(!State.furniLib.includes(it)){ continue; } // removed meanwhile
-    const ai = it._bgMethod==='ai';
-    setBgStatus('背景を自動除去中… 残り '+(bgQueue.length+1)+' 件'+(ai?'（AI・初回はモデル読み込みあり）':'（高速）'));
-    await yield_();
-    try{ const cut = ai ? await aiCutCanvas(it.srcCanvas) : floodCutCanvas(it.srcCanvas, 30); it.srcCanvas=cut; it._bgDone=true; renderFurniLib(); }
-    catch(e){ console.warn('auto bg removal failed:',e); it._bgDone=true; if(ai && !IMGLY){ setBgStatus('AI背景除去に失敗（ネット接続を確認）。元画像のまま使えます'); bgRunning=false; return; } }
-    await yield_();
-  }
-  bgRunning=false; setBgStatus('背景の自動除去が完了しました','ok'); setTimeout(()=>setBgStatus(''),4000);
+const _cutQ={ waiting:[], active:0, MAX:3 }; // 同時実行3（サーバ側にも並行上限あり）
+function _cutRemain(){ return _cutQ.waiting.length + _cutQ.active; }
+function _cutStatus(){ const n=_cutRemain();
+  if(n) setBgStatus('背景を切り抜き中… 残り '+n+' 件');
+  else { setBgStatus('背景の切り抜きが完了しました','ok'); setTimeout(()=>{ if(!_cutRemain()) setBgStatus(''); },4000); } }
+function cutQueueAdd(it){ if(!it || !it.imgUrl || it.cutCanvas || it._cutState || !SERVER.bgcut) return;
+  it._cutState='pending'; _cutQ.waiting.push(it); _cutPump(); }
+function queuePendingCuts(){ if(!SERVER.bgcut || typeof State==='undefined') return; for(const it of (State.furniLib||[])) cutQueueAdd(it); }
+function _cutPump(){ while(_cutQ.active<_cutQ.MAX && _cutQ.waiting.length){ _cutStart(_cutQ.waiting.shift()); } }
+function _cutStart(it){ _cutQ.active++; it._cutState='processing'; _cutStatus();
+  it._cutPromise=(async()=>{
+    try{ const cut=await serverCutCanvas(it.srcCanvas, it.imgUrl); it.cutCanvas=cut; it._cutState='done'; it._thumb=null; }
+    catch(e){ console.warn('server bgcut failed:', it&&it.name, e); it._cutState='failed'; }
+    finally{ _cutQ.active--; refreshLibCard(it); _cutStatus(); _cutPump(); }
+  })();
+  return it._cutPromise;
 }
+/* 配置時の優先実行: キュー待ちなら追い越して即実行し、timeoutMs まで待つ（結果は it.cutCanvas）。 */
+async function requestCutNow(it, timeoutMs){
+  if(it.cutCanvas || !SERVER.bgcut || !it.imgUrl || it._cutState==='failed') return it.cutCanvas||null;
+  if(it._cutState==='pending'){ const i=_cutQ.waiting.indexOf(it); if(i>=0) _cutQ.waiting.splice(i,1); _cutStart(it); }
+  else if(!it._cutPromise) _cutStart(it); // 未キュー（復元直後など）
+  await Promise.race([it._cutPromise, new Promise(r=>setTimeout(r, timeoutMs||15000))]);
+  return it.cutCanvas||null;
+}
+/* 該当カードだけ in-place 差し替え（ライブラリ全体の再描画を避ける）。無ければ次の renderFurniLib で反映 */
+function refreshLibCard(it){ const host=$('furniLib'); if(!host) return;
+  const el=host.querySelector('[data-lib-id="'+it.id+'"]'); if(el && State.furniLib.includes(it)) el.replaceWith(makeFurniEl(it)); }
 
 /* ---- collect furniture images from the web (store products via server.py) ---- */
 function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
@@ -2553,7 +2615,7 @@ async function doCollect(){
     await pool(items, 5, it=> new Promise(async res=>{
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
       const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
-      if(best){ const li=addToFurniLib(downscaleCanvas(best,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', defer:true}); added.push(li); ok++; }
+      if(best){ const li=addToFurniLib(downscaleCanvas(best.canvas,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(best.url), defer:true}); added.push(li); ok++; }
       done++; setCollectStatus(`最適な画像を選んでいます… ${done}/${items.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
     }));
     renderFurniLib(); // 収集完了時に一括描画
@@ -2661,12 +2723,15 @@ function openMaterialCrop(it){
 
 /* ---- save / load the furniture library as a JSON list ---- */
 async function exportLib(){ if(!State.furniLib.length){ toast('ライブラリが空です'); return; }
-  const obj={ app:'room-studio-lib', version:1, items:State.furniLib.map(it=>({ name:it.name, src:canvasToPNG(it.srcCanvas), link:it.link||'', price:it.price||0, shop:it.shop||'', category:it.category||'upload' })) };
+  const obj={ app:'room-studio-lib', version:1, items:State.furniLib.map(it=>({ name:it.name, src:canvasToPNG(it.srcCanvas), link:it.link||'', price:it.price||0, shop:it.shop||'', category:it.category||'upload',
+    imgUrl:it.imgUrl||undefined, cut:it.cutCanvas?canvasToPNG(it.cutCanvas):undefined })) }; // undefined は JSON から自然に落ちる
   const blob=new Blob([JSON.stringify(obj)],{type:'application/json'});
   if(await saveBlob(blob, 'room-studio-furniture-library.json', 'application/json')) toast('リストを保存しました'); }
 async function importLib(obj){ if(!obj || obj.app!=='room-studio-lib'){ toast('対応していないファイルです'); return; }
   busy(true,'ライブラリを読み込み中…'); setMode('furniture');
-  try{ for(const it of (obj.items||[])){ const c=await loadDataURL(it.src); addToFurniLib(c, it.name, {link:it.link, price:it.price, shop:it.shop, category:it.category}); } toast('リストを読み込みました'); }
+  try{ for(const it of (obj.items||[])){ const c=await loadDataURL(it.src);
+    addToFurniLib(c, it.name, {link:it.link, price:it.price, shop:it.shop, category:it.category,
+      imgUrl:it.imgUrl||'', cutCanvas:it.cut?await loadDataURL(it.cut):null}); } toast('リストを読み込みました'); }
   catch(e){ console.error(e); toast('読み込みに失敗しました'); } finally{ busy(false); } }
 function selectLayer(id){ State.selectedId=id; const l=State.layers.find(x=>x.id===id);
   if(l){ if(l.type==='surface'){ setMode('surface'); setSurfTool(null); } else setMode('furniture'); }
@@ -2892,8 +2957,9 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
       const src=it.source||'upload';
       const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus' || src==='hay' || src==='flymee'); // クラウドには商品画像を保存しない
       const o={ id:it.id, name:it.name, category:it.category||'upload', source:src,
-        link:it.link||'', price:it.price||0, shop:it.shop||'', itemCode:it.itemCode||'', productUrl:it.productUrl||'', affiliateUrl:it.affiliateUrl||'' };
-      if(!strip) o.src=pngCached(it.srcCanvas);
+        link:it.link||'', price:it.price||0, shop:it.shop||'', itemCode:it.itemCode||'', productUrl:it.productUrl||'', affiliateUrl:it.affiliateUrl||'',
+        imgUrl:it.imgUrl||'' };
+      if(!strip){ o.src=pngCached(it.srcCanvas); if(it.cutCanvas) o.cut=pngCached(it.cutCanvas); } // 切り抜きも保存（クラウド=参照のみ時は除外）
       return o;
     })
   };
@@ -2944,11 +3010,13 @@ async function loadProject(obj, opts){
         const cv=hasImg?await loadDataURL(d.src):placeholderCanvas();
         lib.push({ id:d.id, name:d.name, srcCanvas:cv, category:d.category||'upload', source:d.source||'upload',
           link:d.link||'', price:d.price||0, shop:d.shop||'', itemCode:d.itemCode||'', productUrl:d.productUrl||'', affiliateUrl:d.affiliateUrl||'',
+          imgUrl:d.imgUrl||'', cutCanvas:d.cut?await loadDataURL(d.cut):null,
           needsRehydrate:!hasImg });
       }
       State.furniLib=lib;
       if(obj.libNextId) State.libNextId=Math.max(obj.libNextId, State.furniLib.reduce((m,it)=>Math.max(m,(it.id|0)+1),1));
       renderFurniLib();
+      queuePendingCuts(); // 切り抜き未保存の収集品はバックグラウンドで作り直す（サーバ検出前なら probeServer 後に再試行）
     }
     renderLayers(); syncPanels(); rebuildMaskPreview(); render();
     toast(opts&&opts.restored ? '前回の続きから復元しました' : 'プロジェクトを読み込みました');
@@ -2972,10 +3040,11 @@ async function rehydrateProject(){
       const r=await fetch(SERVER.url+'/item?'+new URLSearchParams({code:t.obj.itemCode, source:t.obj.source||'rakuten'}), {cache:'no-store'});
       if(r.ok){ const it=await r.json();
         const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
-        const cv=urls.length? await pickBestCandidate(urls) : null;
-        if(cv){ t.obj.srcCanvas=downscaleCanvas(cv,1000); t.obj.needsRehydrate=false;
+        const best=urls.length? await pickBestCandidate(urls) : null;
+        if(best){ t.obj.srcCanvas=downscaleCanvas(best.canvas,1000); t.obj.needsRehydrate=false;
           if(t.kind==='layer'){ t.obj.dirty=true; t.obj.natW=t.obj.srcCanvas.width; t.obj.natH=t.obj.srcCanvas.height; rebuildFurniture(t.obj); }
-          else { t.obj._thumb=null; }
+          else { // ライブラリ側は元URLを更新し、切り抜きも作り直す（クラウド参照経路では cut は保存されない）
+            t.obj.imgUrl=rawUrlFromProxy(best.url); t.obj.cutCanvas=null; t.obj._cutState=null; t.obj._thumb=null; cutQueueAdd(t.obj); }
           ok++; done=true; } }
     }catch(e){ /* 再取得失敗はプレースホルダのまま */ }
     if(!done) fail++;

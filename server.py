@@ -106,7 +106,7 @@ class InpaintReq(BaseModel):
 @app.get("/health")
 def health():
     return {"inpaint": _check_import(), "model": "lama", "loaded": _model is not None,
-            **core.provider_status()}
+            "bgcut": bgcut_core.available(), **core.provider_status()}
 
 
 @app.post("/inpaint")
@@ -146,9 +146,10 @@ def inpaint(req: InpaintReq):
 import sys as _sys
 _sys.path.insert(0, os.path.join(APP_DIR, "api"))
 import _collect_core as core  # noqa: E402
+import _bgcut_core as bgcut_core  # noqa: E402  (server-side AI background removal)
 import _site  # noqa: E402  (click tracking + legal pages + access gate)
 
-_GATE_API = ("/collect", "/item", "/imgproxy", "/inpaint", "/track")
+_GATE_API = ("/collect", "/item", "/imgproxy", "/bgcut", "/inpaint", "/track")
 
 
 @app.middleware("http")
@@ -210,6 +211,20 @@ def imgproxy(url: str):
         raise HTTPException(status_code=e.status, detail=e.detail)
     return Response(content=data, media_type=ctype,
                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/bgcut")
+def bgcut(url: str, v: str = "1"):
+    """収集画像のAI背景切り抜き（ISNet/onnxruntime）。許可ホストの画像URLを取得して
+    透過PNG（長辺≤1024）を返す。画像は保存しない（/imgproxy と同じ transient 姿勢）。
+    `v` はモデルバージョン（キャッシュキー用・クライアント定数と対で運用）。"""
+    try:
+        data, _ctype = core.imgproxy_fetch(url)
+        png = bgcut_core.cut_png(data)
+    except core.CollectError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})
 
 
 @app.get("/track")

@@ -76,7 +76,7 @@ python server.py   # → http://127.0.0.1:7865
 
 ## インターネットに公開する（Vercel）
 
-不特定多数に使ってもらうための公開デプロイ。**Vercel の FastAPI ランタイム**で単一の関数（`api/index.py`）が HTML 配信＋`/health`・`/collect`・`/imgproxy` を担当する。重い LaMa(`/inpaint`)は公開では使わず、消しゴムは**ブラウザ内 PatchMatch** に自動フォールバックする（無料・完全動作）。
+不特定多数に使ってもらうための公開デプロイ。**Vercel の FastAPI ランタイム**で単一の関数（`api/index.py`）が HTML 配信＋`/health`・`/collect`・`/imgproxy`・`/bgcut` を担当する。重い LaMa(`/inpaint`)は公開では使わず、消しゴムは**ブラウザ内 PatchMatch** に自動フォールバックする（無料・完全動作）。
 
 **構成（このリポジトリに同梱済み）**
 - `api/index.py` … FastAPI アプリ（`app`）。Vercel が**単一の Serverless Function**としてデプロイし、全リクエストを処理（HTML・/health・/collect・/item・/imgproxy）
@@ -84,10 +84,11 @@ python server.py   # → http://127.0.0.1:7865
 - `api/_provider_base.py` … プロバイダ共通（エラー型・env切替・カテゴリフィルタ）
 - `api/_provider_official.py` … **公開用**プロバイダ。楽天など正規APIのみ（公開安全）
 - `api/_provider_crawler.py` … **私的用**プロバイダ。IKEA/Shopify クローラ。**公開デプロイには載せない**（`.vercelignore` で除外＋実行時ガード）
-- `requirements.txt` … `fastapi`（**Vercel の Python ランタイム有効化に必須**。これが無いと関数が検出されない）
+- `requirements.txt` … `fastapi`（**Vercel の Python ランタイム有効化に必須**。これが無いと関数が検出されない）＋ `/bgcut` 用の `onnxruntime`/`numpy`/`pillow`
 - `vercel.json` は**不要**（ゼロ設定。FastAPI プリセットが `api/index.py` の `app` を自動検出し全ルートを処理）。関数の最大実行時間を延ばしたい場合のみ Vercel の Project Settings → Functions で設定
 - `.vercelignore` … `server.py`・`requirements-local.txt`（重い依存）・`.env`・**`api/_provider_crawler.py`** 等を配信対象から除外
 - `/imgproxy` は公開時の悪用防止のため**アクティブなプロバイダの画像ホストのみ許可**（`provider.imgproxy_hosts()`。公開=official時は**楽天の画像ドメインのみ**）
+- `/bgcut`（`api/_bgcut_core.py`）… **収集画像のサーバ側AI背景切り抜き**。収集直後にクライアントがバックグラウンドで呼び、ライブラリには切り抜き済み（透過）画像を表示する。対象は `/imgproxy` と同じ許可ホストのみ・**入出力とも保存しない**。ISNet(quint8) モデル（`tools/quantize_isnet.py` で生成、GitHub Release アセット）を初回コールドスタート時に `BGCUT_MODEL_URL` から /tmp へDL。サーバ不可/失敗時はブラウザ内AI（@imgly）へ自動フォールバック
 
 **収集プロバイダと動作モード（公開=official/public・私的=crawler/private）**
 - 収集は「プロバイダ」で抽象化し、環境変数で切り替える:
@@ -233,7 +234,7 @@ python server.py   # → http://127.0.0.1:7865
 ## ファイル
 - `room-studio.html` … アプリ本体（単一ファイル）
 - `server.py` … ローカルサーバー（LaMa補完＋家具のネット収集＋アプリ配信）
-- `requirements-local.txt` … ローカルLaMaサーバーの依存（重い）。`requirements.txt`（ルート）はVercel用の空ファイル
+- `requirements-local.txt` … ローカルLaMaサーバーの依存（重い）。`requirements.txt`（ルート）はVercel用（fastapi＋/bgcut の onnxruntime 等）
 - `setup.bat` / `run.bat` … Windows用 セットアップ / 起動
 - `setup.sh` / `run.sh` … Mac・Linux用 セットアップ / 起動（`bash setup.sh` → `bash run.sh`）
 

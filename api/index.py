@@ -12,12 +12,13 @@ from fastapi.responses import HTMLResponse, Response
 
 sys.path.insert(0, os.path.dirname(__file__))
 import _collect_core as core  # noqa: E402
+import _bgcut_core as bgcut_core  # noqa: E402  (server-side AI background removal; heavy deps lazy)
 import _site  # noqa: E402  (click tracking + legal pages)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (parent of api/)
 app = FastAPI()
 
-_GATE_API = ("/collect", "/item", "/imgproxy", "/inpaint", "/track")
+_GATE_API = ("/collect", "/item", "/imgproxy", "/bgcut", "/inpaint", "/track")
 
 
 @app.middleware("http")
@@ -43,7 +44,8 @@ async def _access_gate(request, call_next):
 @app.get("/health")
 def health():
     # provider/mode make it visible on the public URL that the crawler is NOT enabled.
-    return {"ok": True, "inpaint": False, "collect": True, **core.provider_status()}
+    return {"ok": True, "inpaint": False, "collect": True, "bgcut": bgcut_core.available(),
+            **core.provider_status()}
 
 
 def _req_referer(request: Request):
@@ -90,6 +92,19 @@ def imgproxy(url: str = ""):
     except core.CollectError as e:
         raise HTTPException(status_code=e.status, detail=e.detail)
     return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/bgcut")
+def bgcut(url: str = "", v: str = "1"):
+    # AI background removal for collected images (ISNet via onnxruntime). Transient like
+    # /imgproxy — nothing is stored; `v` versions the edge cache alongside the model.
+    try:
+        data, _ctype = core.imgproxy_fetch(url)
+        png = bgcut_core.cut_png(data)
+    except core.CollectError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})
 
 
 @app.get("/track")

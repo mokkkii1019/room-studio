@@ -38,10 +38,11 @@
   - `GET /shops` … 楽天全ショップからメーカー/店舗を検索
   - `GET /item` … itemCode で1件再取得（参照のみ保存の再ハイドレーション用）
   - `GET /imgproxy` … 外部画像の同一オリジン中継（キャンバス汚染防止・許可ホストのみ）
+  - `GET /bgcut` … 収集画像のサーバ側AI背景切り抜き（ISNet/onnxruntime、許可ホストのみ・透過PNG長辺≤1024）。**入出力とも保存しない**（/imgproxy と同じ transient。/tmp に置くのはモデル重みのみ）。モデルは初回に `BGCUT_MODEL_URL`（GitHub Release アセット）から /tmp へDL。`v=` はモデルバージョン（エッジキャッシュキー）
   - `GET /track` … アフィリンク/購入クリック計測（204、stdout ログのみ）
   - `GET /about`・`/privacy`・`/tokushoho` … 法務ページ（静的生成）
   - `GET /og.png`・`/apple-touch-icon.png` … 画像アセット
-- **依存**: `requirements.txt` は `fastapi` のみ（Vercel の Python ランタイム有効化に必須）。収集ロジックは**標準ライブラリのみ**で実装（`urllib` 等）。`vercel.json` は不要（ゼロ設定）。
+- **依存**: `requirements.txt` は `fastapi` ＋ `/bgcut` 用の `onnxruntime`/`numpy`/`pillow`（バンドル実測 ~138MB / 上限250MB）。重い import は `_bgcut_core` 内で遅延させ、他ルートのコールドスタートに載せない。収集ロジックは**標準ライブラリのみ**（`urllib` 等）。`vercel.json` は不要（ゼロ設定）。
 - **重い AI 補完（LaMa `/inpaint`）は公開版に載せない**。公開では消しゴムはブラウザ内 PatchMatch に自動フォールバック。
 
 ### 1.3 バックエンド（ローカル版 = `server.py`）
@@ -54,6 +55,7 @@
 api/
 ├── index.py               … Vercel エントリ（FastAPI app）
 ├── _collect_core.py       … 収集の facade（プロバイダ選択＋整形＋imgproxy・stdlib）
+├── _bgcut_core.py         … /bgcut の推論コア（ISNet/onnxruntime・遅延import・モデル/tmpキャッシュ）
 ├── _provider_base.py      … プロバイダ共通（CollectError・env切替・カテゴリフィルタ）
 ├── _provider_official.py  … 【公開用】楽天正規APIのみ（常にimport可・公開安全）
 ├── _provider_crawler.py   … 【私的用】IKEA/Shopifyクローラ（.vercelignoreで配信除外＋実行時403）
