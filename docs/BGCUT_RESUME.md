@@ -59,9 +59,20 @@ python server.py   # http://127.0.0.1:7865
 
 `/health` に `"bgcut":true` が出ればOK。
 
+## maxDuration は対応不要（2026-07-19 調査）
+
+Vercel は fluid compute が既定で有効になり、`maxDuration` の既定値は**全プラン 300s**
+（Hobby は上限も300s / Pro・Enterprise は上限800s）。コールド10.5sに対して約29倍の余裕があり、
+引き上げは不要。1回目のリクエストが200で返っている時点で旧来の10s制限下にないことも実証済み。
+
+`33f048e` のコミットメッセージにある「default maxDuration safety（8s に短縮）」は
+fluid compute 以前の前提なので、現在の判断材料にしないこと。
+
+**`vercel.json` は追加しないこと。** 過去に `functions: {"api/index.py": {...}}` が
+ビルド前バリデーションで拒否され `33f048e` で削除された経緯がある（FastAPI プリセットは
+ゼロコンフィグで単一関数としてデプロイされる）。現在正常動作しているので触らない。
+
 ## 積み残し
 
-- Vercel Project Settings → Functions の `maxDuration`。コールド10.5sで通っているので
-  現行設定でも動くが、モデル配布元が遅い日に備えて 60s へ上げておくと安全（ダッシュボード操作）。
 - 他ルート（`/collect` 等）のコールドスタート悪化は未計測。重い依存は遅延importしているため
   理論上は影響しないはずだが、体感で遅くなったら要確認。
