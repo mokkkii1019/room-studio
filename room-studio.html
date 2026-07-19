@@ -2313,13 +2313,13 @@ function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
 async function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return;
   let note='';
-  if(!it.cutCanvas && it.imgUrl && SERVER.bgcut && it._cutState!=='failed'){
+  if(AUTO_CUT && !it.cutCanvas && it.imgUrl && SERVER.bgcut && it._cutState!=='failed'){
     // 収集品で切り抜き未完了 → 優先実行して待つ（キュー待ちを追い越す）。タイムアウトは元画像で配置
     busy(true,'背景を切り抜いています…');
     try{ await requestCutNow(it, 15000); }finally{ busy(false); }
     if(!it.cutCanvas && it._cutState!=='failed') note='切り抜きに時間がかかっています。完了後にもう一度配置すると透過になります';
   }
-  if(!it.cutCanvas && it.imgUrl && !it._browserCutTried && (it._cutState==='failed' || !SERVER.bgcut)){
+  if(AUTO_CUT && !it.cutCanvas && it.imgUrl && !it._browserCutTried && (it._cutState==='failed' || !SERVER.bgcut)){
     // サーバ不可/失敗 → ブラウザ内AIへ1回だけフォールバック（結果はライブラリに保存して再利用）
     it._browserCutTried=true;
     busy(true,'AIで背景を切り抜き中…（初回はモデル読み込みで時間がかかります）');
@@ -2437,14 +2437,24 @@ function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, do
 
 /* ---- 自動切り抜きキュー: 収集品はサーバ(/bgcut)でバックグラウンドで透過化 ----
    結果は it.cutCanvas に保持（it.srcCanvas＝オリジナルは温存）。カードのサムネは完了次第
-   透過版に差し替わり、配置時は layer.aiCutCanvas に入る（既存の解除ボタンで元に戻せる）。 */
+   透過版に差し替わり、配置時は layer.aiCutCanvas に入る（既存の解除ボタンで元に戻せる）。
+
+   AUTO_CUT=false で自動経路のみを停止（2026-07-19）。理由は2つ:
+   ・待ち時間 — /bgcut は1枚≒7秒。50件収集で約2分ユーザを待たせていた。
+   ・精度 — ISNet は salient object 検出なので、人物入りの販促画像では「人物を残して
+     家具を捨てる」。家具カテゴリの候補画像の約17%に人物が含まれる。
+   手動の「AIで背景を切り抜く」(fAiCut) と保存済み cutCanvas の読み込みは従来どおり動く。
+   画像選別（白背景の単体商品写真だけを採用する）が入るまではこの既定を維持すること。
+   詳細は docs/COLLECT_QUALITY_RESUME.md。 */
+const AUTO_CUT=false;
 function setBgStatus(msg, kind){ const el=$('bgStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg||''; el.className='engine'+(kind==='ok'?' ok':''); }
 const _cutQ={ waiting:[], active:0, MAX:3 }; // 同時実行3（サーバ側にも並行上限あり）
 function _cutRemain(){ return _cutQ.waiting.length + _cutQ.active; }
 function _cutStatus(){ const n=_cutRemain();
   if(n) setBgStatus('背景を切り抜き中… 残り '+n+' 件');
   else { setBgStatus('背景の切り抜きが完了しました','ok'); setTimeout(()=>{ if(!_cutRemain()) setBgStatus(''); },4000); } }
-function cutQueueAdd(it){ if(!it || !it.imgUrl || it.cutCanvas || it._cutState || !SERVER.bgcut) return;
+function cutQueueAdd(it){ if(!AUTO_CUT) return;
+  if(!it || !it.imgUrl || it.cutCanvas || it._cutState || !SERVER.bgcut) return;
   it._cutState='pending'; _cutQ.waiting.push(it); _cutPump(); }
 function queuePendingCuts(){ if(!SERVER.bgcut || typeof State==='undefined') return; for(const it of (State.furniLib||[])) cutQueueAdd(it); }
 function _cutPump(){ while(_cutQ.active<_cutQ.MAX && _cutQ.waiting.length){ _cutStart(_cutQ.waiting.shift()); } }
