@@ -18,7 +18,7 @@ import urllib.request
 import urllib.error
 
 import _provider_base as base
-from _provider_base import CollectError, _relevant, _numbered_variants
+from _provider_base import CollectError, _relevant
 
 PROVIDER_NAME = "official"
 
@@ -100,23 +100,27 @@ def _headers(referer):
 
 
 def _raw_images(it):
-    """Rakuten item -> ordered list of raw candidate image URLs (600x600, deduped)."""
+    """Rakuten item -> ordered list of raw candidate image URLs (600x600, deduped).
+
+    Only the URLs Rakuten actually returned. We used to append _numbered_variants()
+    guesses on top, hoping to surface cleaner front shots; measured against live
+    Rakuten data that produced 105 guessed URLs per 20 items to find 9 that existed
+    (91% 404). The client loaded every one of them before it could show anything, so
+    the guesses were most of the collect-time wait and bought almost no extra choice.
+    """
     imgs = it.get("mediumImageUrls") or it.get("smallImageUrls") or []
-    raw = []
-    for im in imgs[:3]:
-        u = im.get("imageUrl") if isinstance(im, dict) else None
-        if u:
-            raw.append(u.replace("?_ex=128x128", "?_ex=600x600").replace("?_ex=64x64", "?_ex=600x600"))
-    if not raw:
-        return []
     merged, seen_u = [], set()
-    for u in raw + _numbered_variants(raw[0], 9):
+    for im in imgs:
+        u = im.get("imageUrl") if isinstance(im, dict) else None
+        if not u:
+            continue
+        u = u.replace("?_ex=128x128", "?_ex=600x600").replace("?_ex=64x64", "?_ex=600x600")
         k = u.split("?")[0]
         if k in seen_u:
             continue
         seen_u.add(k)
         merged.append(u)
-    return merged[:10]
+    return merged[:6]
 
 
 def _normalize(it, kw=""):
@@ -136,6 +140,19 @@ def _normalize(it, kw=""):
     }
 
 
+# Words handed to Rakuten's own NGKeyword so accessories never come back in the first
+# place. Filtering them locally works too (TYPE_EXCLUDE_BY_TYPE still does, as a safety
+# net) but wastes the page: a `tv` search returned 25/30 screen-protector films, so
+# local-only filtering starved the result set and forced extra pages.
+# Semantics verified against the live API (2026-07-19): a space-separated list is
+# OR-of-exclusions — an item is dropped if it contains ANY of the words.
+TYPE_NG = {
+    "tv": "フィルム 保護パネル",
+    "washing_machine": "毛ごみ 糸くず ゴミ取り 乾燥フィルター",
+    "vacuum": "掃除機スタンド クリーナースタンド ツールステーション",
+}
+
+
 def search(type_, taste="", count=50, shop="", referer=None):
     """Rakuten Ichiba Item Search. `shop` = optional Rakuten shopCode (e.g. a maker,
     'artofblack', …); empty = interior-genre keyword search."""
@@ -151,6 +168,9 @@ def search(type_, taste="", count=50, shop="", referer=None):
             "applicationId": RAKUTEN_APP_ID, "accessKey": RAKUTEN_ACCESS_KEY, "keyword": keyword,
             "hits": 30, "page": page, "imageFlag": 1, "format": "json", "sort": "standard",
         }
+        ng = TYPE_NG.get(type_)
+        if ng:
+            params["NGKeyword"] = ng
         if genre and not (shop or "").strip():
             params["genreId"] = genre
         if (shop or "").strip():

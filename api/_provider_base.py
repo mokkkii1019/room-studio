@@ -4,7 +4,7 @@
 Defines the shared pieces every collection *provider* builds on:
   - CollectError               … carries an HTTP status + message
   - env / config               … COLLECT_PROVIDER, APP_MODE, .env loading
-  - category maps + filters     … TYPE_MATCH / TYPE_EXCLUDE / _relevant / _numbered_variants
+  - category maps + filters     … TYPE_MATCH / TYPE_EXCLUDE / _relevant
 
 A provider module (e.g. _provider_official, _provider_crawler) must expose:
 
@@ -126,16 +126,24 @@ TYPE_EXCLUDE_BY_TYPE = {
     "shelf": ["ローテーブル", "センターテーブル", "コーヒーテーブル", "ダイニングテーブル", "デスク", "desk"],
     "chest": ["チェア", "chair", "ソファ", "sofa"],
     "desk": ["チェア", "chair", "ワゴンのみ"],
-    "tv": ["テレビ台", "テレビボード", "tvスタンド", "テレビスタンド", "リモコン", "アンテナ", "壁掛け金具", "金具", "hdmi", "レコーダー"],
+    # 液晶保護フィルム/パネルは「液晶テレビ」を含むため TYPE_MATCH を通ってしまう。
+    # 実測では tv の検索結果 30件中 25件が保護フィルムだった（2026-07-19）。
+    # ※「フィルム」は tv 限定にすること — mirror の「フィルムミラー（割れない鏡）」は正当な商品。
+    "tv": ["テレビ台", "テレビボード", "tvスタンド", "テレビスタンド", "リモコン", "アンテナ", "壁掛け金具", "金具", "hdmi", "レコーダー",
+           "フィルム", "保護パネル"],
     "refrigerator": ["冷蔵庫マット", "マット", "シート", "トレー", "収納", "ラック"],
-    "washing_machine": ["ラック", "台", "マット", "ホース", "洗濯ネット", "パン", "収納"],
+    "washing_machine": ["ラック", "台", "マット", "ホース", "洗濯ネット", "パン", "収納",
+                        "毛ごみ", "糸くず", "ゴミ取り", "乾燥フィルター", "枚入"],
     "air_conditioner": ["リモコン", "室外機", "洗浄", "フィルター", "配管", "ホース", "室外"],
     "microwave": ["ラック", "レンジ台", "ターンテーブル", "調理", "容器", "収納"],
     "rice_cooker": ["内釜", "しゃもじ", "パッキン", "収納"],
     "air_purifier": ["フィルター", "交換用"],
     "fan": ["リモコン", "羽根", "クリップ", "usb扇風機", "ハンディ"],
     "humidifier": ["フィルター", "交換用", "カートリッジ", "アロマオイル", "洗浄"],
-    "vacuum": ["紙パック", "フィルター", "ノズル", "ヘッドのみ", "バッテリー", "スタンドのみ"],
+    # 「スタンド」単体で弾かないこと — 本体に「スタンド付き/スタンドセット」は正当。
+    # 弾くのは収納スタンドそのものを売る商品名だけ。
+    "vacuum": ["紙パック", "フィルター", "ノズル", "ヘッドのみ", "バッテリー", "スタンドのみ",
+               "掃除機スタンド", "クリーナースタンド", "ツールステーション"],
     "curtain": ["カーテンレール", "レール", "タッセル", "フックのみ", "アジャスター", "クリップ"],
     "clock": ["電池", "ムーブメント", "部品"],
     "trash_can": ["ゴミ袋", "替え袋", "スタンドのみ"],
@@ -165,12 +173,9 @@ def _relevant(title, type_):
     return any(k in t for k in inc_l)
 
 
-def _numbered_variants(url, maxn):
-    """Re-number a trailing image index (…-1.jpg / …-21a.jpg) to a plain 1..maxn.
-    Rakuten's representative images aren't always -1..-3, so this surfaces the
-    small-index main/front shots that tend to be the cleanest single-item photos."""
-    m = re.match(r'^(.*[^\d])(\d+)([a-zA-Z]*)(\.\w+)(\?.*)?$', url)
-    if not m:
-        return []
-    pre, _num, _sfx, ext, q = m.group(1), m.group(2), m.group(3), m.group(4), (m.group(5) or "")
-    return [f"{pre}{n}{ext}{q}" for n in range(1, maxn + 1)]
+# NOTE: _numbered_variants() lived here — it re-numbered an image URL's trailing index
+# (…-1.jpg → …-2.jpg …) to guess at extra gallery shots. Removed 2026-07-19 after
+# measuring it against live Rakuten data: 105 guessed URLs per 20 items yielded 9 that
+# existed (91% 404), and the client had to load every one before it could render. The
+# guesses were the bulk of the collect-time wait and the few hits were no cleaner than
+# the images Rakuten already returns. Don't reintroduce URL guessing without measuring.
