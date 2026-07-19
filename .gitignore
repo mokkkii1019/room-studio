@@ -10,3 +10,5 @@ node_modules/
 !demo*.png
 !og.png
 !apple-touch-icon.png
+# Documentation screenshots (kept small; excluded from the Vercel bundle via .vercelignore)
+!docs/img/*.png

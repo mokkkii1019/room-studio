@@ -294,8 +294,13 @@ LANDING_PAGES = [
         "related": ["hitorigurashi-sofa", "6jo-hitorigurashi-layout", "chintai-kabe-makeover"],
         "hero": {"alt": "北欧テイストの明るいリビングのイメージ",
                  "note": "画像が入ります：明るい木の質感の北欧テイストな無人リビング（横長・人物やブランドの写り込みなし）"},
+        # Reference LP: shows placeholder boxes for the before/after slots while the
+        # operator prepares the captures (the other three stay hidden until filled).
+        "ph": True,
         "ba": {"heading": "北欧トーンにする前と、後", "label_b": "Before", "label_a": "After",
                "note_b": "編集前：ふつうの部屋", "note_a": "編集後：床と壁を北欧トーンに",
+               "ph_b": "Before画像が入ります／家具の少ないプレーンな部屋",
+               "ph_a": "After画像が入ります／同じ部屋をRoom Studioで北欧トーンに加工",
                "alt_b": "Room Studioで北欧トーンにする前の部屋",
                "alt_a": "Room Studioで床と壁を北欧トーンに変えた部屋",
                "cap": "Room Studioで床と壁を明るい北欧トーンに変えた例（Before → After）"},
@@ -311,13 +316,28 @@ def landing_slugs():
     return [p["slug"] for p in LANDING_PAGES]
 
 
-def _img(name, alt, cls):
-    """An image slot. Rendered ONLY when the file exists (see landing_html), so a
-    live page never shows author-facing placeholder text. Space is reserved via the
-    container's aspect-ratio; alt + lazy-loading keep it accessible and light."""
+def _img(name, alt, cls, w, h, eager=False):
+    """A filled image slot (the operator has dropped a file in /lp-assets).
+    Space is reserved twice over — the container's aspect-ratio and the intrinsic
+    width/height attributes — so neither path can produce layout shift.
+    `eager` is for the hero only: it is above the fold, so lazy-loading it would
+    delay LCP. Everything below the fold stays lazy."""
     esc = _html.escape
-    return (f'<figure class="ph {cls}"><img src="/lp-assets/{esc(name)}" '
-            f'alt="{esc(alt)}" loading="lazy"></figure>')
+    load = ('loading="eager" fetchpriority="high"' if eager else 'loading="lazy"')
+    return (f'<figure class="{("ph " + cls).strip()}"><img src="/lp-assets/{esc(name)}" '
+            f'alt="{esc(alt)}" width="{w}" height="{h}" {load}></figure>')
+
+
+def _img_ph(cls, note):
+    """An EMPTY image slot, drawn as a labelled placeholder box.
+
+    Only used where the LP opts in via `ph: True` (see landing_html). It reserves
+    exactly the same space as the real image, so dropping the file in later cannot
+    shift the layout. `aria-hidden` + the surrounding <figure> keep it out of the
+    accessibility tree — it is scaffolding, not content."""
+    esc = _html.escape
+    return (f'<figure class="{("ph ph-empty " + cls).strip()}" aria-hidden="true">'
+            f'<span class="ph-note">{esc(note)}</span></figure>')
 
 
 def _hero_svg(alt):
@@ -448,26 +468,39 @@ def landing_html(slug, assets_dir=None):
         f'<section class="block"><h2>{esc(h)}</h2><p>{esc(b)}</p></section>' for h, b in secs[:1])
     sec_rest = "\n".join(
         f'<section class="block"><h2>{esc(h)}</h2><p>{esc(b)}</p></section>' for h, b in secs[1:])
-    # Hero photo (free-stock room, slot A) + before/after app captures (slot B) — both
-    # degrade to labelled placeholders until the operator drops files in /lp-assets.
+    # Hero photo (free-stock room, slot A) + before/after app captures (slot B).
+    # `ph` opts an LP into showing labelled placeholder boxes while slot B is still
+    # empty; without it the block stays hidden until both captures exist.
+    show_ph = bool(p.get("ph"))
     hero = p.get("hero") or {}
     hero_alt = hero.get("alt", "")
     # Real free-stock photo when the operator has added one; otherwise a calm inline
     # SVG illustration so the hero is never empty (auto-upgrades to the photo later).
-    hero_fig = (_img(f"{slug}-hero", hero_alt, "hero-ph") if _has(f"{slug}-hero")
-                else _hero_svg(hero_alt))
+    # The hero is above the fold, hence eager.
+    hero_fig = (_img(f"{slug}-hero", hero_alt, "hero-ph", 1600, 900, eager=True)
+                if _has(f"{slug}-hero") else _hero_svg(hero_alt))
     hero_media = f'<div class="hero-media">{hero_fig}</div>'
     steps_html = _steps_html()
     feat_html = _features_html()
     ba = p.get("ba")
     ba_html = ""
-    if ba and _has(f"{slug}-before") and _has(f"{slug}-after"):
-        fb = _img(f"{slug}-before", ba["alt_b"], "")
-        fa = _img(f"{slug}-after", ba["alt_a"], "")
+    # The signature visual of these LPs: Before = a plain room the operator supplies,
+    # After = that SAME room actually edited in Room Studio and screenshotted. The
+    # After image must be real product output — never a stock photo or a mockup —
+    # because the whole block exists to prove the feature does what the page claims.
+    if ba and (show_ph or (_has(f"{slug}-before") and _has(f"{slug}-after"))):
+        def _slot(role, alt, note):
+            if _has(f"{slug}-{role}"):
+                return _img(f"{slug}-{role}", alt, "", 800, 600)
+            return _img_ph("", note)
+        fb = _slot("before", ba["alt_b"], ba["ph_b"])
+        fa = _slot("after", ba["alt_a"], ba["ph_a"])
         ba_html = (
             f'<section class="ba"><h2>{esc(ba["heading"])}</h2>\n<div class="ba-grid">'
-            f'<div class="ba-item before">{fb}<span class="ba-label">{esc(ba["label_b"])}</span></div>'
-            f'<div class="ba-item after">{fa}<span class="ba-label">{esc(ba["label_a"])}</span></div>'
+            f'<div class="ba-item before">{fb}<span class="ba-label">{esc(ba["label_b"])}</span>'
+            f'<p class="ba-note">{esc(ba["note_b"])}</p></div>'
+            f'<div class="ba-item after">{fa}<span class="ba-label">{esc(ba["label_a"])}</span>'
+            f'<p class="ba-note">{esc(ba["note_a"])}</p></div>'
             f'</div>\n<p class="ba-cap">{esc(ba["cap"])}</p></section>')
     # FAQ block (styled as cards) + FAQPage structured data (unchanged content).
     faq = p.get("faq") or []
@@ -559,6 +592,12 @@ def landing_html(slug, assets_dir=None):
   .ba-item .ph{{aspect-ratio:4/3}}
   .ba-label{{display:inline-block;margin:10px 0 0;font-size:12px;font-weight:700;color:#fff;background:var(--acc2);padding:3px 12px;border-radius:999px}}
   .ba-item.after .ba-label{{background:var(--acc)}}
+  .ba-note{{font-size:13px;color:var(--muted);margin:8px 0 0;line-height:1.6}}
+  /* Empty slot: reuses .ph entirely (same box, same greige panel, same centring),
+     so dropping the real file in never shifts anything. Only the border becomes
+     dashed — that reads as scaffolding rather than as a broken image. */
+  .ph-empty{{border-style:dashed}}
+  .ph-note{{font-size:12.5px;line-height:1.7;color:var(--muted);text-align:center;padding:0 16px;max-width:24em}}
   .ba-cap{{text-align:center;color:var(--muted);font-size:13px;margin:20px 0 0}}
   .faqwrap{{padding:56px 0;border-top:1px solid var(--line)}}
   .faqwrap>h2{{text-align:center}}
