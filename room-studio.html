@@ -1173,6 +1173,8 @@ const tileCache={}, thumbCache={};
    読み込みは非同期だが matTile()/matThumb() は同期呼び出しなので、未読込のあいだは
    base 色のベタ塗りを返す。素材を選んだ時点で ensureMatTile() を await してから
    適用するため、実際の描画にベタ塗りが出ることはない。 */
+let _matGridTimer=null;
+function _matGridRefresh(){ clearTimeout(_matGridTimer); _matGridTimer=setTimeout(()=>{ if(typeof refreshMatGrids==='function') refreshMatGrids(); }, 60); }
 function solidTile(hex, w, h){ const c=document.createElement('canvas'); c.width=w||64; c.height=h||64;
   const x=c.getContext('2d'); x.fillStyle=hex||'#cccccc'; x.fillRect(0,0,c.width,c.height); return c; }
 function _photoOf(key){ const m=MATERIALS.find(x=>x.key===key); return (m&&m.photo)?m:null; }
@@ -1200,7 +1202,7 @@ function matThumb(key){ if(thumbCache[key]) return thumbCache[key]; if(tileCache
   const ph=_photoOf(key);
   if(ph){ const c=solidTile(ph.base,96,96); thumbCache[key]=c;   // 先にベタ塗りを返し、届いたら差し替える
     const im=new Image(); im.crossOrigin='anonymous';
-    im.onload=()=>{ c.getContext('2d').drawImage(im,0,0,96,96); refreshMatGrids(); };
+    im.onload=()=>{ c.getContext('2d').drawImage(im,0,0,96,96); _matGridRefresh(); }; // 14枚分をまとめて1回だけ再描画
     im.src=(SERVER.url||'')+'/materials/'+key+'_t.jpg';
     return c; }
   const m=MATERIALS.find(x=>x.key===key); _matSize=96; const t=m?m.draw():newTile(); _matSize=512; thumbCache[key]=t; return t; }
