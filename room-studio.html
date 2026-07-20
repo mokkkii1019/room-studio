@@ -2402,32 +2402,139 @@ function dropPosToCanvas(e){ const rect=overlay.getBoundingClientRect(); const s
 function imageFilesFrom(dt){ return [...(dt&&dt.files?dt.files:[])].filter(f=>f.type && f.type.startsWith('image/')); }
 function loadImageURL(url, cb, onerr){ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); cb(c); }catch(e){ onerr&&onerr(e); } }; im.onerror=()=>onerr&&onerr(); im.src=url; }
 function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); if(m<=maxSide) return src; const s=maxSide/m, c=document.createElement('canvas'); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); const x=c.getContext('2d'); x.imageSmoothingEnabled=true; x.drawImage(src,0,0,c.width,c.height); return c; }
-/* 「単体（商品のみ）画像らしさ」を採点: 縁が無地で明るい＝商品写真、縁が雑然/人物多い＝ライフスタイル写真。高いほど単体らしい */
-function scoreSingleItem(cv){
-  const s=64, t=document.createElement('canvas'); t.width=s; t.height=s; const x=t.getContext('2d',{willReadFrequently:true}); x.drawImage(cv,0,0,s,s);
-  const d=x.getImageData(0,0,s,s).data, m=Math.max(2,Math.round(s*0.12));
-  let br=0,bg=0,bb=0,bn=0; const vals=[];
-  for(let y=0;y<s;y++)for(let xx=0;xx<s;xx++){ if(y<m||y>=s-m||xx<m||xx>=s-m){ const p=(y*s+xx)*4; br+=d[p];bg+=d[p+1];bb+=d[p+2]; vals.push((d[p]+d[p+1]+d[p+2])/3); bn++; } }
-  const ml=(br+bg+bb)/(3*bn); let v=0; for(const a of vals) v+=(a-ml)*(a-ml); const sd=Math.sqrt(v/bn);
-  const lightness=ml/255, uniform=1-Math.min(1,sd/55);
-  // center detail: 商品が中央にある単体・正面写真は中央のコントラストが高く縁は無地
-  let cm=0,cn=0; const cvals=[], c0=Math.round(s*0.3), c1=Math.round(s*0.7);
-  for(let y=c0;y<c1;y++)for(let xx=c0;xx<c1;xx++){ const p=(y*s+xx)*4; const g=(d[p]+d[p+1]+d[p+2])/3; cvals.push(g); cm+=g; cn++; }
-  cm/=Math.max(1,cn); let cvar=0; for(const a of cvals) cvar+=(a-cm)*(a-cm); const csd=Math.sqrt(cvar/Math.max(1,cn));
-  const centerDetail=Math.min(1,csd/35);
-  let skin=0; const tot=d.length/4;
-  for(let i=0;i<d.length;i+=4){ const R=d[i],G=d[i+1],B=d[i+2]; if(R>95&&G>40&&B>20&&R>G&&R>B&&(R-Math.min(G,B))>15&&Math.abs(R-G)>15) skin++; }
-  const skinFrac=skin/tot, skinPen=skinFrac>0.06?(skinFrac-0.06)*5:0;
-  return uniform*0.5 + lightness*0.25 + centerDetail*0.25 - skinPen;
+/* ---- 候補画像の採点 ----------------------------------------------------------
+   楽天が返す候補は大半が販促物で、単体商品写真は少数派。実測（212枚を目視ラベル付け）:
+
+   | 候補の内訳            | 割合 |
+   |-----------------------|------|
+   | テキストバナー/レビュー | 62%  |
+   | バリエーション表/コラージュ | 17% |
+   | 人物入り              |  8%  |
+   | **使える商品写真**     | **18%** |
+
+   旧スコアラーは「縁が無地で明るい＋中央にコントラスト」を評価していたが、これは
+   カラーバリエーション表（白背景・整然・中央に商品が並ぶ）に最高得点を与えていた。
+   実測でも採用したい画像の中央値 -0.055 に対し捨てたい画像 +0.158 と**符号が逆**。
+   肌色ペナルティも人物ではなく木目・ベージュ生地に反応していた（人物 0.128 <
+   採用したい画像 0.177）ため撤去。
+
+   代わりに減点方式にする。加点要素を置かないのは、白背景を褒めるとバリエーション表が
+   必ず勝つため。実測のアイテム単位の的中率（3候補から1枚選び、それが使える画像か）:
+
+   | | 開発セット(40件) | 別カテゴリ検証(32件) |
+   |---|---|---|
+   | 旧 | 18% | 19% |
+   | 新 | **35%** | **31%** |
+   | 上限（そもそも使える候補がある率） | 40% | 34% |
+
+   評価スクリプトと手順は docs/COLLECT_QUALITY_RESUME.md。閾値を触るときは必ず
+   ラベル付きサンプルで測り直すこと。 */
+const CAND_S=256; // 判定解像度。128pxまで落としても結果はほぼ変わらない（実測）
+function candPixels(cv){
+  const t=document.createElement('canvas'); t.width=CAND_S; t.height=CAND_S;
+  const x=t.getContext('2d',{willReadFrequently:true}); x.drawImage(cv,0,0,CAND_S,CAND_S);
+  return x.getImageData(0,0,CAND_S,CAND_S).data;
 }
-/* 複数候補（先頭3枚＋連番補完）から最も単体・正面らしい1枚を {canvas, url} で返す。404はスキップ。
+function candGray(d){ const g=new Float32Array(CAND_S*CAND_S);
+  for(let i=0,p=0;i<g.length;i++,p+=4) g[i]=(d[p]+d[p+1]+d[p+2])/3; return g; }
+function candPercentile(a,p){ const v=Float32Array.from(a).sort();
+  const pos=(v.length-1)*(p/100), lo=Math.floor(pos), hi=Math.ceil(pos);
+  return lo===hi?v[lo]:v[lo]+(v[hi]-v[lo])*(pos-lo); }
+/* 文字は「小さく・高コントラスト・線幅が一定」の塊。商品の輪郭は細長く、写真の質感は
+   コントラストが低いので、小面積の連結成分だけ数えると重畳テキストが分離できる。 */
+function candTextScore(d){
+  const s=CAND_S, g=candGray(d), e=new Float32Array(s*s);
+  for(let y=0;y<s;y++)for(let x=0;x<s;x++){ const i=y*s+x;
+    const gx=x===0?0:Math.abs(g[i]-g[i-1]), gy=y===0?0:Math.abs(g[i]-g[i-s]);
+    e[i]=Math.hypot(gx,gy); }
+  const thr=Math.max(28,candPercentile(e,92));
+  const on=new Uint8Array(s*s); for(let i=0;i<on.length;i++) on[i]=e[i]>thr?1:0;
+  const seen=new Uint8Array(s*s), stack=new Int32Array(s*s);
+  let glyphs=0, glyphPx=0;
+  for(let start=0;start<on.length;start++){
+    if(!on[start]||seen[start]) continue;
+    let sp=0, area=0, x0=s, x1=-1, y0=s, y1=-1;
+    stack[sp++]=start; seen[start]=1;
+    while(sp){ const i=stack[--sp], y=(i/s)|0, x=i-y*s; area++;
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      for(let dy=-1;dy<=1;dy++){ const ny=y+dy; if(ny<0||ny>=s) continue;
+        for(let dx=-1;dx<=1;dx++){ const nx=x+dx; if(nx<0||nx>=s) continue;
+          const j=ny*s+nx; if(on[j]&&!seen[j]){ seen[j]=1; stack[sp++]=j; } } } }
+    const h=y1-y0+1, w=x1-x0+1;
+    if(h<3||w<3||h>40||w>40) continue;
+    if(area<8||area>400) continue;
+    if(area/Math.max(1,h*w)<0.08) continue; // 細長い＝商品の輪郭。文字ではない
+    glyphs++; glyphPx+=h*w;
+  }
+  return { glyphs, textPx: glyphPx/(s*s) };
+}
+function candStd(a){ let m=0; for(const v of a) m+=v; m/=a.length;
+  let s2=0; for(const v of a) s2+=(v-m)*(v-m); return Math.sqrt(s2/a.length); }
+/* 内側にある「のっぺりした行/列」＝コラージュの仕切り。バリエーション表の検出用。 */
+function candGutterScore(d){
+  const s=CAND_S, g=candGray(d), a=Math.floor(s*0.12), b=Math.floor(s*0.88);
+  const buf=new Float32Array(s), rowFlat=[], colFlat=[];
+  for(let y=a;y<b;y++){ for(let x=0;x<s;x++) buf[x]=g[y*s+x]; rowFlat.push(candStd(buf)<4); }
+  for(let x=a;x<b;x++){ for(let y=0;y<s;y++) buf[y]=g[y*s+x]; colFlat.push(candStd(buf)<4); }
+  const bands=f=>{ let n=0,cur=0; for(const v of f){ if(v) cur++; else { if(cur>=3) n++; cur=0; } } if(cur>=3) n++; return n; };
+  return bands(rowFlat)+bands(colFlat);
+}
+/* ランキングの帯やクーポンバッジは彩度が極端に高い。家具本体はまず該当しない。 */
+function candVividScore(d){ let n=0;
+  for(let p=0;p<d.length;p+=4){ const mx=Math.max(d[p],d[p+1],d[p+2]), mn=Math.min(d[p],d[p+1],d[p+2]);
+    if(mx>0 && (mx-mn)/mx>0.55 && mx/255>0.45) n++; }
+  return n/(CAND_S*CAND_S); }
+/* 高いほど切り抜き素材として使える。すべて減点のみ（上のコメント参照）。 */
+function scoreCandidate(cv){
+  const d=candPixels(cv), t=candTextScore(d);
+  return -Math.min(1.6, t.glyphs/60)
+         -Math.min(1.0, t.textPx*6)
+         -0.8*Math.min(2, candGutterScore(d))
+         -Math.min(0.8, candVividScore(d)*12);
+}
+/* ---- 収集の絞り込み ----------------------------------------------------------
+   楽天が1商品につき返す画像は最大3枚で、そのうち使える写真がある商品は3〜4割しかない
+   （実測。連番でURLを推測する手は91%が404だったので廃止済み）。つまり選別を賢くしても
+   1商品あたりの上限は動かない。**上限を超える唯一の手は「商品ごと捨てる」こと。**
+
+   そこで要求数の COLLECT_OVERFETCH 倍を取得し、スコア順に上位 count 件だけ採用する。
+   固定閾値での足切りも試したが、在庫が枯れて要求数に届かないだけで精度は同じだった:
+
+   | 納品率と精度 | dev(40件) | holdout(32件) |
+   |---|---|---|
+   | 現状（全件採用）      | 100% / 35% | 100% / 31% |
+   | 3倍取得→上位1/3     | 100% / **62%** | 100% / **64%** |
+   | 3倍取得→閾値 -1.2   | 77% / 70%  | 100% / 64% |
+
+   判定は128pxのサムネイルで行う（実測で精度はほぼ落ちない）。3倍の商品を見ても通信量は
+   むしろ減る: 30件納品で 1商品あたり 2.6枚×60KB=156KB → 2.6枚×7KB＋本命60KB=78KB。
+   測り直しは tools/collect-audit/eval_imgscore.py。 */
+const COLLECT_OVERFETCH=3, COLLECT_FETCH_MAX=90; // 90 = /collect の上限（楽天3ページ）
+function overfetchCount(n){ return Math.max(n, Math.min(COLLECT_FETCH_MAX, n*COLLECT_OVERFETCH)); }
+/* 候補URLの楽天画像サイズ指定を判定用の128pxに落とす。楽天以外のURLはそのまま返す。 */
+function candThumbUrl(u){ try{
+    const abs=new URL(u, location.origin), raw=abs.searchParams.get('url');
+    if(!raw || !/_ex=\d+x\d+/.test(raw)) return u;
+    abs.searchParams.set('url', raw.replace(/_ex=\d+x\d+/, '_ex=128x128'));
+    return abs.toString();
+  }catch(e){ return u; } }
+/* サムネイルだけ読んで {url（原寸のまま）, score} を返す。原寸は勝った1枚しか読まない。 */
+function pickBestCandidateThumb(urls){ return new Promise(async resolve=>{
+  const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(candThumbUrl(u), c=>r({canvas:c, url:u}), ()=>r(null)))));
+  const valid=cvs.filter(Boolean);
+  if(!valid.length){ resolve(null); return; }
+  let best=valid[0], bestScore=-Infinity;
+  for(const v of valid){ const sc=scoreCandidate(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
+  resolve({ url:best.url, score:bestScore });
+}); }
+/* 複数候補から最も単体・正面らしい1枚を {canvas, url} で返す（原寸を読む版）。404はスキップ。
    url は勝った候補のロード元（/imgproxy?url=… 形式）— /bgcut 用の元URL復元に使う。 */
 function pickBestCandidate(urls){ return new Promise(async resolve=>{
   const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(u, c=>r({canvas:c, url:u}), ()=>r(null)))));
   const valid=cvs.filter(Boolean);
   if(valid.length<=1){ resolve(valid[0]||null); return; }
   let best=valid[0], bestScore=-Infinity;
-  for(const v of valid){ const sc=scoreSingleItem(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
+  for(const v of valid){ const sc=scoreCandidate(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
   resolve(best);
 }); }
 /* /imgproxy?url=<enc> 形式（相対/絶対どちらも）から元画像URLを取り出す */
@@ -2599,7 +2706,7 @@ async function doCollect(){
   try{
     let items=[];
     if(mode==='brands'){
-      const per=Math.max(1, Math.floor(count/brands.length)); let lastErr='';
+      const per=overfetchCount(Math.max(1, Math.floor(count/brands.length))); let lastErr='';
       for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
         try{
           const kw=(brands[i].name+' '+taste).trim(); // ブランド名をキーワードに含めて楽天全体を検索
@@ -2610,23 +2717,34 @@ async function doCollect(){
       }
       if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
     } else if(mode==='rakuten'){
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source:'rakuten', provider:'official'}), {cache:'no-store'});
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:'rakuten', provider:'official'}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source='rakuten'; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やキーワードを変えてみてください'); $('collectBtn').disabled=false; return; }
     } else {
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(count), source:crawlerSource, provider:'crawler'}), {cache:'no-store'});
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:crawlerSource, provider:'crawler'}), {cache:'no-store'});
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source=crawlerSource; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やキーワードを変えてみてください'); $('collectBtn').disabled=false; return; }
     }
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
+    // 1) 全件をサムネイルだけで採点する（原寸はまだ読まない）
+    let seen=0; const scored=[];
+    await pool(items, 6, it=> new Promise(async res=>{
+      const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
+      const pick=urls.length? await pickBestCandidateThumb(urls) : null;
+      if(pick) scored.push({it, url:pick.url, score:pick.score});
+      seen++; setCollectStatus(`画像を選別しています… ${seen}/${items.length}`); res();
+    }));
+    // 2) スコア上位だけ原寸で読み込む。取得数 > 要求数のぶんがここで捨てられる
+    scored.sort((a,b)=>b.score-a.score);
+    const keep=scored.slice(0, count);
     let done=0, ok=0; const added=[];
-    await pool(items, 5, it=> new Promise(async res=>{
-      const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).map(u=>SERVER.url+u);
-      const best=await pickBestCandidate(urls); // 複数画像から単体らしい1枚を選ぶ
-      if(best){ const li=addToFurniLib(downscaleCanvas(best.canvas,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(best.url), defer:true}); added.push(li); ok++; }
-      done++; setCollectStatus(`最適な画像を選んでいます… ${done}/${items.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
+    await pool(keep, 5, k=> new Promise(async res=>{
+      const it=k.it;
+      const cv=await new Promise(r=>loadImageURL(k.url, c=>r(c), ()=>r(null)));
+      if(cv){ const li=addToFurniLib(downscaleCanvas(cv,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true}); added.push(li); ok++; }
+      done++; setCollectStatus(`画像を読み込んでいます… ${done}/${keep.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
     }));
     renderFurniLib(); // 収集完了時に一括描画
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
