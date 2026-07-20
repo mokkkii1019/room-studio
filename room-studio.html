@@ -655,6 +655,7 @@
             <div id="matConfig" style="display:none">
               <div class="slider"><label>強さ</label><input type="range" id="matStrength" min="0" max="100" value="100"><span class="val" id="matStrengthV">100%</span></div>
               <div class="slider"><label>柄の大きさ</label><input type="range" id="matScale" min="40" max="220" value="100"><span class="val" id="matScaleV">100%</span></div>
+              <label class="toggle"><input type="checkbox" id="matKeepShade" checked><span class="sw"></span>陰影を保つ<span class="info" data-tip="元の壁や床にある明るさのムラ（窓からの光、家具の影、奥ほど暗くなる感じ）を素材の上にも残します。切ると均一な色味になり、平らな板を貼ったように見えます。">i</span></label>
               <label class="toggle"><input type="checkbox" id="matPersp"><span class="sw"></span>遠近に合わせる（床/壁）<span class="info" data-tip="ステージ上の4つの角を床（または壁）の四隅にドラッグして合わせると、柄がパースに沿って投影されます。">i</span></label>
               <div id="matPerspBox" style="display:none">
                 <button class="btn" id="matPerspReset" style="width:100%;justify-content:center">四隅を選択範囲に合わせる</button>
@@ -1332,7 +1333,7 @@ function fillPolygonToMask(mask, pts){
    `getSrcLp(i)` returns original lightness; we keep it to preserve texture.
    ========================================================================= */
 function applyRecolorToImageData(out, srcData, alphaOf, opts){
-  // opts: {color:[h,s,l], strength, lightShift, keepTexture, materialBuf, matStrength}
+  // opts: {color:[h,s,l], strength, lightShift, keepTexture, materialBuf, matStrength, matKeepShade}
   const w=State.W,h=State.H, n=w*h;
   // average L over affected pixels (fast lightness, no full HSL)
   let sumL=0,cnt=0; for(let i=0;i<n;i++){ const a=alphaOf(i); if(a>4){ const p=i*4; sumL+=lpOf(srcData[p],srcData[p+1],srcData[p+2]); cnt++; } }
@@ -1346,8 +1347,12 @@ function applyRecolorToImageData(out, srcData, alphaOf, opts){
     const p=i*4; const lp=lpOf(srcData[p],srcData[p+1],srcData[p+2]);
     let R,G,B, strength;
     if(useMat){
-      // material is laid flat & fully opaque so the original wall/floor never shows through
+      // material is laid fully opaque so the original wall/floor never shows through
       R=mb[p]; G=mb[p+1]; B=mb[p+2]; strength=opts.matStrength;
+      // 陰影を保つ: 元の壁/床の明暗を素材に乗せる。そのまま貼ると照明も影も無い板に
+      //   見えてしまうため。家具側の素材（rebuildFurniture）と同じ式にしてある。
+      //   出力は Uint8ClampedArray なので 255 超えは自動でクランプされる。
+      if(opts.matKeepShade){ const f=clamp(lp/Math.max(avgL,0.05),0.3,1.7); R*=f; G*=f; B*=f; }
     } else {
       const nl = clamp(tl + (lp-avgL)*variation + (opts.lightShift||0), 0, 1);
       const rgb=hsl2rgb(th,ts,nl); R=rgb[0];G=rgb[1];B=rgb[2]; strength=opts.strength;
@@ -1392,6 +1397,7 @@ function rebuildSurface(layer){
     keepTexture: layer.keepTexture,
     materialBuf: matBuf,
     matStrength: layer.matStrength,
+    matKeepShade: layer.matKeepShade!==false, // 未設定（旧データ）は保つ側を既定にする
   };
   applyRecolorToImageData(out, src, i=>feather[i], opts);
   cctx.putImageData(out,0,0);
@@ -1980,7 +1986,7 @@ function captureState(){
     layers: State.layers.map(l=> l.type==='surface' ? {
       type:'surface', id:l.id, name:l.name, mask:l.mask.slice(), color:l.color,
       strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture,
-      material:l.material, matStrength:l.matStrength, matScale:l.matScale,
+      material:l.material, matStrength:l.matStrength, matScale:l.matScale, matKeepShade:l.matKeepShade,
       perspective:l.perspective, quad:l.quad?l.quad.map(p=>p.slice()):null, visible:l.visible
     } : {
       type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
@@ -1997,7 +2003,7 @@ function restoreState(s){
   State.layers = s.layers.map(d=> d.type==='surface' ? {
       id:d.id, type:'surface', name:d.name, mask:d.mask.slice(), color:d.color, strength:d.strength,
       lightShift:d.lightShift, keepTexture:d.keepTexture, material:d.material, matStrength:d.matStrength,
-      matScale:d.matScale, perspective:d.perspective, quad:d.quad?d.quad.map(p=>p.slice()):null,
+      matScale:d.matScale, matKeepShade:d.matKeepShade!==false, perspective:d.perspective, quad:d.quad?d.quad.map(p=>p.slice()):null,
       visible:d.visible, dirty:true, cache:null
     } : {
       id:d.id, type:'furniture', name:d.name, srcCanvas:d.srcCanvas, aiCutCanvas:d.aiCutCanvas,
@@ -2272,7 +2278,7 @@ function addSurfaceLayer(){
   const id=State.nextId++;
   const layer={ id, type:'surface', name:`表面 ${State.layers.filter(l=>l.type==='surface').length+1}`,
     mask:newMask(), color:'#cfd8d4', strength:1.0, lightShift:0, keepTexture:true,
-    material:null, matStrength:1.0, matScale:100, perspective:false, quad:null,
+    material:null, matStrength:1.0, matScale:100, matKeepShade:true, perspective:false, quad:null,
     visible:true, dirty:false, cache:null };
   State.layers.push(layer); selectLayer(id); renderLayers(); toast('表面を追加しました。範囲を塗ってください');
 }
@@ -2985,7 +2991,7 @@ function setMode(m){ State.mode=m;
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
   { const ch=$('surfSelChip'); if(ch){ ch.style.display=a?'flex':'none'; if(a) ch.textContent='選択中：'+(a.name||'表面'); } }
-  if(a){ if(a.color!=='transparent') $('surfColor').value=a.color; $('surfHex').textContent=(a.color==='transparent'?'透明':a.color.toUpperCase()); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
+  if(a){ if(a.color!=='transparent') $('surfColor').value=a.color; $('surfHex').textContent=(a.color==='transparent'?'透明':a.color.toUpperCase()); setSlider('surfStrength',Math.round(a.strength*100),'%'); setSlider('surfLight',a.lightShift*100|0); $('keepTexture').checked=a.keepTexture; setSlider('matStrength',Math.round(a.matStrength*100),'%'); setSlider('matScale',a.matScale,'%'); $('matKeepShade').checked=a.matKeepShade!==false; markChips('colorChips',a.color); markMats('matGrid',a.material); $('matPersp').checked=a.perspective; $('matPerspBox').style.display=a.perspective?'block':'none'; }
   updateMatConfig();
   const f=selectedFurniture(); $('furnitureControls').style.display=f?'block':'none'; $('furnitureEmpty').style.display=f?'none':'block';
   if(f) syncFurnitureUI(f);
@@ -3101,7 +3107,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
     layers:State.layers.map(l=>{
       if(l.type==='surface') return { type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
         strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture, material:l.material, matStrength:l.matStrength,
-        matScale:l.matScale, perspective:l.perspective, quad:l.quad, visible:l.visible };
+        matScale:l.matScale, matKeepShade:l.matKeepShade, perspective:l.perspective, quad:l.quad, visible:l.visible };
       const src=l.source||'upload';
       const stripImg = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus' || src==='hay' || src==='flymee'); // クラウドには商品画像を保存しない
       const f={ type:'furniture', id:l.id, name:l.name,
@@ -3151,7 +3157,7 @@ async function loadProject(obj, opts){
         const mask=newMask(), bytes=b64ToBytes(d.mask); mask.set(bytes.subarray(0,mask.length));
         layers.push({ id:d.id, type:'surface', name:d.name, mask, color:d.color, strength:d.strength,
           lightShift:d.lightShift, keepTexture:d.keepTexture, material:d.material, matStrength:d.matStrength,
-          matScale:d.matScale, perspective:d.perspective||false, quad:d.quad||null, visible:d.visible, dirty:true, cache:null });
+          matScale:d.matScale, matKeepShade:d.matKeepShade!==false, perspective:d.perspective||false, quad:d.quad||null, visible:d.visible, dirty:true, cache:null });
       } else {
         const hasImg=!!d.src;
         const src=hasImg? await loadDataURL(d.src) : placeholderCanvas();   // クラウド作品(画像なし)はB側で都度再取得
@@ -3445,6 +3451,7 @@ function pickFurnMat(key){ const f=selectedFurniture(); if(!f) return; pushHisto
 function refreshMatGrids(){ buildMats('matGrid', pickSurfMat, false); buildMats('fMatGrid', pickFurnMat, false); const a=activeSurface(); if(a) markMats('matGrid',a.material); const f=selectedFurniture(); if(f) markMats('fMatGrid',f.material); }
 buildMats('matGrid', pickSurfMat, false);
 on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matStrength'); a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
+on($('matKeepShade'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.matKeepShade=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
 on($('matScale'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matScale'); a.matScale=+e.target.value; $('matScaleV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
 on($('matPersp'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.perspective=e.target.checked; if(a.perspective && !a.quad) a.quad=maskBBoxQuad(a.mask); $('matPerspBox').style.display=a.perspective?'block':'none'; a._matBufKey=null; a.dirty=true; rebuildSurface(a); render(); });
 on($('matPerspReset'),'click',()=>{ const a=activeSurface(); if(!a||!a.perspective) return; pushHistory(); a.quad=maskBBoxQuad(a.mask); a._matBufKey=null; a.dirty=true; rebuildSurface(a); render(); });
