@@ -2746,7 +2746,7 @@ function normShopName(s){
   return (s||'').normalize('NFKC').toLowerCase().replace(/[\s　・（）()【】\[\]。、,.\-_/]/g,'');
 }
 async function resolveShopCode(brand, type){
-  const key=type+' '+brand;
+  const key=type+'|'+brand;
   if(key in _shopCodeCache) return _shopCodeCache[key];
   let code=null;
   try{
