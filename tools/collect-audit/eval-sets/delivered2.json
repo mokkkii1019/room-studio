@@ -1,0 +1,578 @@
+[
+ {
+  "file": "e000.jpg",
+  "type": "chest",
+  "item": 0,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/woodylife/cabinet/wsn/wsn-nier-003-r4.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e001.jpg",
+  "type": "storage_box",
+  "item": 1,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lachic12/cabinet/onesell488/tka4e3e831c4_1.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e002.jpg",
+  "type": "coffee_table",
+  "item": 2,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/simpleandstandard/cabinet/centertable/easycentertable/004.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e003.jpg",
+  "type": "coffee_table",
+  "item": 3,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/f012173-ebetsu/cabinet/eb8-0001-0199/r_eb8_0043_2.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e004.jpg",
+  "type": "storage_box",
+  "item": 4,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lachic12/cabinet/onesell488/tk92ee6f703d_1.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e005.jpg",
+  "type": "chest",
+  "item": 5,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/02/f514-05007-100_02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e006.jpg",
+  "type": "dining_table",
+  "item": 6,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-ehira-kagu-e-flat/cabinet/02386316/03588219/imgrc0087456296.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "e007.jpg",
+  "type": "mirror",
+  "item": 7,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/attract/cabinet/teori/zero-008.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e008.jpg",
+  "type": "chest",
+  "item": 8,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/peace/cabinet/living/imgrc0120668479.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e009.jpg",
+  "type": "desk",
+  "item": 9,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/sumica/cabinet/item_cart/desk/02/vg-rossy_02_.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e010.jpg",
+  "type": "sofa",
+  "item": 10,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/sofa/01/vg-mosa_02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e011.jpg",
+  "type": "chest",
+  "item": 11,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/bonir/cabinet/019/22141-01.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e012.jpg",
+  "type": "chair",
+  "item": 12,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/air-rhizome/cabinet/140/m0m-f-kago04.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e013.jpg",
+  "type": "chest",
+  "item": 13,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f514-g1014-100_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e014.jpg",
+  "type": "mirror",
+  "item": 14,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/bedding/cabinet/3a10/3a-esql90_2.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e015.jpg",
+  "type": "dining_table",
+  "item": 15,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/t-interior/cabinet/item/images2/qos001_1a.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e016.jpg",
+  "type": "mirror",
+  "item": 16,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/door-z/cabinet/03030058/imgrc0104321839.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e017.jpg",
+  "type": "storage_box",
+  "item": 17,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/koukitorin/cabinet/interior01/inte3/compass1652942079.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e018.jpg",
+  "type": "storage_box",
+  "item": 18,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/clickworks/cabinet/raku999_0201/01-20250708-19491101.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e019.jpg",
+  "type": "desk",
+  "item": 19,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/02/f802-g1056-100_02___.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e020.jpg",
+  "type": "storage_box",
+  "item": 20,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kalavika/cabinet/08290750/08345525/jh21110124_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e021.jpg",
+  "type": "storage_box",
+  "item": 21,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kalavika/cabinet/08290750/08345525/jh21110124_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e022.jpg",
+  "type": "dining_table",
+  "item": 22,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lushroom/cabinet/dining/dining/50023-2025_02.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e023.jpg",
+  "type": "chest",
+  "item": 23,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/b-room-f/cabinet/shohin/md/md-8511t/imgrc0093665369.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e024.jpg",
+  "type": "dining_table",
+  "item": 24,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kaguone/cabinet/lp/tr02/0201_0300/tr020233_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e025.jpg",
+  "type": "desk",
+  "item": 25,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/img4/pc-desk3/newgulliver_top_02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e026.jpg",
+  "type": "dining_table",
+  "item": 26,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/rtecogn/cabinet/dt/11759989/003-wn.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e027.jpg",
+  "type": "chair",
+  "item": 27,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/grazia-doris/cabinet/02154991/03518463/imgrc0069602617.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e028.jpg",
+  "type": "coffee_table",
+  "item": 28,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/sanshow/cabinet/01560868/m-mlt211-80-1002.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e029.jpg",
+  "type": "chest",
+  "item": 29,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/tomarigi/cabinet/sideboard/av-sb-sub1.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e030.jpg",
+  "type": "storage_box",
+  "item": 30,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/agep-shop/cabinet/image8/fdc3706_1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e031.jpg",
+  "type": "chest",
+  "item": 31,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ymworld/cabinet/kd_furniture17/00-100142-11_logo.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e032.jpg",
+  "type": "chair",
+  "item": 32,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/storage-g/cabinet/10283824/11719167_10stm4.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e033.jpg",
+  "type": "sofa",
+  "item": 33,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/risopale/cabinet/prd-img/sf-licsa-n/sf-licsa--n_ds1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e034.jpg",
+  "type": "sofa",
+  "item": 34,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/risopale/cabinet/prd-img/11329864/sf-beris-n_ds1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e035.jpg",
+  "type": "dining_table",
+  "item": 35,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/auc-yasukichi/cabinet/item_interior/20000372_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e036.jpg",
+  "type": "chest",
+  "item": 36,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/01/f301-05012-100_02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e037.jpg",
+  "type": "chest",
+  "item": 37,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/stfurniture/cabinet/meu/meu-150k.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e038.jpg",
+  "type": "mirror",
+  "item": 38,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/shinwashop/cabinet/zakka/p-zm_01.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e039.jpg",
+  "type": "storage_box",
+  "item": 39,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kasukito/cabinet/by5-11/byp-2922-1.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "e040.jpg",
+  "type": "storage_box",
+  "item": 40,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lachic12/cabinet/onesell488/tkbbc86edbe9.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "e041.jpg",
+  "type": "coffee_table",
+  "item": 41,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/air-rhizome/cabinet/test/hka-l02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e042.jpg",
+  "type": "chest",
+  "item": 42,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/npp35_1.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e043.jpg",
+  "type": "coffee_table",
+  "item": 43,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ritahome/cabinet/95/imgrc0127483271.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e044.jpg",
+  "type": "desk",
+  "item": 44,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/storage/05/f802-g1024-100_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e045.jpg",
+  "type": "sofa",
+  "item": 45,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/risopale/cabinet/prd-img/sf-delos/sf-delos-2pam_r.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e046.jpg",
+  "type": "dining_table",
+  "item": 46,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/air-rhizome/cabinet/138/vld-kago04.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e047.jpg",
+  "type": "carpet",
+  "item": 47,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/rugly/cabinet/rug9/rk_hol-p_kou2.gif?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e048.jpg",
+  "type": "coffee_table",
+  "item": 48,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/lushroom/cabinet/table/30032-2019_02.jpg?_ex=600x600",
+  "label": "closeup"
+ },
+ {
+  "file": "e049.jpg",
+  "type": "storage_box",
+  "item": 49,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/primeplus/cabinet/r_2024100811/20241008131823_39_1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e050.jpg",
+  "type": "coffee_table",
+  "item": 50,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/joystyle-coordinate/cabinet/lt/ltgi_head.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e051.jpg",
+  "type": "chair",
+  "item": 51,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/re-pro/cabinet/by01-2_st.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e052.jpg",
+  "type": "sofa",
+  "item": 52,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/dondon/cabinet/event/th/hy012_2.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e053.jpg",
+  "type": "storage_box",
+  "item": 53,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/livingut/cabinet/maker_jej4/408507_1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e054.jpg",
+  "type": "desk",
+  "item": 54,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/denzo/cabinet/1000-03/1000-141010115_1.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e055.jpg",
+  "type": "dining_table",
+  "item": 55,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kinonukumori/cabinet/sh/di/anna_1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e056.jpg",
+  "type": "desk",
+  "item": 56,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/office-com/cabinet/officecom8/z-lwd-1270_003.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e057.jpg",
+  "type": "coffee_table",
+  "item": 57,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/jiyu-ken/cabinet/tac/3000/3006_01.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e058.jpg",
+  "type": "storage_box",
+  "item": 58,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kasukito/cabinet/by5-11/byp-2921-1.jpg?_ex=600x600",
+  "label": "clean"
+ },
+ {
+  "file": "e059.jpg",
+  "type": "desk",
+  "item": 59,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/desk/01/f802-g1064-100_01.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e060.jpg",
+  "type": "bed",
+  "item": 60,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/mikazuki/cabinet/bed/murren-ver2/4128q-1.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e061.jpg",
+  "type": "chest",
+  "item": 61,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/e-sumail-style/cabinet/craftuchida/547003_01_04b.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e062.jpg",
+  "type": "coffee_table",
+  "item": 62,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/classy02/cabinet/table/eg_060_03a.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e063.jpg",
+  "type": "mirror",
+  "item": 63,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_gold/lifestyle-funfun/search/anm-013.jpg?_ex=600x600",
+  "label": "person"
+ },
+ {
+  "file": "e064.jpg",
+  "type": "coffee_table",
+  "item": 64,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kagu10point/cabinet/eu/eu-029.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e065.jpg",
+  "type": "bed",
+  "item": 65,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/rh2016/cabinet/bedframe/cj-ljy/2-1.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e066.jpg",
+  "type": "chest",
+  "item": 66,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/potarico/cabinet/gt/as-356-1-2.jpg?_ex=600x600",
+  "label": "text"
+ },
+ {
+  "file": "e067.jpg",
+  "type": "carpet",
+  "item": 67,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/ragmatst/cabinet/01241930/mouty2bs-a4-1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e068.jpg",
+  "type": "coffee_table",
+  "item": 68,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/low-ya/cabinet/item_cart/table/01/f402-g1050-100_02.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e069.jpg",
+  "type": "dining_table",
+  "item": 69,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/moromoro/cabinet/jxd01_2.jpg?_ex=600x600",
+  "label": "ok"
+ },
+ {
+  "file": "e070.jpg",
+  "type": "chair",
+  "item": 70,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kaguin/cabinet/eigyou2/9110796_new1.jpg?_ex=600x600",
+  "label": "grid"
+ },
+ {
+  "file": "e071.jpg",
+  "type": "sofa",
+  "item": 71,
+  "slot": 0,
+  "url": "https://thumbnail.image.rakuten.co.jp/@0_mall/kagu350/cabinet/118000-1/g118013-l-r.jpg?_ex=600x600",
+  "label": "ok"
+ }
+]

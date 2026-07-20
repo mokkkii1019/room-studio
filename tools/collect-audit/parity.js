@@ -13,10 +13,10 @@ if (start < 0 || end < 0) {
   process.exit(2);
 }
 const src = html.slice(start, end);
-for (const fn of ['candGray', 'candPercentile', 'candTextScore', 'candGutterScore', 'candVividScore']) {
+for (const fn of ['candGray', 'candPercentile', 'candTextScore', 'candGutterScore', 'candVividScore', 'candSeamScore']) {
   if (!src.includes('function ' + fn)) { console.error('missing ' + fn); process.exit(2); }
 }
-const m = new Function(src + '; return {candTextScore, candGutterScore, candVividScore};')();
+const m = new Function(src + '; return {candTextScore, candGutterScore, candVividScore, candSeamScore};')();
 
 const dir = process.argv[3];
 const exp = JSON.parse(fs.readFileSync(path.join(dir, 'expected.json'), 'utf8'));
@@ -24,12 +24,15 @@ let bad = 0;
 for (const e of exp) {
   const d = new Uint8ClampedArray(fs.readFileSync(path.join(dir, e.file)));
   const t = m.candTextScore(d), g = m.candGutterScore(d), v = m.candVividScore(d);
+  const s = m.candSeamScore(d);
   const ok = t.glyphs === e.glyphs && Math.abs(t.textPx - e.text_px) < 1e-6
-    && g === e.gutter && Math.abs(v - e.vivid) < 1e-6;
+    && g === e.gutter && Math.abs(v - e.vivid) < 1e-6
+    && s.seams === e.seams && Math.abs(s.seamMax - e.seam_max) < 1e-6;
   if (!ok) {
     bad++;
     console.log(`MISMATCH ${e.file} glyphs ${t.glyphs}/${e.glyphs} ` +
-      `textPx ${t.textPx}/${e.text_px} gutter ${g}/${e.gutter} vivid ${v}/${e.vivid}`);
+      `textPx ${t.textPx}/${e.text_px} gutter ${g}/${e.gutter} vivid ${v}/${e.vivid} ` +
+      `seams ${s.seams}/${e.seams} seamMax ${s.seamMax}/${e.seam_max}`);
   }
 }
 console.log(bad === 0 ? `parity OK — room-studio.html matches imgscore.py on ${exp.length} images`

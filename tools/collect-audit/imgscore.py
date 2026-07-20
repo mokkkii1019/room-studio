@@ -95,6 +95,24 @@ def vivid_score(a):
     return float(((sat > 0.55) & (mx / 255.0 > 0.45)).mean())
 
 
+def seam_score(a, thr=18.0, frac=0.80):
+    """(count, strongest) of interior rows/columns that are almost entirely an edge.
+
+    gutter_score() only finds collages separated by FLAT whitespace. Measured over 120
+    live deliveries, collages are the largest remaining failure class and most of them
+    butt photographs straight against each other, so no flat gap exists — but the seam
+    still runs the full width of the frame, which a real photograph essentially never
+    does. Catches 7 of 14 collages for 2 false positives out of 39 usable images.
+    """
+    g = a.mean(axis=2)
+    n = g.shape[0]
+    lo, hi = int(n * 0.10), int(n * 0.90)
+    rows = (np.abs(np.diff(g, axis=0)) > thr).mean(axis=1)[lo:hi]
+    cols = (np.abs(np.diff(g, axis=1)) > thr).mean(axis=0)[lo:hi]
+    seams = int((rows > frac).sum() + (cols > frac).sum())
+    return seams, float(max(rows.max(initial=0.0), cols.max(initial=0.0)))
+
+
 def score(a):
     """Higher = more usable as a cut-out. Deductions only.
 
@@ -103,10 +121,13 @@ def score(a):
     did reward exactly that — ranked them top of the list.
     """
     tpx, tn = text_score(a)
+    seams, seam_max = seam_score(a)
     return (-min(1.6, tn / 60.0)
             - min(1.0, tpx * 6.0)
             - 0.8 * min(2, gutter_score(a))
-            - min(0.8, vivid_score(a) * 12.0))
+            - min(0.8, vivid_score(a) * 12.0)
+            - 1.0 * min(2, seams)
+            - (0.8 if seam_max >= 0.80 else 0.0))
 
 
 def score_legacy(a64):

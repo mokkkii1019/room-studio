@@ -28,7 +28,7 @@ from collections import defaultdict
 from imgscore import FETCH_PX, load, score, score_legacy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SETS = ["dev", "holdout", "delivered"]
+SETS = ["dev", "holdout", "delivered", "delivered2"]
 ACCEPTABLE = {"clean", "ok"}
 
 
@@ -108,7 +108,7 @@ def run_set(name, cache):
 def parity(cache):
     """Diff room-studio.html's scoring against this module on identical buffers."""
     import numpy as np
-    from imgscore import gutter_score, text_score, vivid_score
+    from imgscore import gutter_score, seam_score, text_score, vivid_score
 
     recs = json.load(open(os.path.join(HERE, "eval-sets", "dev.json"), encoding="utf-8"))[:24]
     pdir = os.path.join(cache, "_parity")
@@ -119,8 +119,10 @@ def parity(cache):
         rgba = np.dstack([a.astype(np.uint8), np.full((256, 256, 1), 255, np.uint8)])
         open(os.path.join(pdir, rec["file"] + ".raw"), "wb").write(rgba.tobytes())
         tpx, tn = text_score(a)
+        seams, seam_max = seam_score(a)
         exp.append({"file": rec["file"] + ".raw", "text_px": float(tpx), "glyphs": int(tn),
-                    "gutter": int(gutter_score(a)), "vivid": float(vivid_score(a))})
+                    "gutter": int(gutter_score(a)), "vivid": float(vivid_score(a)),
+                    "seams": int(seams), "seam_max": float(seam_max)})
     json.dump(exp, open(os.path.join(pdir, "expected.json"), "w"), indent=1)
     html = os.path.join(HERE, "..", "..", "room-studio.html")
     r = subprocess.run(["node", os.path.join(HERE, "parity.js"), html, pdir])
@@ -132,7 +134,7 @@ if __name__ == "__main__":
     cache = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, ".cache")
     os.makedirs(cache, exist_ok=True)
     for s in SETS:
-        (run_delivered if s == "delivered" else run_set)(s, cache)
+        (run_delivered if s.startswith("delivered") else run_set)(s, cache)
     if "--parity" in sys.argv:
         print()
         parity(cache)
