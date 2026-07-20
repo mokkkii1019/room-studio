@@ -145,6 +145,17 @@ def lp_asset(name: str):
     return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/materials/{name}")
+def material_asset(name: str):
+    # 素材タイル（CC0, ambientCG）。materials/ の <key>.jpg と <key>_t.jpg を配信。
+    # 内容は不変なので lp-assets より長めにキャッシュさせる。出典は docs/MATERIALS_CC0.md。
+    res = _site.lp_asset(os.path.join(ROOT, "materials"), name)
+    if res is None:
+        raise HTTPException(status_code=404, detail="not found")
+    data, ctype = res
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.get("/about", response_class=HTMLResponse)
 def about():
     return HTMLResponse(_site.legal_html("about"))

@@ -1008,12 +1008,12 @@ function selectedFurniture(){ const l=State.layers.find(x=>x.id===State.selected
    ========================================================================= */
 const MATERIALS = [
   // 木目 wood
-  {key:'oak',      name:'オーク',         base:'#cdae78', draw:woodDraw('#d2b67f','#9c7c46',6,11)},
-  {key:'natoak',   name:'ナチュラルオーク', base:'#ddc9a6', draw:woodDraw('#e1cfae','#b59a6e',6,12)},
-  {key:'ash',      name:'アッシュ',       base:'#ddccb2', draw:woodDraw('#e0d0b8','#b39f81',5,33)},
-  {key:'walnut',   name:'ウォルナット',   base:'#7a5639', draw:woodDraw('#825c3d','#3f2c1d',7,22)},
-  {key:'teak',     name:'チーク',         base:'#a8743f', draw:woodDraw('#b07c45','#6e4724',6,44)},
-  {key:'ebony',    name:'エボニー',       base:'#463629', draw:woodDraw('#52402f','#241a12',7,77)},
+  {key:'oak',      name:'オーク',         base:'#cc9c6e', photo:true},
+  {key:'natoak',   name:'ナチュラルオーク', base:'#d4a27d', photo:true},
+  {key:'ash',      name:'アッシュ',       base:'#a0795b', photo:true},
+  {key:'walnut',   name:'ウォルナット',   base:'#3f220e', photo:true},
+  {key:'teak',     name:'チーク',         base:'#af723f', photo:true},
+  {key:'ebony',    name:'エボニー',       base:'#2e2017', photo:true},
   // 石目・大理石 stone / marble
   {key:'marble',   name:'大理石（白）',   base:'#f1f0ec', draw:marbleDraw('#f3f2ee','#c2bdb1',66)},
   {key:'calacatta',name:'カラカッタ',     base:'#f2f0ea', draw:marbleDraw('#f4f2ec','#8b8576',61)},
@@ -1040,14 +1040,14 @@ const MATERIALS = [
   {key:'terr',     name:'テラコッタ',     base:'#c47a55', draw:tileDraw('#c47a55','#9c5d3e',4,4,199)},
   // ---- 追加分 ----
   // 木目 wood
-  {key:'maple',    name:'メープル',       base:'#e2cba0', draw:woodDraw('#e8d4b0','#c0a374',6,101)},
-  {key:'cherry',   name:'チェリー',       base:'#a9603f', draw:woodDraw('#b56d48','#7a3f28',6,103)},
-  {key:'mahogany', name:'マホガニー',     base:'#7e3f2f', draw:woodDraw('#8a4735','#4d2317',7,107)},
-  {key:'birch',    name:'バーチ',         base:'#e4d3b3', draw:woodDraw('#ead9bd','#c3ab86',5,109)},
-  {key:'pine',     name:'パイン',         base:'#dcc290', draw:woodDraw('#e5cf9e','#b89660',6,113)},
-  {key:'rosewood', name:'ローズウッド',   base:'#6b4030', draw:woodDraw('#77492f','#3a2016',7,127)},
-  {key:'greyoak',  name:'グレーオーク',   base:'#b8b0a3', draw:woodDraw('#c0b8ab','#8f887d',6,131)},
-  {key:'smokedoak',name:'スモークオーク', base:'#8a7a63', draw:woodDraw('#93826a','#5a4d3c',6,137)},
+  {key:'maple',    name:'メープル',       base:'#b08f65', photo:true},
+  {key:'cherry',   name:'チェリー',       base:'#683817', photo:true},
+  {key:'mahogany', name:'マホガニー',     base:'#593313', photo:true},
+  {key:'birch',    name:'バーチ',         base:'#c19f76', photo:true},
+  {key:'pine',     name:'パイン',         base:'#ddc1ab', photo:true},
+  {key:'rosewood', name:'ローズウッド',   base:'#371e0e', photo:true},
+  {key:'greyoak',  name:'グレーオーク',   base:'#7b624d', photo:true},
+  {key:'smokedoak',name:'スモークオーク', base:'#654330', photo:true},
   // 石目・大理石 stone / marble
   {key:'emperador',name:'エンペラドール（茶）', base:'#5f4632', draw:marbleDraw('#6a4f39','#c9a878',139)},
   {key:'nero',     name:'黒大理石',       base:'#2c2b2a', draw:marbleDraw('#33322f','#9b978c',149)},
@@ -1166,9 +1166,46 @@ function paperDraw(hex,seed){ return ()=>{ const n=tileNoise(seed), b=hex2rgb(he
 function shade(hex,amt){ const [r,g,b]=hex2rgb(hex); return `rgb(${clamp(r+amt*2.55,0,255)|0},${clamp(g+amt*2.55,0,255)|0},${clamp(b+amt*2.55,0,255)|0})`; }
 // cache rendered tiles
 const tileCache={}, thumbCache={};
-function matTile(key){ if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); _matSize=512; const t=m?m.draw():newTile(); tileCache[key]=t; return t; }
+/* ---- 写真素材（CC0）------------------------------------------------------------
+   `photo:true` の素材は手続き生成ではなく /materials/<key>.jpg（実写のシームレスタイル）
+   を読む。出典は ambientCG（CC0）で、取得と検証の手順は docs/MATERIALS_CC0.md。
+
+   読み込みは非同期だが matTile()/matThumb() は同期呼び出しなので、未読込のあいだは
+   base 色のベタ塗りを返す。素材を選んだ時点で ensureMatTile() を await してから
+   適用するため、実際の描画にベタ塗りが出ることはない。 */
+let _matGridTimer=null;
+function _matGridRefresh(){ clearTimeout(_matGridTimer); _matGridTimer=setTimeout(()=>{ if(typeof refreshMatGrids==='function') refreshMatGrids(); }, 60); }
+function solidTile(hex, w, h){ const c=document.createElement('canvas'); c.width=w||64; c.height=h||64;
+  const x=c.getContext('2d'); x.fillStyle=hex||'#cccccc'; x.fillRect(0,0,c.width,c.height); return c; }
+function _photoOf(key){ const m=MATERIALS.find(x=>x.key===key); return (m&&m.photo)?m:null; }
+const _matLoading={};
+/* /materials/<key>.jpg を読んで tileCache に入れる。thumb は <key>_t.jpg（96px）。 */
+function ensureMatTile(key){
+  const m=_photoOf(key); if(!m) return Promise.resolve(tileCache[key]||matTile(key));
+  if(tileCache[key]) return Promise.resolve(tileCache[key]);
+  if(_matLoading[key]) return _matLoading[key];
+  _matLoading[key]=new Promise(res=>{
+    const im=new Image(); im.crossOrigin='anonymous';
+    im.onload=()=>{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight;
+      c.getContext('2d').drawImage(im,0,0); tileCache[key]=c; res(c); };
+    im.onerror=()=>{ tileCache[key]=solidTile(m.base,64,64); res(tileCache[key]); }; // 落ちてもベタ塗りで続行
+    im.src=(SERVER.url||'')+'/materials/'+key+'.jpg';
+  });
+  return _matLoading[key];
+}
+function ensureMatTiles(keys){ return Promise.all([...new Set((keys||[]).filter(Boolean))].map(ensureMatTile)); }
+function matTile(key){ if(tileCache[key]) return tileCache[key];
+  const ph=_photoOf(key); if(ph){ ensureMatTile(key); return solidTile(ph.base,64,64); }
+  const m=MATERIALS.find(x=>x.key===key); _matSize=512; const t=m?m.draw():newTile(); tileCache[key]=t; return t; }
 /* small, cheap preview for the material picker (avoids generating all full 512px tiles at load) */
-function matThumb(key){ if(thumbCache[key]) return thumbCache[key]; if(tileCache[key]) return tileCache[key]; const m=MATERIALS.find(x=>x.key===key); _matSize=96; const t=m?m.draw():newTile(); _matSize=512; thumbCache[key]=t; return t; }
+function matThumb(key){ if(thumbCache[key]) return thumbCache[key]; if(tileCache[key]) return tileCache[key];
+  const ph=_photoOf(key);
+  if(ph){ const c=solidTile(ph.base,96,96); thumbCache[key]=c;   // 先にベタ塗りを返し、届いたら差し替える
+    const im=new Image(); im.crossOrigin='anonymous';
+    im.onload=()=>{ c.getContext('2d').drawImage(im,0,0,96,96); _matGridRefresh(); }; // 14枚分をまとめて1回だけ再描画
+    im.src=(SERVER.url||'')+'/materials/'+key+'_t.jpg';
+    return c; }
+  const m=MATERIALS.find(x=>x.key===key); _matSize=96; const t=m?m.draw():newTile(); _matSize=512; thumbCache[key]=t; return t; }
 /* extract a SEAMLESS tile from any photo: center-crop → half-offset wrap → feather-heal the central seam cross */
 function makeSeamless(src, S){ S=S||512;
   const base=document.createElement('canvas'); base.width=base.height=S; const bx=base.getContext('2d',{willReadFrequently:true}); bx.imageSmoothingEnabled=true;
@@ -1202,8 +1239,11 @@ function deleteUserMaterial(key){ const i=MATERIALS.findIndex(m=>m.key===key); i
 function buildMaterialBuffer(key, scalePct){
   const t = matTile(key);
   const buf = document.createElement('canvas'); buf.width=State.W; buf.height=State.H;
-  const bx = buf.getContext('2d'); const sc=(scalePct/100); const ts=Math.max(24, t.width*sc);
-  for(let y=0;y<State.H;y+=ts) for(let x=0;x<State.W;x+=ts) bx.drawImage(t,x,y,ts,ts);
+  const bx = buf.getContext('2d'); const sc=(scalePct/100);
+  // 写真素材には 512x256 のような非正方形タイルがある。tw/th を別々に持たないと
+  // 板目が正方形に潰れて幅の広い板に見えてしまう。
+  const tw=Math.max(24, t.width*sc), th=Math.max(24, t.height*sc);
+  for(let y=0;y<State.H;y+=th) for(let x=0;x<State.W;x+=tw) bx.drawImage(t,x,y,tw,th);
   return bx.getImageData(0,0,State.W,State.H);
 }
 
@@ -1442,7 +1482,9 @@ function rebuildFurniture(layer){
     let sumL=0,cnt=0; for(let i=0;i<n;i++){ if(d[i*4+3]>10){ const p=i*4; sumL+=lpOf(d[p],d[p+1],d[p+2]); cnt++; } }
     const avgL=cnt?sumL/cnt:0.5;
     let matBuf=null;
-    if(layer.material){ const t=matTile(layer.material); const bc=document.createElement('canvas'); bc.width=w;bc.height=h; const bcx=bc.getContext('2d'); const ts=t.width*0.7; for(let y=0;y<h;y+=ts)for(let x=0;x<w;x+=ts) bcx.drawImage(t,x,y,ts,ts); matBuf=bcx.getImageData(0,0,w,h).data; }
+    if(layer.material){ const t=matTile(layer.material); const bc=document.createElement('canvas'); bc.width=w;bc.height=h; const bcx=bc.getContext('2d');
+      const tw=t.width*0.7, th=t.height*0.7; // 非正方形タイルの比率を保つ（buildMaterialBuffer と同じ理由）
+      for(let y=0;y<h;y+=th)for(let x=0;x<w;x+=tw) bcx.drawImage(t,x,y,tw,th); matBuf=bcx.getImageData(0,0,w,h).data; }
     const col = layer.recolor? rgb2hsl(...hex2rgb(layer.color)) : null;
     for(let i=0;i<n;i++){ const al=d[i*4+3]; if(al<=10) continue; const p=i*4; const lp=lpOf(d[p],d[p+1],d[p+2]);
       if(layer.material){ const shadeF=clamp(lp/Math.max(avgL,0.05),0.3,1.7); const R=matBuf[p]*shadeF,G=matBuf[p+1]*shadeF,B=matBuf[p+2]*shadeF; const s=layer.matStrength; d[p]=d[p]*(1-s)+R*s; d[p+1]=d[p+1]*(1-s)+G*s; d[p+2]=d[p+2]*(1-s)+B*s; }
@@ -3225,6 +3267,8 @@ async function loadProject(obj, opts){
       }
     }
     State.layers=layers; State.selectedId=obj.selectedId||null;
+    // 写真素材は非同期に読むので、レイヤーを描き直す前に使われているタイルを揃えておく
+    await ensureMatTiles(layers.map(l=>l.material));
     State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); });
     // 家具ライブラリ（収集した家具など）を復元
     if(Array.isArray(obj.furniLib)){
@@ -3499,8 +3543,12 @@ on($('surfLight'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHisto
 on($('keepTexture'),'change',e=>{ const a=activeSurface(); if(!a) return; pushHistory(); a.keepTexture=e.target.checked; a.dirty=true; rebuildSurface(a); render(); });
 function updateMatConfig(){ const a=activeSurface(), el=$('matConfig'); if(el) el.style.display=(a&&a.material)?'block':'none'; }
 function updateFMatConfig(){ const f=selectedFurniture(), el=$('fMatConfig'); if(el) el.style.display=(f&&f.material)?'block':'none'; }
-function pickSurfMat(key){ const a=activeSurface(); if(!a) return; pushHistory(); a.material=key; if(a.color==='transparent'){ a.color=$('surfColor').value; markChips('colorChips',a.color); $('surfHex').textContent=a.color.toUpperCase(); } markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }
-function pickFurnMat(key){ const f=selectedFurniture(); if(!f) return; pushHistory(); f.material=key; markMats('fMatGrid',key); updateFMatConfig(); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }
+async function pickSurfMat(key){ const a=activeSurface(); if(!a) return;
+  if(key) await ensureMatTile(key); // 写真素材は実タイルが届いてから適用する
+  pushHistory(); a.material=key; if(a.color==='transparent'){ a.color=$('surfColor').value; markChips('colorChips',a.color); $('surfHex').textContent=a.color.toUpperCase(); } markMats('matGrid',key); updateMatConfig(); a.dirty=true; rebuildSurface(a); renderLayers(); render(); }
+async function pickFurnMat(key){ const f=selectedFurniture(); if(!f) return;
+  if(key) await ensureMatTile(key);
+  pushHistory(); f.material=key; markMats('fMatGrid',key); updateFMatConfig(); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); }
 function refreshMatGrids(){ buildMats('matGrid', pickSurfMat, false); buildMats('fMatGrid', pickFurnMat, false); const a=activeSurface(); if(a) markMats('matGrid',a.material); const f=selectedFurniture(); if(f) markMats('fMatGrid',f.material); }
 buildMats('matGrid', pickSurfMat, false);
 on($('matStrength'),'input',e=>{ const a=activeSurface(); if(!a) return; pushHistory('matStrength'); a.matStrength=+e.target.value/100; $('matStrengthV').textContent=e.target.value+'%'; a.dirty=true; rebuildSurface(a); render(); });
