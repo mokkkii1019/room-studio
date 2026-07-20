@@ -268,6 +268,16 @@ def lp_asset(name: str):
     return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/materials/{name}")
+def material_asset(name: str):
+    """素材タイル（CC0, ambientCG）。materials/ の <key>.jpg と <key>_t.jpg を配信。"""
+    res = _site.lp_asset(os.path.join(APP_DIR, "materials"), name)
+    if res is None:
+        raise HTTPException(status_code=404, detail="not found")
+    data, ctype = res
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=604800"})
+
+
 def _app_lastmod():
     """room-studio.html の更新日時（YYYY-MM-DD）。sitemap の <lastmod> に使う。"""
     try:
