@@ -14,29 +14,65 @@
 #   grid   multi-panel collage, colour-variation table, several products
 #   person a human is visible
 #   swatch flat fabric or material close-up (curtain listings)
+#   closeup cropped detail shot — real product, unusable as a furniture image
 #
 # acceptable = clean | ok  — the ones worth handing to a user.
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
 from collections import defaultdict
 
-from imgscore import load, score, score_legacy
+from imgscore import FETCH_PX, load, score, score_legacy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SETS = ["dev", "holdout"]
+SETS = ["dev", "holdout", "delivered"]
 ACCEPTABLE = {"clean", "ok"}
 
 
 def cached(cache, rec):
+    """Fetch at the same resolution the client scores at, so the measurement matches
+    what ships (the eval sets record 600x600 URLs)."""
     p = os.path.join(cache, rec["file"])
     if not os.path.exists(p):
-        req = urllib.request.Request(rec["url"], headers={"User-Agent": "RoomStudio-audit/1.0"})
+        url = re.sub(r"_ex=\d+x\d+", f"_ex={FETCH_PX}x{FETCH_PX}", rec["url"])
+        req = urllib.request.Request(url, headers={"User-Agent": "RoomStudio-audit/1.0"})
         with urllib.request.urlopen(req, timeout=40) as r:
             open(p, "wb").write(r.read())
     return p
+
+
+def run_delivered(name, cache):
+    """`delivered` is one image per row — the highest-scoring candidates the shipped
+    scorer actually handed to users, labelled afterwards. It targets the decision
+    boundary, so precision@K here is the number that tracks what a user sees.
+
+    It is also the set that caught the 128px mistake: scored at 128px, text averaged
+    *higher* than usable images, so banners sailed through. See imgscore.SIDE.
+    """
+    recs = json.load(open(os.path.join(HERE, "eval-sets", f"{name}.json"), encoding="utf-8"))
+    rows = []
+    for rec in recs:
+        try:
+            rows.append((score(load(cached(cache, rec))), rec["label"]))
+        except Exception as e:  # noqa: BLE001
+            print(f"  ! {rec['file']} unavailable ({e})")
+    n = len(rows)
+    good = sum(1 for _, l in rows if l in ACCEPTABLE)
+    print(f"\n{name}: {n} delivered images, {good} usable ({100*good/n:.0f}%)")
+    ranked = sorted(rows, key=lambda t: -t[0])
+    for k in (12, 24, 36):
+        if k > n:
+            continue
+        g = sum(1 for _, l in ranked[:k] for _ in (1,) if l in ACCEPTABLE)
+        print(f"  precision@{k:<3} {g:3}/{k} ({100*g/k:.0f}%)")
+    by = defaultdict(list)
+    for s, l in rows:
+        by[l].append(s)
+    print("  mean score by label: " + "  ".join(
+        f"{l}={sum(v)/len(v):.2f}(n={len(v)})" for l, v in sorted(by.items())))
 
 
 def run_set(name, cache):
@@ -96,7 +132,7 @@ if __name__ == "__main__":
     cache = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, ".cache")
     os.makedirs(cache, exist_ok=True)
     for s in SETS:
-        run_set(s, cache)
+        (run_delivered if s == "delivered" else run_set)(s, cache)
     if "--parity" in sys.argv:
         print()
         parity(cache)

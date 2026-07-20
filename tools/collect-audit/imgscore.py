@@ -11,7 +11,23 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-SIDE = 256  # analysis resolution; results barely move down to a 128px source
+SIDE = 256      # analysis resolution (the canvas the features are computed on)
+FETCH_PX = 300  # what the client downloads to score with — keep in sync with
+#                 CAND_FETCH_PX in room-studio.html.
+#
+# FETCH_PX is not a free parameter. Scoring started at 128px to save bandwidth; measured
+# against the `delivered` set that was wrong in a way the earlier item-level metric was
+# too coarse to show — downscaling destroys the fine glyph structure text detection
+# relies on, so overlay text stopped being detected at all:
+#
+#   source | 1 image | precision@24 | mean(usable) - mean(text)
+#    128px |   4.8KB |     46%      |  -0.02   <- text scored *better* than usable
+#    200px |   9.6KB |     54%      |  +0.38
+#    300px |  18.8KB |     62%      |  +0.46
+#    600px |  58.1KB |     62%      |  +0.41
+#
+# 300px matches full size at a third of the bytes. Do not lower it without re-running
+# eval_imgscore.py on the `delivered` set.
 
 
 def load(path, side=SIDE):
