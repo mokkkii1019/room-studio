@@ -2748,12 +2748,13 @@ async function doCollect(){
       const per=overfetchCount(Math.max(1, Math.floor(count/brands.length))); let lastErr='';
       for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
         try{
-          /* ショップは shopCode で指定する（/collect の shop=）。以前はショップ名を
-             キーワードに混ぜて楽天全体を検索していたが、店名は商品名に入っていないのが
-             普通なので実測では**全ショップで0件**だった（kagu350 / air-rhizome /
-             kagu-noguchi / mic319 / t-interior / eeena の6店で確認）。shopCode 指定なら
-             同じ6店で 14〜90件、いずれも全件がそのショップの商品。 */
-          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), shop:brands[i].code, source:'rakuten', provider:'official'}), {cache:'no-store'});
+          /* State.makers に入るのはブランド名の文字列（プリセット or 手入力）であって
+             楽天の shopCode ではない。この画面は /shops を呼んでいないため shopCode は
+             一度も手に入らない。ここを shop= に渡すと「無印良品」のような日本語がそのまま
+             shopCode 扱いになり、楽天が 502 を返す（2026-07-20 に実際に壊した）。
+             ブランド名は商品名に含まれることが多いのでキーワード検索が現実的な手段。 */
+          const kw=(brands[i].name+' '+taste).trim();
+          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), {cache:'no-store'});
           if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
           const j=await r.json(); (j.items||[]).forEach(it=>{ it.source='rakuten'; items.push(it); });
         }catch(e){ lastErr=String(e&&e.message||e); }
