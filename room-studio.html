@@ -2506,16 +2506,29 @@ function scoreCandidate(cv){
    | 3倍取得→上位1/3     | 100% / **62%** | 100% / **64%** |
    | 3倍取得→閾値 -1.2   | 77% / 70%  | 100% / 64% |
 
-   判定は128pxのサムネイルで行う（実測で精度はほぼ落ちない）。3倍の商品を見ても通信量は
-   むしろ減る: 30件納品で 1商品あたり 2.6枚×60KB=156KB → 2.6枚×7KB＋本命60KB=78KB。
+   判定は縮小画像で行うが、**小さくしすぎると文字検出が死ぬ**。当初128pxにしたところ、
+   本番で配信された48枚を採点し直すと、テキストの平均スコアが使える画像より高くなり
+   （-0.57 対 -0.59）判別力がゼロだった。縮小でグリフの微細構造が潰れるため。実測:
+
+   | 判定に使う画像 | 1枚 | 上位24枚の精度 | 「使える画像 − テキスト」の差 |
+   |---|---|---|---|
+   | 128px | 4.8KB | 46% | **-0.02（判別できていない）** |
+   | 200px | 9.6KB | 54% | +0.38 |
+   | **300px** | **18.8KB** | **62%** | **+0.46** |
+   | 600px（原寸） | 58.1KB | 62% | +0.41 |
+
+   300pxで原寸と同じ精度が1/3のデータ量で出るので、判定は300pxで行う。実例として、多くの
+   店舗が使う「THANK YOU! 累計販売台数◯万台突破」バナーは128pxだと48枚中5〜22位に
+   居座るが、300pxなら39〜45位まで落ちる。
    測り直しは tools/collect-audit/eval_imgscore.py。 */
 const COLLECT_OVERFETCH=3, COLLECT_FETCH_MAX=90; // 90 = /collect の上限（楽天3ページ）
+const CAND_FETCH_PX=300; // 判定用に落とす解像度。これ未満にすると文字検出が壊れる（上表）
 function overfetchCount(n){ return Math.max(n, Math.min(COLLECT_FETCH_MAX, n*COLLECT_OVERFETCH)); }
-/* 候補URLの楽天画像サイズ指定を判定用の128pxに落とす。楽天以外のURLはそのまま返す。 */
+/* 候補URLの楽天画像サイズ指定を判定用サイズに落とす。楽天以外のURLはそのまま返す。 */
 function candThumbUrl(u){ try{
     const abs=new URL(u, location.origin), raw=abs.searchParams.get('url');
     if(!raw || !/_ex=\d+x\d+/.test(raw)) return u;
-    abs.searchParams.set('url', raw.replace(/_ex=\d+x\d+/, '_ex=128x128'));
+    abs.searchParams.set('url', raw.replace(/_ex=\d+x\d+/, '_ex='+CAND_FETCH_PX+'x'+CAND_FETCH_PX));
     return abs.toString();
   }catch(e){ return u; } }
 /* サムネイルだけ読んで {url（原寸のまま）, score} を返す。原寸は勝った1枚しか読まない。 */
