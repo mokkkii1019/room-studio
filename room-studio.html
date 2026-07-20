@@ -2725,6 +2725,42 @@ function onMakerFilterInput(v){ const q=(v||'').trim();
   const matches=currentShops().filter(m=> m.name.toLowerCase().includes(ql) || (m.kana||'').includes(q) || m.code.toLowerCase().includes(ql));
   renderShopList(matches, q);
 }
+/* ---- ブランド名 → 楽天 shopCode -------------------------------------------
+   メーカー選択に入るのはブランド名の文字列（プリセット or 検索窓での手入力）で、楽天の
+   shopCode ではない。ブランド名をそのままキーワード検索に混ぜると、その店の商品ではなく
+   **転売店の出品**が大量に混ざる。実測（ソファ, 2026-07-20）:
+
+   | ブランド        | キーワード（うち本当にその店） | shopCode指定 |
+   |----------------|------------------------|-------------|
+   | アイリスオーヤマ  | 75件（**9件**）          | 75件（75件） |
+   | 無印良品        | 12件（1件）             | 2件（2件）   |
+   | ニトリ          | 74件（74件）            | 73件（73件） |
+   | art of black   | 11件（11件）            | 11件（11件） |
+
+   そこで /shops で候補店を引き、**店名がブランド名と一致したときだけ** shopCode を使う。
+   一致しなければ（LOWYA / タンスのゲンなど、楽天に自店が無くトップが転売店になる場合）
+   従来どおりキーワードに戻す。ブランド名を shopCode 欄へ無条件に渡すと楽天が 502 を返す
+   ので、この「一致したときだけ」が要。 */
+const _shopCodeCache={};
+function normShopName(s){
+  return (s||'').normalize('NFKC').toLowerCase().replace(/[\s　・（）()【】\[\]。、,.\-_/]/g,'');
+}
+async function resolveShopCode(brand, type){
+  const key=type+' '+brand;
+  if(key in _shopCodeCache) return _shopCodeCache[key];
+  let code=null;
+  try{
+    const r=await fetch(SERVER.url+'/shops?'+new URLSearchParams({query:brand, type}), {cache:'no-store'});
+    if(r.ok){
+      const nb=normShopName(brand);
+      for(const s of ((await r.json()).shops||[])){
+        const ns=normShopName(s.name);
+        if(nb && ns && (ns.includes(nb) || nb.includes(ns))){ code=s.code; break; }
+      }
+    }
+  }catch(e){ /* 解決できなければキーワードに戻すだけ。収集自体は止めない */ }
+  _shopCodeCache[key]=code; return code;
+}
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
@@ -2734,6 +2770,14 @@ async function doCollect(){
   let brands=[];
   if(official || $('collectSource').value==='makers'){
     brands=[...State.makers].map(code=>({code, name:(State.shopNames[code]||code)}));
+  }
+  /* メーカー検索窓に文字が残っているのに1件も選択されていない場合は止める。この窓は
+     絞り込むだけで、候補や「＋…で探す」を押すまで何も適用されない。黙って楽天全体から
+     集めると「メーカーを指定したのに関係ない店の商品ばかり来る」ように見えてしまう。 */
+  const mf=$('makerFilter');
+  if(official && !brands.length && mf && mf.value.trim()){
+    setCollectStatus(`「${mf.value.trim()}」はまだ選択されていません。下の一覧から選ぶか「＋「${mf.value.trim()}」で探す」を押してください（指定せず集めるなら検索窓を空にしてください）`,'err');
+    $('collectBtn').disabled=false; return;
   }
   // 収集モード: 'brands'(選択ショップごとに按分検索) / 'rakuten'(楽天市場全体) / 'crawler'(IKEA等)
   const crawlerSource = official ? '' : $('collectSource').value;
@@ -2748,15 +2792,23 @@ async function doCollect(){
       const per=overfetchCount(Math.max(1, Math.floor(count/brands.length))); let lastErr='';
       for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
         try{
-          /* State.makers に入るのはブランド名の文字列（プリセット or 手入力）であって
-             楽天の shopCode ではない。この画面は /shops を呼んでいないため shopCode は
-             一度も手に入らない。ここを shop= に渡すと「無印良品」のような日本語がそのまま
-             shopCode 扱いになり、楽天が 502 を返す（2026-07-20 に実際に壊した）。
-             ブランド名は商品名に含まれることが多いのでキーワード検索が現実的な手段。 */
-          const kw=(brands[i].name+' '+taste).trim();
-          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), {cache:'no-store'});
-          if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
-          const j=await r.json(); (j.items||[]).forEach(it=>{ it.source='rakuten'; items.push(it); });
+          let got=[];
+          const code=await resolveShopCode(brands[i].name, type); // 名前が一致した店だけ返る
+          if(code){
+            const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), shop:code, source:'rakuten', provider:'official'}), {cache:'no-store'});
+            if(r.ok){ got=(await r.json()).items||[]; }
+            else { try{ lastErr=(await r.json()).detail||''; }catch(e){} }
+          }
+          /* shopCode で引けない／その店にこのカテゴリの在庫が無い場合はキーワードに戻す。
+             例: 「モダンデコ」は shopCode 解決すると「モダンデコワークス」（屋外用）に
+             当たり、ソファが0件になる。0件ならキーワード検索のほうがまだ拾える。 */
+          if(!got.length){
+            const kw=(brands[i].name+' '+taste).trim();
+            const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), {cache:'no-store'});
+            if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
+            got=(await r.json()).items||[];
+          }
+          got.forEach(it=>{ it.source='rakuten'; items.push(it); });
         }catch(e){ lastErr=String(e&&e.message||e); }
       }
       if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
