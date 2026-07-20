@@ -2709,7 +2709,7 @@ async function doCollect(){
   if(official || $('collectSource').value==='makers'){
     brands=[...State.makers].map(code=>({code, name:(State.shopNames[code]||code)}));
   }
-  // 収集モード: 'brands'(選択ブランド名で按分検索) / 'rakuten'(楽天市場全体) / 'crawler'(IKEA等)
+  // 収集モード: 'brands'(選択ショップごとに按分検索) / 'rakuten'(楽天市場全体) / 'crawler'(IKEA等)
   const crawlerSource = official ? '' : $('collectSource').value;
   let mode='rakuten';
   if(brands.length) mode='brands';
@@ -2722,8 +2722,12 @@ async function doCollect(){
       const per=overfetchCount(Math.max(1, Math.floor(count/brands.length))); let lastErr='';
       for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
         try{
-          const kw=(brands[i].name+' '+taste).trim(); // ブランド名をキーワードに含めて楽天全体を検索
-          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), {cache:'no-store'});
+          /* ショップは shopCode で指定する（/collect の shop=）。以前はショップ名を
+             キーワードに混ぜて楽天全体を検索していたが、店名は商品名に入っていないのが
+             普通なので実測では**全ショップで0件**だった（kagu350 / air-rhizome /
+             kagu-noguchi / mic319 / t-interior / eeena の6店で確認）。shopCode 指定なら
+             同じ6店で 14〜90件、いずれも全件がそのショップの商品。 */
+          const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), shop:brands[i].code, source:'rakuten', provider:'official'}), {cache:'no-store'});
           if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
           const j=await r.json(); (j.items||[]).forEach(it=>{ it.source='rakuten'; items.push(it); });
         }catch(e){ lastErr=String(e&&e.message||e); }
