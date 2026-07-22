@@ -800,10 +800,10 @@
               <button class="btn" id="fEraseResetBtn" style="width:100%;justify-content:center">手動消しをリセット</button>
             </div>
             <button class="btn" id="fKeepRegion" style="width:100%;justify-content:center;margin-top:6px">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/></svg>
-              範囲外を消す（残す部分を四角で囲む）<span class="info" data-tip="残したい部分を画像の上で四角く囲むと、その外側が透明になります。収集画像に余計なものが写り込んでいるときに、商品だけを残せます。もう一度囲むと範囲をさらに狭められます。元に戻すには取り消し（Ctrl+Z）か「手動消しをリセット」。">i</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l7 5-2.6 8.5H7.6L5 8z"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/><circle cx="19" cy="8" r="1.4" fill="currentColor"/><circle cx="5" cy="8" r="1.4" fill="currentColor"/></svg>
+              範囲外を消す（頂点で囲む）<span class="info" data-tip="残したい部分の輪郭を頂点をクリックして囲むと、その外側が透明になります（表面の「面」と同じ操作）。最初の点をもう一度クリックするか Enter で確定。ひとつ前の点は Alt/右クリックか Backspace で取り消せます。収集画像の余計な写り込みを消して商品だけを残すのに使えます。元に戻すには取り消し（Ctrl+Z）か「手動消しをリセット」。">i</span>
             </button>
-            <div id="fKeepHint" style="display:none;font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px">残したい部分を四角く囲んでください。囲みの外側が消えます。</div>
+            <div id="fKeepHint" style="display:none;font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px">残したい輪郭を頂点をクリックして囲んでください。3点以上で、最初の点をもう一度クリックか Enter で確定します（囲みの外側が消えます）。</div>
             </div>
           </div>
           <div class="section">
@@ -987,8 +987,8 @@ const State = {
   poly:{points:[]},                   // in-progress polygon (face) selection
   furniEyedrop:false,                 // eyedropper active for furniture recolor
   furniErase:false,                   // manual background-erase brush active for selected furniture
-  furniKeep:false,                    // "keep region" box active: erases everything outside a drawn box
-  _keepBox:null,                      // {x0,y0,x1,y1} live keep-box being dragged (stage px)
+  furniKeep:false,                    // "keep region" polygon active: erases everything outside a drawn polygon
+  keepPoly:{points:[]},               // in-progress keep polygon (stage px), same UX as the surface "面" tool
   makers:new Set(),                   // selected Rakuten shopCodes (presets or 楽天全店舗検索, multi-collect)
   shopNames:{},                       // shopCode -> 表示名（プリセット/検索結果から蓄積）
   shownShops:[],                      // 現在メーカー一覧に表示中の [{code,name}]（全選択用）
@@ -1641,28 +1641,41 @@ function eraseFurnitureAt(layer, px, py, restore){
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const ddx=x-cx,ddy=y-cy; if(ddx*ddx+ddy*ddy<=r2) m[y*W+x]=val; }
   layer.dirty=true; rebuildFurniture(layer); render();
 }
-/* 「範囲外を消す」: ステージ上に描いた四角の外側にあたる画素を eraseMask で透明化する。
-   手動消しブラシと同じ eraseMask に OR で書き込むので、AI切り抜き・ブラシ消しと併用でき、
-   取り消し（Ctrl+Z）や「手動消しをリセット」でそのまま戻せる。移動・拡大・回転・台形補正の
-   どの状態でも、画像の各画素を実際のステージ位置へ順変換して四角の内外を判定する。 */
-function keepRegionApply(layer, x0,y0,x1,y1){
+/* 「範囲外を消す」: ステージ上に頂点で描いた多角形の外側にあたる画素を eraseMask で透明化する。
+   多角形の判定は表面の「面」と同じ fillPolygonToMask を使う（ステージ大のマスクへ塗り、その
+   外側を消す）ので、凹み・自己交差の扱いも面ツールと一致する。手動消しブラシと同じ eraseMask に
+   OR で書き込むので AI切り抜き・ブラシ消しと併用でき、取り消し（Ctrl+Z）や「手動消しをリセット」で
+   そのまま戻せる。移動・拡大・回転・台形補正のどの状態でも、画像の各画素を実際のステージ位置へ
+   順変換して内外を判定する。 */
+function keepPolyApply(layer, pts){
+  if(!pts || pts.length<3) return false;
   const W=layer.natW, Hh=layer.natH, hw=W/2, hh=Hh/2;
-  const minX=Math.min(x0,x1), maxX=Math.max(x0,x1), minY=Math.min(y0,y1), maxY=Math.max(y0,y1);
-  if(maxX-minX<4 || maxY-minY<4) return false; // 誤クリック相当の極小ボックスは無視
   const Hf=computeHomography([[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]], effectiveCorners(layer)); // 画素→局所台形
   if(!Hf) return false;
+  const keep=new Uint8Array(State.W*State.H); fillPolygonToMask(keep, pts); // ステージ上の「残す」領域
+  let any=false; for(let i=0;i<keep.length;i++){ if(keep[i]){ any=true; break; } }
+  if(!any) return false; // 面積ゼロ（一直線など）は無視
   if(!layer.eraseMask || layer.eraseMask.length!==W*Hh) layer.eraseMask=new Uint8Array(W*Hh);
-  const m=layer.eraseMask;
+  const m=layer.eraseMask, SW=State.W, SH=State.H;
   // furnitureOuter（局所台形→ステージ）を画素ループのためにインライン展開
   const sgn=layer.flip?-1:1, sc=layer.scale, rad=layer.rot*Math.PI/180, cs=Math.cos(rad), sn=Math.sin(rad), ox=layer.x, oy=layer.y;
   for(let iy=0;iy<Hh;iy++){ for(let ix=0;ix<W;ix++){
     const u=ix-hw, v=iy-hh, den=Hf[6]*u+Hf[7]*v+1; if(Math.abs(den)<1e-9) continue;
     const lx=(Hf[0]*u+Hf[1]*v+Hf[2])/den, ly=(Hf[3]*u+Hf[4]*v+Hf[5])/den;
-    const px=lx*sc*sgn, py=ly*sc, sx=ox+px*cs-py*sn, sy=oy+px*sn+py*cs;
-    if(sx<minX||sx>maxX||sy<minY||sy>maxY) m[iy*W+ix]=1;
+    const px=lx*sc*sgn, py=ly*sc, sx=(ox+px*cs-py*sn)|0, sy=(oy+px*sn+py*cs)|0;
+    if(sx<0||sy<0||sx>=SW||sy>=SH || !keep[sy*SW+sx]) m[iy*W+ix]=1; // 多角形の外（画面外含む）→消す
   }}
   layer.dirty=true; rebuildFurniture(layer); return true;
 }
+function keepPolyReset(){ State.keepPoly.points=[]; renderOverlay(); }
+function keepPolyAddPoint(p){ State.keepPoly.points.push({x:p.x, y:p.y}); renderOverlay(); }
+function keepPolyRemoveLast(){ State.keepPoly.points.pop(); renderOverlay(); }
+function keepPolyClose(){ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; }
+  if(State.keepPoly.points.length<3){ toast('3点以上クリックしてください'); return; }
+  pushHistory('keep'+f.id);
+  const ok=keepPolyApply(f, State.keepPoly.points);
+  keepPolyReset(); render();
+  toast(ok?'囲んだ範囲の外を消しました':'範囲が狭すぎます。もう一度囲んでください'); }
 /* draw `img` so its corners map to dst=[TL,TR,BR,BL] (homography) via subdivided affine triangles */
 function drawImagePerspective(ctx, img, dst, steps){
   steps=steps||8; const w=img.width, h=img.height;
@@ -2150,10 +2163,7 @@ function renderOverlay(){
     if(State.eraseTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
   // selected furniture handles
   if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); }
-    if(State._keepBox){ const b=State._keepBox, x=Math.min(b.x0,b.x1), y=Math.min(b.y0,b.y1), w=Math.abs(b.x1-b.x0), hb=Math.abs(b.y1-b.y0);
-      octx.save(); octx.fillStyle='rgba(0,0,0,.28)'; // 外側を暗く覆って「残る範囲」を分かりやすくする
-      octx.beginPath(); octx.rect(0,0,State.W,State.H); octx.rect(x,y,w,hb); octx.fill('evenodd');
-      octx.strokeStyle='rgba(59,130,110,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.strokeRect(x,y,w,hb); octx.restore(); }
+    if(State.furniKeep && State.keepPoly.points.length) drawKeepPolyInProgress();
     if(State.furniEyedrop && lastMouse){ drawEyedropLoupe(lastMouse); }
     if(State.furniErase && lastMouse){ const r=+$('fEraseSize').value/2; octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(181,73,58,.95)'; octx.lineWidth=1.5; octx.stroke(); octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke(); } }
   // brush cursor — shown for brush-like tools (incl. SAM, where drag = brush); not for the eyedropper (it shows a loupe)
@@ -2208,6 +2218,17 @@ function drawPolyInProgress(){ const pts=State.poly.points; if(!pts.length) retu
   if(lastMouse) octx.lineTo(lastMouse.x,lastMouse.y);
   octx.strokeStyle='rgba(59,111,224,.95)'; octx.lineWidth=1.5; octx.setLineDash([5,4]); octx.stroke(); octx.setLineDash([]);
   pts.forEach((p,i)=>{ octx.beginPath(); octx.arc(p.x,p.y, i===0?7:5, 0,7); octx.fillStyle= i===0?'#3B6FE0':'#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle= i===0?'#fff':'#3B6FE0'; octx.stroke(); });
+}
+/* 「範囲外を消す」用の進行中ポリゴン描画。drawPolyInProgress と同じ操作感で色は緑（消去=残す境界）。
+   3点以上あれば外側を暗く覆って「残る範囲」を分かりやすく見せる。 */
+function drawKeepPolyInProgress(){ const pts=State.keepPoly.points; if(!pts.length) return; const G='rgba(59,150,110,';
+  if(pts.length>=3){ octx.save(); octx.fillStyle='rgba(0,0,0,.30)'; // 外側を暗く（残る範囲＝多角形の内側を強調）
+    octx.beginPath(); octx.rect(0,0,State.W,State.H); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y); octx.closePath();
+    octx.fill('evenodd'); octx.restore(); }
+  octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y);
+  if(lastMouse) octx.lineTo(lastMouse.x,lastMouse.y);
+  octx.strokeStyle=G+'.95)'; octx.lineWidth=1.5; octx.setLineDash([5,4]); octx.stroke(); octx.setLineDash([]);
+  pts.forEach((p,i)=>{ octx.beginPath(); octx.arc(p.x,p.y, i===0?7:5, 0,7); octx.fillStyle= i===0?'#3B966E':'#fff'; octx.fill(); octx.lineWidth=2; octx.strokeStyle= i===0?'#fff':'#3B966E'; octx.stroke(); });
 }
 
 /* ---- eyedropper: sample a colour from the composited image, then fill with it ---- */
@@ -2298,7 +2319,10 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
     if(State.furniEyedrop){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColorFurniture(col); return; }
     if(State.furniErase){ if(!f){ toast('家具を選択してください'); return; } const restore=(e.altKey||e.button===2); pushHistory('ferase'+f.id); drag={type:'ferase',layer:f,restore}; eraseFurnitureAt(f,p.x,p.y,restore); return; }
-    if(State.furniKeep){ if(!f){ toast('家具を選択してください'); return; } drag={type:'keepbox',layer:f,sx:p.x,sy:p.y}; State._keepBox={x0:p.x,y0:p.y,x1:p.x,y1:p.y}; renderOverlay(); return; }
+    if(State.furniKeep){ if(!f){ toast('家具を選択してください'); return; }
+      if(e.altKey||e.ctrlKey||e.button===2){ keepPolyRemoveLast(); return; }
+      const pts=State.keepPoly.points; if(pts.length>=3){ const dx=p.x-pts[0].x, dy=p.y-pts[0].y; if(dx*dx+dy*dy<=12*12){ keepPolyClose(); return; } }
+      keepPolyAddPoint(p); return; }
     if(f && f.corners && f._cornersStage){ for(let i=0;i<4;i++){ const h=f._cornersStage[i]; const dx=p.x-h[0], dy=p.y-h[1]; if(dx*dx+dy*dy<=16*16){ pushHistory('kcorner'+f.id+'_'+i); drag={type:'kcorner',idx:i,layer:f}; return; } } }
     if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit; if none, select the topmost surface under the cursor (edit any layer by clicking it)
@@ -2321,7 +2345,6 @@ on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMou
         else { samFlushPreview(); const fn=drag.sub?eraseAtSub:eraseAt; drag.type=drag.sub?'erasesub':'erasepaint'; fn({x:drag.sx,y:drag.sy}); fn(p); } } }
     else if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p); else if(drag.type==='erasesub') eraseAtSub(p);
     else if(drag.type==='ferase'){ eraseFurnitureAt(drag.layer,p.x,p.y,drag.restore); }
-    else if(drag.type==='keepbox'){ State._keepBox={x0:drag.sx,y0:drag.sy,x1:p.x,y1:p.y}; renderOverlay(); }
     else if(drag.type==='move'){ drag.layer.x=p.x-drag.offx; drag.layer.y=p.y-drag.offy; render(); }
     else if(drag.type==='scale'){ const f=selectedFurniture(); const d=Math.hypot(p.x-f.x,p.y-f.y); f.scale=clamp(drag.startScale*(d/drag.startDist),0.05,6); syncFurnitureUI(f); render(); }
   } else { renderOverlay(); }
@@ -2331,14 +2354,10 @@ function endDrag(e){
   if(drag && drag.type==='sampend'){ const d=drag; drag=null; handleSamClick({x:d.sx,y:d.sy}, d.label); return; } // tap (no drag) → AI click
   if(drag && (drag.type==='paint'||drag.type==='erasemask')){ const a=activeSurface(); if(a){ a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); } }
   if(drag && (drag.type==='erasepaint'||drag.type==='erasesub')){ updateRunErase(); }
-  if(drag && drag.type==='keepbox'){ const b=State._keepBox, L=drag.layer; State._keepBox=null;
-    if(b && Math.abs(b.x1-b.x0)>=4 && Math.abs(b.y1-b.y0)>=4){ // 誤クリック相当の極小ボックスは無視（履歴も汚さない）
-      pushHistory('keep'+L.id); if(keepRegionApply(L,b.x0,b.y0,b.x1,b.y1)) toast('囲んだ範囲の外を消しました'); }
-  }
   drag=null; endCoalesce(); render(); }
 on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
 on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
-on(overlay,'contextmenu',e=>{ if((State.mode==='surface'&&(State.surfTool==='sam'||State.surfTool==='poly'))||(State.mode==='erase'&&State.eraseTool==='sam')) e.preventDefault(); });
+on(overlay,'contextmenu',e=>{ if((State.mode==='surface'&&(State.surfTool==='sam'||State.surfTool==='poly'))||(State.mode==='erase'&&State.eraseTool==='sam')||(State.mode==='furniture'&&(State.furniKeep||State.furniErase))) e.preventDefault(); });
 
 function paintAt(p){ const a=activeSurface(); if(!a) return; const r=+$('brushSize').value/2;
   if(drag.type==='erasemask'){ stampDisc(a.mask,p.x,p.y,r,0); const x=maskPreviewCanvas.getContext('2d'); x.save(); x.globalCompositeOperation='destination-out'; x.beginPath(); x.arc(p.x,p.y,r,0,7); x.fill(); x.restore(); }
@@ -3120,7 +3139,7 @@ function setMode(m){ State.mode=m;
   if(dot) dot.style.background=meta.c; if(ttl) ttl.textContent=meta.t; if(hint) hint.textContent=meta.h;
   State.furniEyedrop=false; { const fe=$('fEyedropBtn'); if(fe) fe.classList.remove('primary'); const feh=$('fEyedropHint'); if(feh) feh.style.display='none'; }
   State.furniErase=false; { const eb=$('fEraseToggle'); if(eb) eb.classList.remove('primary'); const ebx=$('fEraseBox'); if(ebx) ebx.style.display='none'; }
-  State.furniKeep=false; State._keepBox=null; { const kb=$('fKeepRegion'); if(kb) kb.classList.remove('primary'); const kh=$('fKeepHint'); if(kh) kh.style.display='none'; }
+  State.furniKeep=false; State.keepPoly.points=[]; { const kb=$('fKeepRegion'); if(kb) kb.classList.remove('primary'); const kh=$('fKeepHint'); if(kh) kh.style.display='none'; }
   if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':(m==='select'?'default':'');
   samResetPoints(); polyReset();
 }
@@ -3529,6 +3548,11 @@ on(document,'keydown',e=>{
     if(e.key==='Backspace'){ e.preventDefault(); polyRemoveLast(); return; }
     if(e.key==='Escape'){ e.preventDefault(); polyReset(); return; }
   }
+  if(State.mode==='furniture'&&State.furniKeep&&State.keepPoly.points.length){
+    if(e.key==='Enter'){ e.preventDefault(); keepPolyClose(); return; }
+    if(e.key==='Backspace'){ e.preventDefault(); keepPolyRemoveLast(); return; }
+    if(e.key==='Escape'){ e.preventDefault(); keepPolyReset(); return; }
+  }
   // Delete/Backspace で選択中の家具を削除（入力欄にフォーカス中は除く）
   if((e.key==='Delete'||e.key==='Backspace') && !typing){ const f=selectedFurniture(); if(f){ e.preventDefault(); deleteLayer(f.id); toast('家具を削除しました'); return; } }
   if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
@@ -3676,12 +3700,12 @@ on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushH
 buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fColor'); f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
 on($('fEyedropBtn'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniEyedrop=!State.furniEyedrop; if(State.furniEyedrop){ State.furniErase=false; $('fEraseToggle').classList.remove('primary'); $('fEraseBox').style.display='none'; } $('fEyedropBtn').classList.toggle('primary',State.furniEyedrop); $('fEyedropHint').style.display=State.furniEyedrop?'block':'none'; overlay.style.cursor=State.furniEyedrop?'crosshair':''; toast(State.furniEyedrop?'スポイトON: 画像をクリックで色を採取':'スポイトを解除しました'); renderOverlay(); });
-function setFurniKeep(on){ State.furniKeep=on; State._keepBox=null; $('fKeepRegion').classList.toggle('primary',on); $('fKeepHint').style.display=on?'block':'none'; overlay.style.cursor=on?'crosshair':''; renderOverlay(); }
+function setFurniKeep(on){ State.furniKeep=on; State.keepPoly.points=[]; $('fKeepRegion').classList.toggle('primary',on); $('fKeepHint').style.display=on?'block':'none'; overlay.style.cursor=on?'crosshair':''; renderOverlay(); }
 on($('fEraseToggle'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniErase=!State.furniErase; if(State.furniErase){ State.furniEyedrop=false; $('fEyedropBtn').classList.remove('primary'); $('fEyedropHint').style.display='none'; setFurniKeep(false); } $('fEraseToggle').classList.toggle('primary',State.furniErase); $('fEraseBox').style.display=State.furniErase?'block':'none'; overlay.style.cursor=''; toast(State.furniErase?'手動消しON: 家具の上をドラッグで消去（Alt/右ドラッグで戻す）':'手動消しを解除しました'); renderOverlay(); });
 on($('fKeepRegion'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; }
   const on=!State.furniKeep;
   if(on){ State.furniErase=false; $('fEraseToggle').classList.remove('primary'); $('fEraseBox').style.display='none'; State.furniEyedrop=false; $('fEyedropBtn').classList.remove('primary'); $('fEyedropHint').style.display='none'; }
-  setFurniKeep(on); toast(on?'残す範囲をドラッグで四角く囲んでください（外側が消えます）':'範囲外消しを解除しました'); });
+  setFurniKeep(on); toast(on?'残したい輪郭を頂点をクリックして囲んでください（最初の点かEnterで確定、外側が消えます）':'範囲外消しを解除しました'); });
 on($('fEraseSize'),'input',()=>{ $('fEraseSizeV').textContent=$('fEraseSize').value; renderOverlay(); });
 on($('fEraseResetBtn'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.eraseMask) return; pushHistory(); f.eraseMask=null; f.dirty=true; rebuildFurniture(f); render(); toast('手動消しをリセットしました'); });
 on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
