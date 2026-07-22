@@ -799,6 +799,11 @@
               <div class="slider"><label>ブラシ径</label><input type="range" id="fEraseSize" min="6" max="160" value="40"><span class="val" id="fEraseSizeV">40</span></div>
               <button class="btn" id="fEraseResetBtn" style="width:100%;justify-content:center">手動消しをリセット</button>
             </div>
+            <button class="btn" id="fKeepRegion" style="width:100%;justify-content:center;margin-top:6px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/></svg>
+              範囲外を消す（残す部分を四角で囲む）<span class="info" data-tip="残したい部分を画像の上で四角く囲むと、その外側が透明になります。収集画像に余計なものが写り込んでいるときに、商品だけを残せます。もう一度囲むと範囲をさらに狭められます。元に戻すには取り消し（Ctrl+Z）か「手動消しをリセット」。">i</span>
+            </button>
+            <div id="fKeepHint" style="display:none;font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px">残したい部分を四角く囲んでください。囲みの外側が消えます。</div>
             </div>
           </div>
           <div class="section">
@@ -982,6 +987,8 @@ const State = {
   poly:{points:[]},                   // in-progress polygon (face) selection
   furniEyedrop:false,                 // eyedropper active for furniture recolor
   furniErase:false,                   // manual background-erase brush active for selected furniture
+  furniKeep:false,                    // "keep region" box active: erases everything outside a drawn box
+  _keepBox:null,                      // {x0,y0,x1,y1} live keep-box being dragged (stage px)
   makers:new Set(),                   // selected Rakuten shopCodes (presets or 楽天全店舗検索, multi-collect)
   shopNames:{},                       // shopCode -> 表示名（プリセット/検索結果から蓄積）
   shownShops:[],                      // 現在メーカー一覧に表示中の [{code,name}]（全選択用）
@@ -1634,6 +1641,28 @@ function eraseFurnitureAt(layer, px, py, restore){
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const ddx=x-cx,ddy=y-cy; if(ddx*ddx+ddy*ddy<=r2) m[y*W+x]=val; }
   layer.dirty=true; rebuildFurniture(layer); render();
 }
+/* 「範囲外を消す」: ステージ上に描いた四角の外側にあたる画素を eraseMask で透明化する。
+   手動消しブラシと同じ eraseMask に OR で書き込むので、AI切り抜き・ブラシ消しと併用でき、
+   取り消し（Ctrl+Z）や「手動消しをリセット」でそのまま戻せる。移動・拡大・回転・台形補正の
+   どの状態でも、画像の各画素を実際のステージ位置へ順変換して四角の内外を判定する。 */
+function keepRegionApply(layer, x0,y0,x1,y1){
+  const W=layer.natW, Hh=layer.natH, hw=W/2, hh=Hh/2;
+  const minX=Math.min(x0,x1), maxX=Math.max(x0,x1), minY=Math.min(y0,y1), maxY=Math.max(y0,y1);
+  if(maxX-minX<4 || maxY-minY<4) return false; // 誤クリック相当の極小ボックスは無視
+  const Hf=computeHomography([[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]], effectiveCorners(layer)); // 画素→局所台形
+  if(!Hf) return false;
+  if(!layer.eraseMask || layer.eraseMask.length!==W*Hh) layer.eraseMask=new Uint8Array(W*Hh);
+  const m=layer.eraseMask;
+  // furnitureOuter（局所台形→ステージ）を画素ループのためにインライン展開
+  const sgn=layer.flip?-1:1, sc=layer.scale, rad=layer.rot*Math.PI/180, cs=Math.cos(rad), sn=Math.sin(rad), ox=layer.x, oy=layer.y;
+  for(let iy=0;iy<Hh;iy++){ for(let ix=0;ix<W;ix++){
+    const u=ix-hw, v=iy-hh, den=Hf[6]*u+Hf[7]*v+1; if(Math.abs(den)<1e-9) continue;
+    const lx=(Hf[0]*u+Hf[1]*v+Hf[2])/den, ly=(Hf[3]*u+Hf[4]*v+Hf[5])/den;
+    const px=lx*sc*sgn, py=ly*sc, sx=ox+px*cs-py*sn, sy=oy+px*sn+py*cs;
+    if(sx<minX||sx>maxX||sy<minY||sy>maxY) m[iy*W+ix]=1;
+  }}
+  layer.dirty=true; rebuildFurniture(layer); return true;
+}
 /* draw `img` so its corners map to dst=[TL,TR,BR,BL] (homography) via subdivided affine triangles */
 function drawImagePerspective(ctx, img, dst, steps){
   steps=steps||8; const w=img.width, h=img.height;
@@ -2121,6 +2150,10 @@ function renderOverlay(){
     if(State.eraseTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
   // selected furniture handles
   if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); }
+    if(State._keepBox){ const b=State._keepBox, x=Math.min(b.x0,b.x1), y=Math.min(b.y0,b.y1), w=Math.abs(b.x1-b.x0), hb=Math.abs(b.y1-b.y0);
+      octx.save(); octx.fillStyle='rgba(0,0,0,.28)'; // 外側を暗く覆って「残る範囲」を分かりやすくする
+      octx.beginPath(); octx.rect(0,0,State.W,State.H); octx.rect(x,y,w,hb); octx.fill('evenodd');
+      octx.strokeStyle='rgba(59,130,110,.95)'; octx.lineWidth=1.5; octx.setLineDash([6,4]); octx.strokeRect(x,y,w,hb); octx.restore(); }
     if(State.furniEyedrop && lastMouse){ drawEyedropLoupe(lastMouse); }
     if(State.furniErase && lastMouse){ const r=+$('fEraseSize').value/2; octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(181,73,58,.95)'; octx.lineWidth=1.5; octx.stroke(); octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke(); } }
   // brush cursor — shown for brush-like tools (incl. SAM, where drag = brush); not for the eyedropper (it shows a loupe)
@@ -2265,6 +2298,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   } else if(State.mode==='furniture'){ const f=selectedFurniture();
     if(State.furniEyedrop){ const col=sampleStageColor(p.x,p.y,2); if(col) applyEyedropColorFurniture(col); return; }
     if(State.furniErase){ if(!f){ toast('家具を選択してください'); return; } const restore=(e.altKey||e.button===2); pushHistory('ferase'+f.id); drag={type:'ferase',layer:f,restore}; eraseFurnitureAt(f,p.x,p.y,restore); return; }
+    if(State.furniKeep){ if(!f){ toast('家具を選択してください'); return; } drag={type:'keepbox',layer:f,sx:p.x,sy:p.y}; State._keepBox={x0:p.x,y0:p.y,x1:p.x,y1:p.y}; renderOverlay(); return; }
     if(f && f.corners && f._cornersStage){ for(let i=0;i<4;i++){ const h=f._cornersStage[i]; const dx=p.x-h[0], dy=p.y-h[1]; if(dx*dx+dy*dy<=16*16){ pushHistory('kcorner'+f.id+'_'+i); drag={type:'kcorner',idx:i,layer:f}; return; } } }
     if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit; if none, select the topmost surface under the cursor (edit any layer by clicking it)
@@ -2287,6 +2321,7 @@ on(overlay,'pointermove',e=>{ if(!State.W) return; const p=canvasPos(e); lastMou
         else { samFlushPreview(); const fn=drag.sub?eraseAtSub:eraseAt; drag.type=drag.sub?'erasesub':'erasepaint'; fn({x:drag.sx,y:drag.sy}); fn(p); } } }
     else if(drag.type==='paint'||drag.type==='erasemask') paintAt(p); else if(drag.type==='erasepaint') eraseAt(p); else if(drag.type==='erasesub') eraseAtSub(p);
     else if(drag.type==='ferase'){ eraseFurnitureAt(drag.layer,p.x,p.y,drag.restore); }
+    else if(drag.type==='keepbox'){ State._keepBox={x0:drag.sx,y0:drag.sy,x1:p.x,y1:p.y}; renderOverlay(); }
     else if(drag.type==='move'){ drag.layer.x=p.x-drag.offx; drag.layer.y=p.y-drag.offy; render(); }
     else if(drag.type==='scale'){ const f=selectedFurniture(); const d=Math.hypot(p.x-f.x,p.y-f.y); f.scale=clamp(drag.startScale*(d/drag.startDist),0.05,6); syncFurnitureUI(f); render(); }
   } else { renderOverlay(); }
@@ -2296,6 +2331,10 @@ function endDrag(e){
   if(drag && drag.type==='sampend'){ const d=drag; drag=null; handleSamClick({x:d.sx,y:d.sy}, d.label); return; } // tap (no drag) → AI click
   if(drag && (drag.type==='paint'||drag.type==='erasemask')){ const a=activeSurface(); if(a){ a.dirty=true; rebuildSurface(a); rebuildMaskPreview(); } }
   if(drag && (drag.type==='erasepaint'||drag.type==='erasesub')){ updateRunErase(); }
+  if(drag && drag.type==='keepbox'){ const b=State._keepBox, L=drag.layer; State._keepBox=null;
+    if(b && Math.abs(b.x1-b.x0)>=4 && Math.abs(b.y1-b.y0)>=4){ // 誤クリック相当の極小ボックスは無視（履歴も汚さない）
+      pushHistory('keep'+L.id); if(keepRegionApply(L,b.x0,b.y0,b.x1,b.y1)) toast('囲んだ範囲の外を消しました'); }
+  }
   drag=null; endCoalesce(); render(); }
 on(overlay,'pointerup',endDrag); on(overlay,'pointercancel',endDrag);
 on(overlay,'pointerleave',()=>{ if(!drag){ lastMouse=null; renderOverlay(); } });
@@ -3081,6 +3120,7 @@ function setMode(m){ State.mode=m;
   if(dot) dot.style.background=meta.c; if(ttl) ttl.textContent=meta.t; if(hint) hint.textContent=meta.h;
   State.furniEyedrop=false; { const fe=$('fEyedropBtn'); if(fe) fe.classList.remove('primary'); const feh=$('fEyedropHint'); if(feh) feh.style.display='none'; }
   State.furniErase=false; { const eb=$('fEraseToggle'); if(eb) eb.classList.remove('primary'); const ebx=$('fEraseBox'); if(ebx) ebx.style.display='none'; }
+  State.furniKeep=false; State._keepBox=null; { const kb=$('fKeepRegion'); if(kb) kb.classList.remove('primary'); const kh=$('fKeepHint'); if(kh) kh.style.display='none'; }
   if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':(m==='select'?'default':'');
   samResetPoints(); polyReset();
 }
@@ -3636,7 +3676,12 @@ on($('fRecolor'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushH
 buildChips('fColorChips',hex=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.color=hex; $('fColor').value=hex; $('fHex').textContent=hex.toUpperCase(); markChips('fColorChips',hex); f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fColor'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fColor'); f.color=e.target.value; $('fHex').textContent=e.target.value.toUpperCase(); markChips('fColorChips',e.target.value); f.dirty=true; rebuildFurniture(f); render(); });
 on($('fEyedropBtn'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniEyedrop=!State.furniEyedrop; if(State.furniEyedrop){ State.furniErase=false; $('fEraseToggle').classList.remove('primary'); $('fEraseBox').style.display='none'; } $('fEyedropBtn').classList.toggle('primary',State.furniEyedrop); $('fEyedropHint').style.display=State.furniEyedrop?'block':'none'; overlay.style.cursor=State.furniEyedrop?'crosshair':''; toast(State.furniEyedrop?'スポイトON: 画像をクリックで色を採取':'スポイトを解除しました'); renderOverlay(); });
-on($('fEraseToggle'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniErase=!State.furniErase; if(State.furniErase){ State.furniEyedrop=false; $('fEyedropBtn').classList.remove('primary'); $('fEyedropHint').style.display='none'; } $('fEraseToggle').classList.toggle('primary',State.furniErase); $('fEraseBox').style.display=State.furniErase?'block':'none'; overlay.style.cursor=''; toast(State.furniErase?'手動消しON: 家具の上をドラッグで消去（Alt/右ドラッグで戻す）':'手動消しを解除しました'); renderOverlay(); });
+function setFurniKeep(on){ State.furniKeep=on; State._keepBox=null; $('fKeepRegion').classList.toggle('primary',on); $('fKeepHint').style.display=on?'block':'none'; overlay.style.cursor=on?'crosshair':''; renderOverlay(); }
+on($('fEraseToggle'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; } State.furniErase=!State.furniErase; if(State.furniErase){ State.furniEyedrop=false; $('fEyedropBtn').classList.remove('primary'); $('fEyedropHint').style.display='none'; setFurniKeep(false); } $('fEraseToggle').classList.toggle('primary',State.furniErase); $('fEraseBox').style.display=State.furniErase?'block':'none'; overlay.style.cursor=''; toast(State.furniErase?'手動消しON: 家具の上をドラッグで消去（Alt/右ドラッグで戻す）':'手動消しを解除しました'); renderOverlay(); });
+on($('fKeepRegion'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('家具を選択してください'); return; }
+  const on=!State.furniKeep;
+  if(on){ State.furniErase=false; $('fEraseToggle').classList.remove('primary'); $('fEraseBox').style.display='none'; State.furniEyedrop=false; $('fEyedropBtn').classList.remove('primary'); $('fEyedropHint').style.display='none'; }
+  setFurniKeep(on); toast(on?'残す範囲をドラッグで四角く囲んでください（外側が消えます）':'範囲外消しを解除しました'); });
 on($('fEraseSize'),'input',()=>{ $('fEraseSizeV').textContent=$('fEraseSize').value; renderOverlay(); });
 on($('fEraseResetBtn'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.eraseMask) return; pushHistory(); f.eraseMask=null; f.dirty=true; rebuildFurniture(f); render(); toast('手動消しをリセットしました'); });
 on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
