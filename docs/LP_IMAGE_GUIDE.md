@@ -95,12 +95,16 @@ alt と `width`/`height` はコード側で付与済み（CLSが出ないよう�
 | `chintai-kabe-makeover-before` | B | Room Studioで**壁の色を変える前**（もとの白い壁） |
 | `chintai-kabe-makeover-after` | B | Room Studioで**壁だけ色を変えた後**のイメージ |
 
-### 4. 北欧インテリア（`/lp/hokuo-interior`）※リファレンス
+### 4. 集めた画像を自分の部屋で試す（`/lp/hokuo-interior`）※リファレンス
+本文は「集めた画像は他人の部屋＝自分の部屋ではどう見えるか分からない」という普遍的な悩みが
+主役で、北欧は具体例として残っています（title/descriptionと本文1セクションのみ）。
+before/after は**床・壁だけを変えた例**にしてください（家具を置くと🔴の楽天ルールに触れます）。
+
 | ファイル名 | 種別 | 内容の指示 |
 |---|---|---|
 | `hokuo-interior-hero` | A | **明るい木の質感の北欧テイストな無人リビング**（横長） |
-| `hokuo-interior-before` | B | Room Studioで**北欧トーンにする前**のふつうの部屋 |
-| `hokuo-interior-after` | B | Room Studioで**床と壁を明るい北欧トーンに変えた後** |
+| `hokuo-interior-before` | B | Room Studioで**床と壁の色を変える前**のふつうの部屋 |
+| `hokuo-interior-after` | B | 同じ部屋をRoom Studioで**床と壁だけ色・素材を変えた後** |
 
 ---
 
