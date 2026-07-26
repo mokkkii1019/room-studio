@@ -569,6 +569,11 @@
           <p class="hint" style="margin-top:8px">面や家具を<b>クリックで選択</b>します。家具は<b>ドラッグで移動</b>、選択後は右パネルで調整できます。左のレールでいつでもモードを切り替えられます。</p>
           <p class="hint">配置した家具は <b>Ctrl+C</b> でコピー、<b>Ctrl+V</b> で貼り付け、<b>Delete</b> で削除できます。</p>
         </div>
+        <div class="section">
+          <span class="label">部屋の明るさ<span class="info" data-tip="部屋の写真が暗い／明るすぎるときに、全体を自然に明るく・暗く調整します。中間調だけを持ち上げ／落とすので白飛び・黒潰れが起きにくく、書き出す画像にも反映されます。0でリセット。">i</span></span>
+          <div class="slider" style="margin-top:8px"><label>明るさ</label><input type="range" id="roomBright" min="-100" max="100" value="0"><span class="val" id="roomBrightV">0</span></div>
+          <button class="btn" id="roomBrightReset" style="width:100%;justify-content:center;margin-top:6px">明るさをリセット</button>
+        </div>
       </div>
 
       <!-- ===== SURFACE PANEL ===== -->
@@ -804,6 +809,10 @@
               範囲外を消す（頂点で囲む）<span class="info" data-tip="残したい部分の輪郭を頂点をクリックして囲むと、その外側が透明になります（表面の「面」と同じ操作）。最初の点をもう一度クリックするか Enter で確定。ひとつ前の点は Alt/右クリックか Backspace で取り消せます。収集画像の余計な写り込みを消して商品だけを残すのに使えます。元に戻すには取り消し（Ctrl+Z）か「手動消しをリセット」。">i</span>
             </button>
             <div id="fKeepHint" style="display:none;font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px">残したい輪郭を頂点をクリックして囲んでください。3点以上で、最初の点をもう一度クリックか Enter で確定します（囲みの外側が消えます）。</div>
+            <button class="btn" id="fTrim" style="width:100%;justify-content:center;margin-top:6px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14"/></svg>
+              <span id="fTrimLabel">余白を切り詰める（透明部分）</span><span class="info" data-tip="背景を切り抜いた家具に残っている透明な余白を取り除き、家具そのものの大きさ（領域）に切り詰めます。選択枠・大きさ・配置時の基準がぴったりになります。非破壊なので、もう一度押せば元の領域に戻せます（取り消し Ctrl+Z も可）。">i</span>
+            </button>
             </div>
           </div>
           <div class="section">
@@ -818,7 +827,6 @@
             <div id="fKeystoneBox" style="display:none">
               <button class="btn" id="fKeystoneReset" style="width:100%;justify-content:center">四隅をリセット（長方形に戻す）</button>
             </div>
-            <div class="slider"><label>不透明度</label><input type="range" id="fOpacity" min="20" max="100" value="100"><span class="val" id="fOpacityV">100%</span></div>
             <div class="row">
               <button class="btn" id="fFlip" style="flex:1;justify-content:center">左右反転</button>
               <button class="btn" id="fDup" style="flex:1;justify-content:center">複製</button>
@@ -974,6 +982,8 @@ const State = {
   roomCanvas:null, roomCtx:null,      // editable (eraser writes here)
   roomOriginal:null,                  // backup for reset
   roomData:null,                      // cached ImageData of roomCanvas
+  roomBright:0,                       // 部屋写真の明るさ調整 -100..+100（0=無調整。描画時のみ適用の非破壊）
+  _roomLit:null, _roomLitKey:null,    // 明るさ適用後の部屋ベースのキャッシュ（roomCanvas変更で無効化）
   layers:[],                          // ordered bottom->top
   selectedId:null,
   mode:'surface',                     // surface | furniture | erase
@@ -1006,7 +1016,21 @@ const stage = $('stage'), sctx = stage.getContext('2d');
 const overlay = $('overlay'), octx = overlay.getContext('2d');
 
 function getRoomData(){ if(!State.roomData) State.roomData = State.roomCtx.getImageData(0,0,State.W,State.H); return State.roomData; }
-function invalidateRoomData(){ State.roomData=null; State.edgeMap=null; }
+function invalidateRoomData(){ State.roomData=null; State.edgeMap=null; State._roomLit=null; State._roomLitKey=null; }
+/* 明るさ調整のトーンカーブ（ガンマ）。端点(0,255)は保ったまま中間調だけを持ち上げ／落とすので、
+   白飛び・黒潰れを起こしにくく自然に見える。b>0で明るく、b<0で暗く。 */
+function brightnessLUT(b){ const g=Math.pow(2, -(b/100)*0.9); const lut=new Uint8ClampedArray(256);
+  for(let i=0;i<256;i++) lut[i]=Math.round(255*Math.pow(i/255, g)); return lut; }
+/* 描画に使う部屋ベース。roomBright=0なら素の roomCanvas、それ以外は明るさ適用後をキャッシュして返す。
+   ツール用の画素サンプリング(getRoomData)は素の画素のままにして、明るさは見た目のみに効かせる。 */
+function litRoomBase(){ const b=State.roomBright||0;
+  if(!b || !State.roomCanvas) return State.roomCanvas;
+  if(State._roomLit && State._roomLitKey===b) return State._roomLit;
+  const cv=State._roomLit||document.createElement('canvas'); cv.width=State.W; cv.height=State.H;
+  const x=cv.getContext('2d'); x.drawImage(State.roomCanvas,0,0);
+  const img=x.getImageData(0,0,State.W,State.H), d=img.data, lut=brightnessLUT(b);
+  for(let i=0;i<d.length;i+=4){ d[i]=lut[d[i]]; d[i+1]=lut[d[i+1]]; d[i+2]=lut[d[i+2]]; }
+  x.putImageData(img,0,0); State._roomLit=cv; State._roomLitKey=b; return cv; }
 function activeSurface(){ const l=State.layers.find(x=>x.id===State.selectedId); return (l&&l.type==='surface')?l:null; }
 function selectedFurniture(){ const l=State.layers.find(x=>x.id===State.selectedId); return (l&&l.type==='furniture')?l:null; }
 
@@ -1478,30 +1502,99 @@ function removeBg(imgData, tolPct){
   }
 }
 function rebuildFurniture(layer){
-  const src=layer.aiCutCanvas || layer.srcCanvas, w=src.width, h=src.height;
-  const work=document.createElement('canvas'); work.width=w; work.height=h; const wx=work.getContext('2d',{willReadFrequently:true});
+  const src=layer.aiCutCanvas || layer.srcCanvas, fw=src.width, fh=src.height;
+  const work=document.createElement('canvas'); work.width=fw; work.height=fh; const wx=work.getContext('2d',{willReadFrequently:true});
   wx.drawImage(src,0,0);
-  let img=wx.getImageData(0,0,w,h);
+  let img=wx.getImageData(0,0,fw,fh);
   if(!layer.aiCutCanvas && layer.bgRemove) removeBg(img, layer.bgTol); // AI cut already has alpha
   // recolor / material applied to opaque pixels
   if(layer.recolor || layer.material){
-    const d=img.data, n=w*h;
+    const d=img.data, n=fw*fh;
     let sumL=0,cnt=0; for(let i=0;i<n;i++){ if(d[i*4+3]>10){ const p=i*4; sumL+=lpOf(d[p],d[p+1],d[p+2]); cnt++; } }
     const avgL=cnt?sumL/cnt:0.5;
     let matBuf=null;
-    if(layer.material){ const t=matTile(layer.material); const bc=document.createElement('canvas'); bc.width=w;bc.height=h; const bcx=bc.getContext('2d');
+    if(layer.material){ const t=matTile(layer.material); const bc=document.createElement('canvas'); bc.width=fw;bc.height=fh; const bcx=bc.getContext('2d');
       const tw=t.width*0.7, th=t.height*0.7; // 非正方形タイルの比率を保つ（buildMaterialBuffer と同じ理由）
-      for(let y=0;y<h;y+=th)for(let x=0;x<w;x+=tw) bcx.drawImage(t,x,y,tw,th); matBuf=bcx.getImageData(0,0,w,h).data; }
+      for(let y=0;y<fh;y+=th)for(let x=0;x<fw;x+=tw) bcx.drawImage(t,x,y,tw,th); matBuf=bcx.getImageData(0,0,fw,fh).data; }
     const col = layer.recolor? rgb2hsl(...hex2rgb(layer.color)) : null;
     for(let i=0;i<n;i++){ const al=d[i*4+3]; if(al<=10) continue; const p=i*4; const lp=lpOf(d[p],d[p+1],d[p+2]);
       if(layer.material){ const shadeF=clamp(lp/Math.max(avgL,0.05),0.3,1.7); const R=matBuf[p]*shadeF,G=matBuf[p+1]*shadeF,B=matBuf[p+2]*shadeF; const s=layer.matStrength; d[p]=d[p]*(1-s)+R*s; d[p+1]=d[p+1]*(1-s)+G*s; d[p+2]=d[p+2]*(1-s)+B*s; }
       else { const nl=clamp(col[2]+(lp-avgL),0,1); const rgb=hsl2rgb(col[0],col[1],nl); const s=layer.strength; d[p]=d[p]*(1-s)+rgb[0]*s; d[p+1]=d[p+1]*(1-s)+rgb[1]*s; d[p+2]=d[p+2]*(1-s)+rgb[2]*s; }
     }
   }
-  // 手動で消した部分（eraseMask）を透明化（背景の自動削除後の手直し）
-  if(layer.eraseMask && layer.eraseMask.length===w*h){ const d=img.data, m=layer.eraseMask; for(let i=0;i<m.length;i++){ if(m[i]) d[i*4+3]=0; } }
-  const proc=document.createElement('canvas'); proc.width=w; proc.height=h; proc.getContext('2d').putImageData(img,0,0);
-  layer.proc=proc; layer.natW=w; layer.natH=h; layer.dirty=false; layer._warpKey=null; // proc changed → warp cache stale
+  wx.putImageData(img,0,0); // cut + recolor を原寸に書き戻す
+  // 切り抜き後の必要最小限の領域だけを proc にする（layer.crop = 元画像に対する割合の切り出し矩形）。
+  // natW/natH・corners・eraseMask もこの crop 空間で一貫させるので、ヒット判定・ワープ・選択枠は無改修で追従する。
+  const cr=cropRectPx(layer, fw, fh);
+  const proc=document.createElement('canvas'); proc.width=cr.w; proc.height=cr.h; const pctx=proc.getContext('2d',{willReadFrequently:true});
+  pctx.drawImage(work, cr.x, cr.y, cr.w, cr.h, 0, 0, cr.w, cr.h);
+  // 手動で消した部分（eraseMask）を透明化（crop 後の座標系＝natW×natH で保持・適用）
+  if(layer.eraseMask && layer.eraseMask.length===cr.w*cr.h){ const pd=pctx.getImageData(0,0,cr.w,cr.h), d=pd.data, m=layer.eraseMask; for(let i=0;i<m.length;i++){ if(m[i]) d[i*4+3]=0; } pctx.putImageData(pd,0,0); }
+  layer.proc=proc; layer.natW=cr.w; layer.natH=cr.h; layer.dirty=false; layer._warpKey=null; // proc changed → warp cache stale
+}
+/* layer.crop（元画像に対する割合 {x,y,w,h}）を現在の原寸(W×H)ピクセル矩形に変換。未設定なら全体。
+   割合で持つのはクラウド作品の再取得で原寸が変わっても比率で追従できるようにするため。 */
+function cropRectPx(layer, W, H){
+  const c=layer.crop;
+  if(!c) return { x:0, y:0, w:W, h:H };
+  let x=clamp(Math.round(c.x*W),0,W-1), y=clamp(Math.round(c.y*H),0,H-1);
+  let w=clamp(Math.round(c.w*W),1,W-x), h=clamp(Math.round(c.h*H),1,H-y);
+  return { x, y, w, h };
+}
+/* crop 矩形が変わっても家具の見た目（各画素のステージ位置）が動かないよう、レイヤーの中心 x,y と
+   corners（局所台形）を付け替える。old/new は原寸ピクセルの矩形。crop 局所は原寸ピクセルと 1:1。 */
+function repositionForCropChange(layer, oldPx, newPx){
+  const dx=(newPx.x+newPx.w/2)-(oldPx.x+oldPx.w/2); // 旧crop中心→新crop中心（crop局所px）
+  const dy=(newPx.y+newPx.h/2)-(oldPx.y+oldPx.h/2);
+  const ns=furnitureOuter(layer, dx, dy); layer.x=ns[0]; layer.y=ns[1]; // 新中心を旧中心のステージ位置へ
+  if(layer.corners){
+    // 台形補正中は四隅を平行移動するだけでは不可（中身が旧四隅いっぱいに引き伸ばされて見た目が変わる）。
+    // 「旧領域の矩形→四隅」の射影で新領域の4隅を写し直せば、各画素のステージ位置が保たれる。
+    const hw=oldPx.w/2, hh=oldPx.h/2;
+    const H=computeHomography([[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]], layer.corners);
+    let mapped=null;
+    if(H){ const ax=(newPx.x-oldPx.x)-hw, ay=(newPx.y-oldPx.y)-hh, bx=ax+newPx.w, by=ay+newPx.h;
+      const map=(x,y)=>{ const den=H[6]*x+H[7]*y+1;
+        if(den<=1e-6) return null; // 消失線を越える極端な四隅（=写し直すと裏返る）は写像しない
+        const p=[(H[0]*x+H[1]*y+H[2])/den-dx, (H[3]*x+H[4]*y+H[5])/den-dy];
+        return (isFinite(p[0])&&isFinite(p[1])&&Math.abs(p[0])<1e5&&Math.abs(p[1])<1e5)? p : null; };
+      const q=[map(ax,ay), map(bx,ay), map(bx,by), map(ax,by)];
+      if(q.every(Boolean)) mapped=q;
+    }
+    // 写像できない場合の保険（原点が移った分だけずらす。見た目は多少変わるが破綻はしない）
+    layer.corners = mapped || layer.corners.map(p=>[p[0]-dx, p[1]-dy]);
+    layer._warpKey=null;
+  }
+}
+const TRIM_ALPHA=8; // これ以下の透明度は「余白」とみなす（フェザー端は残す程度の低しきい値）
+/* 選択中家具の透明な余白を取り除き、必要最小限の領域（natW×natH）に切り詰める。ユーザ操作で呼ぶ。
+   非破壊：srcCanvas/aiCutCanvas は原寸のまま、layer.crop（割合）だけを更新して proc を作り直す。 */
+function trimFurnitureToContent(layer){
+  if(layer.dirty||!layer.proc) rebuildFurniture(layer);
+  const cw=layer.natW, ch=layer.natH; if(!cw||!ch) return false;
+  const data=layer.proc.getContext('2d',{willReadFrequently:true}).getImageData(0,0,cw,ch).data;
+  let minx=cw,miny=ch,maxx=-1,maxy=-1;
+  for(let y=0;y<ch;y++){ const row=y*cw; for(let x=0;x<cw;x++){ if(data[(row+x)*4+3]>TRIM_ALPHA){ if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y; } } }
+  if(maxx<minx) return false; // 完全に透明（切り抜きすぎ）→何もしない
+  const bw=maxx-minx+1, bh=maxy-miny+1;
+  if(minx===0&&miny===0&&bw===cw&&bh===ch) return false; // すでにぴったり
+  const fw=(layer.aiCutCanvas||layer.srcCanvas).width, fh=(layer.aiCutCanvas||layer.srcCanvas).height;
+  const oldPx=cropRectPx(layer, fw, fh), newPx={ x:oldPx.x+minx, y:oldPx.y+miny, w:bw, h:bh };
+  repositionForCropChange(layer, oldPx, newPx);
+  // eraseMask を旧 crop(cw×ch) から新 crop(bw×bh) へ切り出し直す
+  if(layer.eraseMask && layer.eraseMask.length===cw*ch){ const nm=new Uint8Array(bw*bh);
+    for(let y=0;y<bh;y++){ const so=(miny+y)*cw+minx, dor=y*bw; for(let x=0;x<bw;x++) nm[dor+x]=layer.eraseMask[so+x]; } layer.eraseMask=nm; }
+  layer.crop={ x:newPx.x/fw, y:newPx.y/fh, w:newPx.w/fw, h:newPx.h/fh };
+  layer.dirty=true; rebuildFurniture(layer);
+  return true;
+}
+/* トリムを解除して元の（原寸全体の）領域に戻す。crop 空間の eraseMask は無効になるので破棄。 */
+function untrimFurniture(layer){
+  if(!layer.crop) return;
+  const fw=(layer.aiCutCanvas||layer.srcCanvas).width, fh=(layer.aiCutCanvas||layer.srcCanvas).height;
+  const oldPx=cropRectPx(layer, fw, fh), newPx={ x:0, y:0, w:fw, h:fh };
+  repositionForCropChange(layer, oldPx, newPx);
+  layer.crop=null; layer.eraseMask=null; layer.dirty=true; rebuildFurniture(layer);
 }
 
 /* Dynamic import with multi-CDN fallback. A single CDN (e.g. jsdelivr) returning 503
@@ -2077,7 +2170,7 @@ function captureState(){
       x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners?l.corners.map(p=>p.slice()):null, flip:l.flip, opacity:l.opacity,
       bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
       material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH, category:l.category,
-      eraseMask:l.eraseMask?l.eraseMask.slice():null
+      eraseMask:l.eraseMask?l.eraseMask.slice():null, crop:l.crop?Object.assign({},l.crop):null
     })
   };
 }
@@ -2094,7 +2187,8 @@ function restoreState(s){
       x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners?d.corners.map(p=>p.slice()):null, flip:d.flip, opacity:d.opacity,
       bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
       material:d.material, matStrength:d.matStrength, visible:d.visible, dirty:true, proc:null,
-      natW:d.natW, natH:d.natH, category:d.category||null, eraseMask:d.eraseMask?d.eraseMask.slice():null
+      natW:d.natW, natH:d.natH, category:d.category||null, eraseMask:d.eraseMask?d.eraseMask.slice():null,
+      crop:d.crop?Object.assign({},d.crop):null
     });
   State.layers.forEach(l=>{ if(l.type==='surface') rebuildSurface(l); else rebuildFurniture(l); });
   renderLayers(); syncPanels(); rebuildMaskPreview(); render();
@@ -2124,7 +2218,7 @@ function shareExport(){ if(!State.W){ toast('先に部屋を読み込んでく�
 function render(){
   if(!State.W) return;
   sctx.clearRect(0,0,State.W,State.H);
-  sctx.drawImage(State.roomCanvas,0,0);
+  sctx.drawImage(litRoomBase(),0,0);
   for(const l of State.layers){ if(!l.visible) continue;
     if(l.type==='surface'){ if(l.dirty) rebuildSurface(l); if(l.cache) sctx.drawImage(l.cache,0,0); }
     else { if(l.dirty||!l.proc) rebuildFurniture(l); sctx.save(); sctx.translate(l.x,l.y); sctx.rotate(l.rot*Math.PI/180); sctx.scale((l.flip?-1:1)*l.scale, l.scale); sctx.globalAlpha=l.opacity;
@@ -2390,7 +2484,7 @@ function addFurnitureLayer(srcCanvas, name, px, py, meta){
     source:meta.source||'upload', itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'', shop:meta.shop||'',
     bgRemove:false, bgTol:30, aiCutCanvas:meta.cutCanvas?copyCanvas(meta.cutCanvas):null, // 事前切り抜き済みなら透過で配置（解除ボタンで元に戻せる）
     recolor:false, color:'#7d8aa0', strength:0.8,
-    material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height };
+    material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height, crop:null };
   // fit initial size so it's ~40% of room width
   layer.scale = clamp((State.W*0.4)/layer.natW, 0.08, 2);
   State.layers.push(layer); rebuildFurniture(layer); selectLayer(id); renderLayers(); render();
@@ -3149,10 +3243,13 @@ function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.displ
   updateMatConfig();
   const f=selectedFurniture(); $('furnitureControls').style.display=f?'block':'none'; $('furnitureEmpty').style.display=f?'none':'block';
   if(f) syncFurnitureUI(f);
+  syncRoomBrightUI();
 }
+function syncRoomBrightUI(){ const b=State.roomBright||0; const el=$('roomBright'); if(el) el.value=b; const v=$('roomBrightV'); if(v) v.textContent=(b>0?'+':'')+b; }
 function syncFurnitureUI(f){ { const nm=$('fInspName'); if(nm) nm.textContent='選択中：'+(f.name||'家具'); } $('fBgRemove').checked=f.bgRemove; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; setSlider('fBgTol',f.bgTol);
   $('fAiCutClear').style.display=f.aiCutCanvas?'block':'none'; $('fAiCut').lastChild.textContent= f.aiCutCanvas?' AIで切り抜き直す':' AIで背景を切り抜く（任意背景・高品質）';
-  setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fYaw',Math.round(f.yaw||0),'°'); setSlider('fOpacity',Math.round(f.opacity*100),'%');
+  { const tl=$('fTrimLabel'); if(tl) tl.textContent = f.crop? '余白を元に戻す' : '余白を切り詰める（透明部分）'; }
+  setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fYaw',Math.round(f.yaw||0),'°');
   $('fKeystone').checked=!!f.corners; $('fKeystoneBox').style.display=f.corners?'block':'none'; $('fYaw').disabled=!!f.corners;
   $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%'); updateFMatConfig();
 }
@@ -3211,6 +3308,7 @@ function setupRoomFromCanvas(srcCanvas){
   State.roomOriginal=State.roomCtx.getImageData(0,0,w,h);
   State.compare.before=document.createElement('canvas'); State.compare.before.width=w; State.compare.before.height=h; State.compare.before.getContext('2d').putImageData(State.roomOriginal,0,0);
   State.compare.active=false; State.compare.split=0.5; $('btnCompare').classList.remove('primary');
+  State.roomBright=0; // 新しい部屋は無調整から
   invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory();
   resizePreviews(); erasePreviewClear();
   $('canvasBox').style.display='block'; $('emptyHint').style.display='none'; $('zoomCtl').style.display='flex';
@@ -3257,6 +3355,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
   return {
     app:'room-studio', version:1, W:State.W, H:State.H, selectedId:State.selectedId, nextId:State.nextId,
     userMaterials:serializeUserMats(),
+    roomBright:State.roomBright||0,
     roomOriginal:_origPng, room:canvasToPNG(State.roomCanvas),
     layers:State.layers.map(l=>{
       if(l.type==='surface') return { type:'surface', id:l.id, name:l.name, mask:bytesToB64(l.mask), color:l.color,
@@ -3268,7 +3367,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
         x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
         bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
         material:l.material, matStrength:l.matStrength, visible:l.visible, category:l.category,
-        eraseMask:l.eraseMask?bytesToB64(l.eraseMask):null,
+        eraseMask:l.eraseMask?bytesToB64(l.eraseMask):null, crop:l.crop||null,
         source:src, itemCode:l.itemCode||'', productUrl:l.productUrl||'', affiliateUrl:l.affiliateUrl||'', shop:l.shop||'' };
       if(!stripImg){ f.src=pngCached(l.srcCanvas); f.aiCut=pngCached(l.aiCutCanvas); }
       return f;
@@ -3304,6 +3403,7 @@ async function loadProject(obj, opts){
     if(obj.roomOriginal){ const oc=await loadDataURL(obj.roomOriginal);
       State.roomOriginal=oc.getContext('2d').getImageData(0,0,oc.width,oc.height); State.compare.before=oc; }
     State.nextId=obj.nextId||State.nextId;
+    State.roomBright=obj.roomBright||0; // setupRoomFromCanvas が 0 に戻すので保存値で上書き
     if(obj.userMaterials){ for(const o of obj.userMaterials) await registerUserMaterial(o); refreshMatGrids(); } // restore custom materials first so layer.material keys resolve
     const layers=[];
     for(const d of (obj.layers||[])){
@@ -3322,7 +3422,7 @@ async function loadProject(obj, opts){
           material:d.material, matStrength:d.matStrength, visible:d.visible, category:d.category||null,
           source:d.source||'upload', itemCode:d.itemCode||'', productUrl:d.productUrl||'', affiliateUrl:d.affiliateUrl||'', shop:d.shop||'',
           needsRehydrate:!hasImg, dirty:true, proc:null, natW:src.width, natH:src.height,
-          eraseMask:d.eraseMask?b64ToBytes(d.eraseMask):null });
+          eraseMask:d.eraseMask?b64ToBytes(d.eraseMask):null, crop:d.crop||null });
       }
     }
     State.layers=layers; State.selectedId=obj.selectedId||null;
@@ -3567,7 +3667,9 @@ on($('btnCompare'),'click',()=>{ if(!State.W){ toast('先に部屋を読み込�
   overlay.style.cursor=State.compare.active?'ew-resize':'';
   toast(State.compare.active?'スライダーをドラッグして編集前/後を比較':'比較を終了しました'); renderOverlay(); });
 on($('fileProj'),'change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ let obj; try{ obj=JSON.parse(r.result); }catch(err){ toast('JSONを解析できませんでした'); return; } closeFavDrawer(); loadProject(obj); }; r.readAsText(f); e.target.value=''; });
-on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory(); erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
+on($('btnReset'),'click',()=>{ if(!State.W) return; if(!confirm('編集をすべて破棄して、元の部屋に戻しますか？')) return; State.roomCtx.putImageData(State.roomOriginal,0,0); State.roomBright=0; invalidateRoomData(); invalidateSam(); State.layers=[]; State.selectedId=null; State.eraseMask=newMask(); clearHistory(); erasePreviewClear(); rebuildMaskPreview(); renderLayers(); syncPanels(); render(); toast('リセットしました'); });
+on($('roomBright'),'input',e=>{ if(!State.W) return; State.roomBright=+e.target.value|0; $('roomBrightV').textContent=(State.roomBright>0?'+':'')+State.roomBright; render(); });
+on($('roomBrightReset'),'click',()=>{ if(!State.W) return; State.roomBright=0; syncRoomBrightUI(); render(); });
 
 // tabs
 document.querySelectorAll('.rail-btn').forEach(t=>on(t,'click',()=>setMode(t.dataset.mode)));
@@ -3652,7 +3754,11 @@ on(document,'drop',e=>{ const files=imageFilesFrom(e.dataTransfer); if(!files.le
 on($('fBgRemove'),'change',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.bgRemove=e.target.checked; $('fBgTolRow').style.display=f.bgRemove?'flex':'none'; f.dirty=true; rebuildFurniture(f); renderLayers(); render(); });
 on($('fBgTol'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fBgTol'); f.bgTol=+e.target.value; $('fBgTolV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fAiCut'),'click',()=>{ const f=selectedFurniture(); if(f) aiCutFurniture(f); });
-on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.aiCutCanvas=null; f.dirty=true; rebuildFurniture(f); syncFurnitureUI(f); renderLayers(); render(); });
+on($('fAiCutClear'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.aiCutCanvas=null; if(f.crop) untrimFurniture(f); f.dirty=true; rebuildFurniture(f); syncFurnitureUI(f); renderLayers(); render(); });
+on($('fTrim'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory();
+  if(f.crop){ untrimFurniture(f); toast('余白を元に戻しました'); }
+  else { const ok=trimFurnitureToContent(f); toast(ok?'余白を切り詰めました':'切り詰める余白はありませんでした'); }
+  syncFurnitureUI(f); renderLayers(); render(); });
 on($('fScale'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fScale'); f.scale=+e.target.value/100; $('fScaleV').textContent=e.target.value+'%'; render(); });
 on($('fRot'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fRot'); f.rot=+e.target.value; $('fRotV').textContent=e.target.value+'°'; render(); });
 on($('fYaw'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fYaw'); f.yaw=+e.target.value; $('fYawV').textContent=e.target.value+'°'; render(); });
@@ -3661,19 +3767,18 @@ on($('fKeystone'),'change',e=>{ const f=selectedFurniture(); if(!f) return; push
   f._warpKey=null; $('fKeystoneBox').style.display=e.target.checked?'block':'none'; $('fYaw').disabled=e.target.checked;
   renderLayers(); render(); toast(e.target.checked?'家具の四隅をドラッグして台形補正できます':'台形補正を解除しました'); });
 on($('fKeystoneReset'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.corners) return; pushHistory(); f.corners=rectCornersLocal(f); f._warpKey=null; render(); });
-on($('fOpacity'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fOpacity'); f.opacity=+e.target.value/100; $('fOpacityV').textContent=e.target.value+'%'; render(); });
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
 /* 家具のプロパティ一式をスナップショット（画像は不変なので srcCanvas 参照を保持）。コピペ/複製で共用。 */
 function snapshotFurniture(f){ return { src:f.srcCanvas, aiCut:f.aiCutCanvas||null, name:f.name, x:f.x, y:f.y, srcId:f.id,
   props:{ bgRemove:f.bgRemove, bgTol:f.bgTol, recolor:f.recolor, color:f.color, strength:f.strength, material:f.material, matStrength:f.matStrength,
     scale:f.scale, rot:f.rot, yaw:f.yaw, corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null, flip:f.flip, opacity:f.opacity, category:f.category,
-    eraseMask:f.eraseMask?f.eraseMask.slice():null } }; }
+    eraseMask:f.eraseMask?f.eraseMask.slice():null, crop:f.crop?Object.assign({},f.crop):null } }; }
 /* スナップショットから新レイヤーとして配置（+dx,+dy ずらし）。返り値=新家具。 */
 function placeFurnitureSnapshot(snap, dx, dy){ if(!State.W){ toast('先に部屋を読み込んでください'); return null; }
   addFurnitureLayer(copyCanvas(snap.src), (snap.name||'家具')+' のコピー');
   const nf=selectedFurniture(); if(!nf) return null; const pr=snap.props;
   Object.assign(nf, pr, { aiCutCanvas:snap.aiCut, corners:pr.corners?pr.corners.map(p=>[p[0],p[1]]):null,
-    eraseMask:pr.eraseMask?pr.eraseMask.slice():null, x:snap.x+(dx||0), y:snap.y+(dy||0), dirty:true });
+    eraseMask:pr.eraseMask?pr.eraseMask.slice():null, crop:pr.crop?Object.assign({},pr.crop):null, x:snap.x+(dx||0), y:snap.y+(dy||0), dirty:true });
   // 複製元の「一つ前面（直上）」へ移動（最前面に置かない）。複製元が残っていれば直後に挿入。
   if(snap.srcId!=null){ const si=State.layers.findIndex(l=>l.id===snap.srcId);
     if(si>=0){ const ni=State.layers.findIndex(l=>l.id===nf.id);
