@@ -8,7 +8,7 @@ import os
 import sys
 import time
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 sys.path.insert(0, os.path.dirname(__file__))
 import _collect_core as core  # noqa: E402
@@ -131,18 +131,24 @@ def sitemap():
 def landing(slug: str):
     page = _site.landing_html(slug, os.path.join(ROOT, "lp-assets"))
     if page is None:
+        # A retired LP keeps its search equity by 301-ing to the surviving page.
+        dest = _site.landing_redirect(slug)
+        if dest:
+            return RedirectResponse(dest, status_code=301)
         raise HTTPException(status_code=404, detail="not found")
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/lp-assets/{name}")
-def lp_asset(name: str):
-    # Landing-page images (hero photos / before-after captures) dropped in lp-assets/.
-    res = _site.lp_asset(os.path.join(ROOT, "lp-assets"), name)
+def lp_asset(name: str, request: Request):
+    # Landing-page media (hero photo/video, before-after captures) from lp-assets/.
+    # Range-aware: the hero video will not play on iOS Safari without it.
+    res = _site.lp_asset_range(os.path.join(ROOT, "lp-assets"), name,
+                               request.headers.get("range"))
     if res is None:
         raise HTTPException(status_code=404, detail="not found")
-    data, ctype = res
-    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+    status, body, headers = res
+    return Response(content=body, status_code=status, headers=headers)
 
 
 @app.get("/materials/{name}")

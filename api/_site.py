@@ -240,6 +240,28 @@ LANDING_PAGES = [
 
 _LP_BY_SLUG = {p["slug"]: p for p in LANDING_PAGES}
 
+# LPs retired on 2026-07-28. Their URLs were public and indexed, so they 301 to the
+# surviving page instead of 404-ing — the accumulated ranking signal and any inbound
+# links/bookmarks carry over. Never re-use one of these keys as a live slug.
+LP_REDIRECTS = {
+    "6jo-hitorigurashi-layout": "hokuo-interior",
+    "hitorigurashi-sofa": "hokuo-interior",
+    "chintai-kabe-makeover": "hokuo-interior",
+}
+
+
+def landing_redirect(slug):
+    """Path to 301 a retired LP slug to, or None when there is nothing to redirect.
+
+    Guards against a redirect loop: a slug that is still live, or one pointing at a
+    target that no longer exists (or at itself), returns None so the caller 404s."""
+    if slug in _LP_BY_SLUG:
+        return None
+    target = LP_REDIRECTS.get(slug)
+    if not target or target == slug or target not in _LP_BY_SLUG:
+        return None
+    return "/lp/" + target
+
 
 def landing_slugs():
     """All landing-page slugs (sitemap uses this)."""
@@ -287,6 +309,26 @@ def _img_ph(cls, note):
     esc = _html.escape
     return (f'<figure class="{("media media-empty " + cls).strip()}" aria-hidden="true">'
             f'<span class="ph-note">{esc(note)}</span></figure>')
+
+
+def _hero_video(sources, poster_url):
+    """A full-bleed ambient hero video (NOT A HOTEL-style), as inline markup.
+
+    Decorative by design: muted, looping, no controls, so it carries atmosphere
+    rather than information — hence `aria-hidden`, which keeps a controlless media
+    element out of the accessibility tree instead of announcing an unusable player.
+    The h1/lead beside it carry the meaning. `poster` is the still hero photo when
+    one exists, so the first paint (and the LCP candidate) is an image rather than
+    an empty box, and it is also what shows if decoding fails or autoplay is denied.
+    `autoplay` is in the markup so it works without JS; the page script pauses it
+    when the visitor prefers reduced motion."""
+    esc = _html.escape
+    poster = f' poster="{esc(poster_url)}"' if poster_url else ""
+    srcs = "".join(f'<source src="{esc(src)}" type="{esc(ct)}">' for src, ct in sources)
+    return ('<figure class="media media-wide media-video">'
+            f'<video autoplay muted loop playsinline preload="metadata"{poster} '
+            f'width="1600" height="900" aria-hidden="true" tabindex="-1">{srcs}</video>'
+            '</figure>')
 
 
 def _hero_svg(alt):
@@ -427,11 +469,19 @@ def landing_html(slug, assets_dir=None):
     show_ph = bool(p.get("ph"))
     hero = p.get("hero") or {}
     hero_alt = hero.get("alt", "")
-    # Real free-stock photo when the operator has added one; otherwise a calm inline
-    # SVG illustration so the hero is never empty (auto-upgrades to the photo later).
+    # Hero visual, best available first: an ambient video, else a real free-stock
+    # photo, else a calm inline SVG illustration so it is never empty. Each tier
+    # upgrades automatically as the operator drops files into /lp-assets.
     # The hero is above the fold, hence eager.
-    hero_fig = (_img(f"{slug}-hero", hero_alt, "media-wide", 1600, 900, eager=True)
-                if _has(f"{slug}-hero") else _hero_svg(hero_alt))
+    hero_vid = [(f"/lp-assets/{slug}-hero{ext}", ct) for ext, ct in _LP_VIDEO_CT.items()
+                if _lp_asset_path(assets_dir, f"{slug}-hero{ext}", _LP_VIDEO_CT)
+                ] if assets_dir else []
+    if hero_vid:
+        hero_fig = _hero_video(hero_vid, f"/lp-assets/{slug}-hero" if _has(f"{slug}-hero") else "")
+    elif _has(f"{slug}-hero"):
+        hero_fig = _img(f"{slug}-hero", hero_alt, "media-wide", 1600, 900, eager=True)
+    else:
+        hero_fig = _hero_svg(hero_alt)
     hero_media = f'<div class="bleed rv">{hero_fig}</div>'
     steps_html = _steps_html()
     feat_html = _features_html()
@@ -581,7 +631,7 @@ def landing_html(slug, assets_dir=None):
   .bleed{{margin-top:clamp(40px,6vw,72px)}}
   .media{{position:relative;margin:0;background:var(--sub);overflow:hidden;display:grid;place-items:center}}
   .media-wide,.media-illus{{aspect-ratio:16/9;max-height:76vh}}
-  .media img,.media svg{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
+  .media img,.media svg,.media video{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
   /* Empty slot: same box, same greige, only the border turns dashed — it reads as
      scaffolding rather than a broken image, and dropping the file in shifts nothing. */
   .media-empty{{border:1px dashed var(--line)}}
@@ -717,6 +767,13 @@ def landing_html(slug, assets_dir=None):
 (function(){{
   var d=document,rm=false;
   try{{rm=matchMedia("(prefers-reduced-motion:reduce)").matches}}catch(e){{}}
+  if(rm){{
+    // Reduced motion: the ambient hero must not loop. autoplay lives in the markup
+    // so it still plays with JS off; here we stop it and fall back to the poster.
+    [].forEach.call(d.querySelectorAll("video[autoplay]"),function(v){{
+      try{{v.removeAttribute("autoplay");v.pause();v.currentTime=0;}}catch(e){{}}
+    }});
+  }}
   var rv=[].slice.call(d.querySelectorAll(".rv"));
   if(rm||!("IntersectionObserver" in window)){{
     rv.forEach(function(e){{e.classList.add("in")}});
@@ -743,21 +800,35 @@ def landing_html(slug, assets_dir=None):
 </body></html>"""
 
 
-# ---- landing-page image assets (/lp-assets/<name>) ---------------------------
-_LP_ASSET_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                ".png": "image/png", ".avif": "image/avif"}
+# ---- landing-page assets (/lp-assets/<name>) ---------------------------------
+_LP_IMG_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+              ".png": "image/png", ".avif": "image/avif"}
+# webm first: browsers pick the first <source> they can decode, and VP9/webm is the
+# smaller file wherever it is supported. mp4/H.264 stays as the universal fallback.
+_LP_VIDEO_CT = {".webm": "video/webm", ".mp4": "video/mp4"}
+_LP_ASSET_CT = dict(_LP_IMG_CT, **_LP_VIDEO_CT)
+
+# One response is capped well under Vercel's ~4.5MB serverless response limit. An
+# open-ended range ("bytes=0-") is answered with at most this much and a 206, which
+# is a legal partial answer — so a hero video larger than the cap still streams
+# instead of failing outright. See docs/LP_IMAGE_GUIDE.md for the recommended size.
+_LP_MAX_CHUNK = 3 * 1024 * 1024
 
 
-def _lp_asset_path(assets_dir, name):
-    """Resolve an LP image to an existing file path under assets_dir, or None.
-    Path-safe: only a bare filename is accepted; a name without extension matches
-    any supported image type (webp/jpg/jpeg/png/avif)."""
+def _lp_asset_path(assets_dir, name, types=None):
+    """Resolve an LP asset to an existing file path under assets_dir, or None.
+
+    Path-safe: only a bare filename is accepted. `types` is the extension→MIME map
+    to consider; a name WITHOUT an extension is tried against each type in turn.
+    It defaults to images only, so an image slot keeps resolving to the picture even
+    when a same-named video sits beside it (`<slug>-hero.webp` vs `<slug>-hero.mp4`)."""
+    types = types or _LP_IMG_CT
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name or ""):
         return None
     ext = os.path.splitext(name)[1].lower()
-    names = [name] if ext in _LP_ASSET_CT else [name + e for e in _LP_ASSET_CT]
+    names = [name] if ext in types else [name + e for e in types]
     for fn in names:
-        if os.path.splitext(fn)[1].lower() not in _LP_ASSET_CT:
+        if os.path.splitext(fn)[1].lower() not in types:
             continue
         path = os.path.join(assets_dir, fn)
         if os.path.isfile(path):
@@ -765,13 +836,67 @@ def _lp_asset_path(assets_dir, name):
     return None
 
 
-def lp_asset(assets_dir, name):
-    """Return (bytes, content_type) for an LP image, or None if not found."""
-    path = _lp_asset_path(assets_dir, name)
+def _parse_range(header, size):
+    """Parse a single HTTP byte range into an inclusive (start, end), or None.
+
+    Returns None for a malformed, multi-range or unsatisfiable header — the caller
+    turns that into 416. Supports "bytes=N-", "bytes=N-M" and the suffix "bytes=-N"."""
+    m = re.fullmatch(r"\s*bytes=(\d*)-(\d*)\s*", header or "")
+    if not m or size <= 0:
+        return None
+    first, last = m.group(1), m.group(2)
+    if first == "":                       # suffix range: the final `last` bytes
+        if last == "":
+            return None
+        start, end = max(0, size - int(last)), size - 1
+    else:
+        start = int(first)
+        end = int(last) if last else size - 1
+    if start >= size or end < start:
+        return None
+    return start, min(end, size - 1)
+
+
+def lp_asset_range(assets_dir, name, range_header=None):
+    """(status, body, headers) for an LP asset, or None when it does not exist.
+
+    Honours one HTTP Range with a 206. This is what makes the video hero viable:
+    iOS Safari refuses to play a <video> served by an endpoint that ignores Range,
+    and an unranged full-file response would also hit Vercel's response size cap."""
+    path = _lp_asset_path(assets_dir, name, _LP_ASSET_CT)
     if not path:
         return None
+    ctype = _LP_ASSET_CT[os.path.splitext(path)[1].lower()]
+    size = os.path.getsize(path)
+    headers = {"Content-Type": ctype, "Accept-Ranges": "bytes",
+               "Cache-Control": "public, max-age=86400"}
+    if range_header:
+        rng = _parse_range(range_header, size)
+        if rng is None:
+            headers["Content-Range"] = f"bytes */{size}"
+            return 416, b"", headers
+        start, end = rng
+        end = min(end, start + _LP_MAX_CHUNK - 1)     # keep the response under the cap
+        with open(path, "rb") as f:
+            f.seek(start)
+            body = f.read(end - start + 1)
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+        headers["Content-Length"] = str(len(body))
+        return 206, body, headers
     with open(path, "rb") as f:
-        return f.read(), _LP_ASSET_CT[os.path.splitext(path)[1].lower()]
+        body = f.read()
+    headers["Content-Length"] = str(len(body))
+    return 200, body, headers
+
+
+def lp_asset(assets_dir, name):
+    """Return (bytes, content_type) for a whole LP asset, or None if not found.
+    Kept for the /materials/ route, which serves small tiles and never needs ranges."""
+    res = lp_asset_range(assets_dir, name)
+    if res is None:
+        return None
+    _status, body, headers = res
+    return body, headers["Content-Type"]
 
 
 # ---- robots.txt / sitemap.xml -------------------------------------------------
