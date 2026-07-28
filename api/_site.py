@@ -206,24 +206,24 @@ def legal_html(kind):
 # =============================================================================
 LANDING_PAGES = [
     {
-        "slug": "hokuo-interior",
-        "title": "北欧インテリアの部屋づくりを、色と質感で試す",
-        "desc": "北欧インテリアは色と素材の組み合わせが決め手。Room Studioなら部屋の写真で家具や床・壁の色を変えて、北欧らしい雰囲気になるかを無料で試せます。",
+        "slug": "moyougae-simulation",
+        "title": "模様替えシミュレーション：自分の部屋の写真で試す",
+        "desc": "模様替えは、やってみるまで仕上がりが分からないもの。Room Studioなら自分の部屋の写真に家具を置き、床や壁の色や素材まで変えて、部屋に合うかを無料で試せます。登録もインストールも不要です。",
         "eyebrow": "集めた画像 / 自分の部屋",
         "h1": "集めた画像は、自分の部屋じゃない",
-        "lead": "光の入り方も、間取りも、もとの床の色も違う。だから「自分の部屋だとどう見えるか」は、自分の部屋の写真の上でしか分かりません。北欧テイストのような憧れの雰囲気も、床や壁ごと変えて先に試せます。",
+        "lead": "光の入り方も、間取りも、もとの床の色も違う。だから「自分の部屋だとどう見えるか」は、自分の部屋の写真の上でしか分かりません。憧れの雰囲気に近づけるかどうかも、家具や床・壁ごと変えて先に試せます。",
         "sections": [
             ("集めた画像は、自分の部屋ではない", "画像を集めていくと、好きな色や素材の傾向は見えてきます。でも、そこから先が難しい。集めた画像はどれも他人の部屋で、窓の位置も光の入り方も、もとの床や壁の色も違うからです。同じ色のソファでも、床が濃い部屋と明るい部屋では見え方が変わります。答えが出る場所は、集めた画像の側ではなく、自分の部屋の写真の上です。"),
             ("自分の部屋の写真の上で、確かめる", "スマホで撮った部屋の写真をそのまま読み込めます。壁や床は面を選んで色や素材を変えられるので、「床を明るい木目にしたら」「壁をグレーに寄せたら」を、いまの光と間取りのまま見比べられます。家具はテイスト欄に好きな言葉を入れて集め、置いたあとに大きさや向き、色や素材を調整できます。ラグやカーテン、照明も同じように集められます。"),
-            ("たとえば、北欧インテリアを目指すなら", "北欧テイストなら、明るい木の質感と白やグレーのベースに、差し色を少しだけ効かせるのが定番です。ただ、同じ組み合わせでも部屋の光やもとの床の色が違えば見え方は変わります。テイスト欄に「北欧」と入れて家具を集め、床を明るい木目に、壁を白やグレーに変えて確かめてみてください。「ナチュラル」でも「インダストリアル」でも、目指したい言葉をそのまま入れて同じように試せます。"),
+            ("目指したいテイストを決めて、寄せていく", "たとえば北欧テイストなら、明るい木の質感と白やグレーのベースに、差し色を少しだけ効かせるのが定番です。ナチュラルなら生成りや麻の素材感を、インダストリアルなら黒や金属を効かせる、というようにテイストごとの定石があります。ただ、同じ組み合わせでも部屋の光やもとの床の色が違えば見え方は変わります。テイスト欄は自由記述なので、目指したい言葉をそのまま入れて家具を集め、床を明るい木目に、壁を白やグレーに、といった調整と合わせて自分の部屋で確かめてみてください。"),
         ],
         "faq": [
             ("集めた画像のイメージを、自分の部屋で確かめる方法はありますか？", "自分の部屋の写真の上で試してみるのがおすすめです。集めた画像は他人の部屋なので、光の入り方も間取りも、もとの床や壁の色も違います。Room Studioなら、部屋の写真で床や壁、家具の色や素材を変えて見比べられるので、どの方向が自分の部屋に合うかを判断しやすくなります。"),
-            ("北欧インテリアはどんな色でまとめればいいですか？", "白やグレーなどの明るいベースに木の質感を合わせ、差し色を少しだけ効かせるのが定番です。ただ同じ色でも部屋によって見え方が変わるので、実際の部屋の写真で床や壁の色を変え、収集機能のテイスト欄に「北欧」と入れて集めた家具を置いて確かめると、近づけやすくなります。"),
+            ("好きなテイストに合わせて、色はどうまとめればいいですか？", "明るいベースに素材の質感を合わせ、差し色を少しだけ効かせるのが基本です。北欧なら白やグレーに木の質感、ナチュラルなら生成りや麻、といったようにテイストごとの定石があります。ただ同じ色でも部屋によって見え方が変わるので、実際の部屋の写真で床や壁の色を変え、収集機能のテイスト欄に目指したい言葉を入れて集めた家具を置いて確かめると、近づけやすくなります。"),
             ("片付いていない部屋の写真でも試せますか？", "はい。写り込んだ気になるものは消してから試せるので、片付けきれていない部屋の写真のままで大丈夫です。登録もアプリのインストールも不要、無料でブラウザからそのまま使えます。部屋の写真は原則としてお使いの端末の中で処理されます。"),
         ],
-        "hero": {"alt": "北欧テイストの明るいリビングのイメージ",
-                 "note": "画像が入ります：明るい木の質感の北欧テイストな無人リビング（横長・人物やブランドの写り込みなし）"},
+        "hero": {"alt": "木の質感のある明るいリビングのイメージ",
+                 "note": "画像が入ります：明るい木の質感の無人リビング（横長・人物やブランドの写り込みなし）"},
         # Shows labelled placeholder boxes for the before/after slots while the operator
         # prepares the captures. Drop this key to hide the block until both files exist.
         "ph": True,
@@ -240,13 +240,19 @@ LANDING_PAGES = [
 
 _LP_BY_SLUG = {p["slug"]: p for p in LANDING_PAGES}
 
-# LPs retired on 2026-07-28. Their URLs were public and indexed, so they 301 to the
-# surviving page instead of 404-ing — the accumulated ranking signal and any inbound
-# links/bookmarks carry over. Never re-use one of these keys as a live slug.
+# URLs retired on 2026-07-28. They were public and indexed, so they 301 to the live
+# page instead of 404-ing — the accumulated ranking signal and any inbound links or
+# bookmarks carry over. Never re-use one of these keys as a live slug.
+#
+# Every entry points at the CURRENT slug, never at another retired one: when the LP
+# was renamed hokuo-interior → moyougae-simulation the three older slugs were
+# repointed too, so each is a single 301 rather than a 301→301 chain. Keep it that
+# way on the next rename — repoint all of these, do not add a new hop.
 LP_REDIRECTS = {
-    "6jo-hitorigurashi-layout": "hokuo-interior",
-    "hitorigurashi-sofa": "hokuo-interior",
-    "chintai-kabe-makeover": "hokuo-interior",
+    "hokuo-interior": "moyougae-simulation",
+    "6jo-hitorigurashi-layout": "moyougae-simulation",
+    "hitorigurashi-sofa": "moyougae-simulation",
+    "chintai-kabe-makeover": "moyougae-simulation",
 }
 
 

@@ -7,20 +7,20 @@ LPに「画像スロット」を実装済み。**ファイルを `lp-assets/` �
 
 ### 🎬 ヒーロー動画（NOT A HOTEL のような全面動画にする場合）
 
-`lp-assets/` に **`hokuo-interior-hero.mp4`** を置くと、ヒーローが自動で全面動画になります
+`lp-assets/` に **`moyougae-simulation-hero.mp4`** を置くと、ヒーローが自動で全面動画になります
 （写真より動画が優先）。ミュート・ループ・コントロール無しの「雰囲気を出すための背景動画」
 として再生されます。
 
 | 項目 | 指定 |
 |---|---|
-| ファイル名 | `hokuo-interior-hero.mp4`（必須）／`hokuo-interior-hero.webm`（任意・あれば優先して使われます） |
+| ファイル名 | `moyougae-simulation-hero.mp4`（必須）／`moyougae-simulation-hero.webm`（任意・あれば優先して使われます） |
 | 比率・実寸 | 16:9 / 1600×900 px 前後（1920×1080 でも可） |
 | 長さ | **6〜12秒のシームレスループ**（つなぎ目が目立たないもの） |
 | 音声 | **必ず削除**。ミュート再生が前提なので、音声トラックは容量の無駄です |
 | **容量** | **3MB以下**（重要。理由は下記） |
 | コーデック | H.264 (mp4) / VP9 (webm)。`-movflags +faststart` 相当でメタデータを先頭に |
 
-⚠️ **静止画も必ずセットで置いてください。** `hokuo-interior-hero.webp` が動画の
+⚠️ **静止画も必ずセットで置いてください。** `moyougae-simulation-hero.webp` が動画の
 **poster（表紙）**として自動で使われ、次の場面で表示されます。動画の1コマを書き出すのが理想です。
 
 - 動画の読み込みが終わるまでの最初の表示（ページの体感速度を決めるのはここ）
@@ -44,7 +44,7 @@ Vercel の1レスポンス上限（約4.5MB）があります。安全のため1
 
 - 置き場所: リポジトリ直下の **`lp-assets/`**
 - 配信URL: `https://roomstudio.jp/lp-assets/<ファイル名>`（`/lp-assets/{name}` ルートが配信）
-- **対応形式**: `.webp`（推奨）/ `.jpg` / `.jpeg` / `.png` / `.avif`。**拡張子は自動判別**（例 `hokuo-interior-hero.jpg` を置けば `hokuo-interior-hero` のスロットに入る）
+- **対応形式**: `.webp`（推奨）/ `.jpg` / `.jpeg` / `.png` / `.avif`。**拡張子は自動判別**（例 `moyougae-simulation-hero.jpg` を置けば `moyougae-simulation-hero` のスロットに入る）
 - 置いたら `git add lp-assets/ && commit && push`（main反映で本番に出る）
 
 ---
@@ -105,18 +105,19 @@ before/after のAfterに家具を写したい場合は、**楽天以外の権利
 alt と `width`/`height` はコード側で付与済み（CLSが出ないよう実寸を明示しています）。
 **before と after は必ず同じ比率**にしてください（重ね合わせ／横並びが破綻します）。上の推奨px通りに書き出せば揃います。
 
-### 集めた画像を自分の部屋で試す（`/lp/hokuo-interior`）
+### 模様替えシミュレーション（`/lp/moyougae-simulation`）
 **現在のLPはこの1枚だけです**（2026-07-28 に他3枚を破棄）。本文は「集めた画像は他人の部屋＝
-自分の部屋ではどう見えるか分からない」という普遍的な悩みが主役で、北欧は具体例として
-残っています（title/descriptionと本文1セクション・FAQ1問）。
+自分の部屋ではどう見えるか分からない」という普遍的な悩みが主役で、テイストは北欧・ナチュラル・
+インダストリアルを並列の例として扱う汎用の内容です（2026-07-28 に北欧特化から汎用化。
+旧URL `/lp/hokuo-interior` は新URLへ301）。
 before/after は**床・壁だけを変えた例**にしてください（家具を置くと🔴の楽天ルールに触れます）。
 
 | ファイル名 | 種別 | 内容の指示 |
 |---|---|---|
-| `hokuo-interior-hero` | A | **明るい木の質感の北欧テイストな無人リビング**（横長） |
-| `hokuo-interior-hero.mp4` | A | 同上を**動画**で（任意。置くと写真より優先。上の🎬参照） |
-| `hokuo-interior-before` | B | Room Studioで**床と壁の色を変える前**のふつうの部屋 |
-| `hokuo-interior-after` | B | 同じ部屋をRoom Studioで**床と壁だけ色・素材を変えた後** |
+| `moyougae-simulation-hero` | A | **明るい木の質感の無人リビング**（横長。特定テイストに寄せすぎない） |
+| `moyougae-simulation-hero.mp4` | A | 同上を**動画**で（任意。置くと写真より優先。上の🎬参照） |
+| `moyougae-simulation-before` | B | Room Studioで**床と壁の色を変える前**のふつうの部屋 |
+| `moyougae-simulation-after` | B | 同じ部屋をRoom Studioで**床と壁だけ色・素材を変えた後** |
 
 ---
 
