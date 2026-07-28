@@ -192,7 +192,12 @@ def legal_html(kind):
 #
 # All landing pages are defined in ONE place (LANDING_PAGES) so sitemap_xml()
 # picks them up automatically. Each dict: sections=[(heading, body)] real copy,
-# faq=[(q, a)] (→ FAQPage JSON-LD), related=[slug] (→ internal links, anchor=H1).
+# faq=[(q, a)] (→ FAQPage JSON-LD), `eyebrow` the small mono label above the H1.
+# Only one LP is published today; the template and the renderer stay plural-safe, so
+# adding another dict here is all it takes. Two keys only matter with 2+ pages:
+# related=[slug] (→ internal links) and `anchor`, which overrides the link text other
+# LPs use for this page — an H1 that leads with a pain reads badly in a link list, so
+# the anchor keeps the search-intent wording of the title.
 # Keep copy honest: general interior guidance + the app's real features; avoid
 # fabricated statistics or hard product claims (hedge where it depends).
 # The CTA links to the app at /?ref=lp-<slug> (attribution via GA4 page_location;
@@ -201,105 +206,26 @@ def legal_html(kind):
 # =============================================================================
 LANDING_PAGES = [
     {
-        "slug": "6jo-hitorigurashi-layout",
-        "title": "6畳 一人暮らしの部屋を、色と配置で広く見せる",
-        "desc": "6畳ワンルームを広くすっきり見せるには色使いが大切。Room Studioなら部屋の写真に家具を置き、壁や床の色を変えながら広く見えるバランスを無料で試せます。",
-        "h1": "6畳・一人暮らしの部屋を、色で広く見せる",
-        "lead": "6畳ワンルームは、家具や壁の色みで「広く見えるか」が大きく変わります。Room Studioなら、部屋の写真に家具を置いて、壁や床の色まで変えながら、すっきり見えるバランスを先に試せます。",
-        "sections": [
-            ("6畳を広く見せる色の使い方", "限られた6畳を広く見せるコツは、色にあります。壁や大きな家具を明るめ・淡めの色でそろえると圧迫感が出にくく、部屋が広く感じられます。逆に濃い色や色数が多いとごちゃつきがち。まずは「ベースは明るい色、差し色は少しだけ」を意識すると、6畳でもすっきりまとまります。"),
-            ("写真に家具を置いて、配置と色を試す", "Room Studioは、あなたの部屋の写真に家具を置いて、大きさや向きを調整しながらレイアウトを試せます。さらに置いた家具の色も変えられるので、「この位置にこの色を置いたら広く見えるか」を、実際の部屋で確かめられます。これから買う家具だけでなく、いま使っているテレビや収納を写真に撮って背景を切り抜けば、それも部屋に置いて模様替え後の6畳を具体的にイメージできます。"),
-            ("壁・床の色や雑貨でも印象を変える", "家具だけでなく、壁や床の色を変えると部屋全体の印象は大きく変わります。床を明るい木目にする、壁を淡いトーンにする——そんな「もし変えたら」を写真の上で試せます。ソファやテーブルだけでなく、ラグやカーテン、フロアランプといった雑貨の色みも6畳の見え方を左右するので、大きな家具は淡めに、ラグやクッションで差し色を少し、といった調整もまとめて確かめられます。"),
-        ],
-        "faq": [
-            ("6畳のワンルームでも家具は置けますか？", "置き方しだいで十分に暮らせます。大きな家具は壁沿いにまとめ、色を明るめでそろえると圧迫感が出にくくなります。Room Studioなら、置いてみてから広く見えるかを写真で確かめられます。"),
-            ("狭い部屋を広く見せるには何色がいいですか？", "壁や大きな家具を明るく淡いトーンでそろえ、差し色は少しだけにするのが基本です。実際の部屋の写真で色を変えて見比べると、自分の部屋に合うトーンが見つけやすくなります。"),
-        ],
-        "related": ["hitorigurashi-sofa", "hokuo-interior", "chintai-kabe-makeover"],
-        "hero": {"alt": "明るい小さめのワンルームのイメージ",
-                 "note": "画像が入ります：明るく片付いた小さめの無人ワンルーム（横長・人物やブランドの写り込みなし）"},
-        "ba": {"heading": "明るい配色で、広く見せる", "label_b": "Before", "label_a": "After",
-               "note_b": "編集前：ふつうの6畳ワンルーム", "note_a": "編集後：明るい配色でまとめた6畳",
-               "alt_b": "Room Studioで配色を変える前の6畳の部屋",
-               "alt_a": "Room Studioで明るい配色にまとめた後の6畳の部屋",
-               "cap": "Room Studioで壁・床・家具の色を明るくまとめた例（Before → After）"},
-        "cta": "6畳の部屋づくりを試す",
-    },
-    {
-        "slug": "hitorigurashi-sofa",
-        "title": "一人暮らしのソファを、部屋に合う色で選ぶ",
-        "desc": "一人暮らしのソファは色や素材で部屋の印象が決まります。Room Studioなら部屋の写真にソファを置いて、色や素材を変えながら部屋に馴染むかを無料で試せます。",
-        "h1": "一人暮らしのソファ、部屋に合う色で選ぶ",
-        "lead": "ソファは部屋のなかでも存在感が大きい家具。だからこそ、色や素材が部屋に合っていないと、せっかく選んでも浮いて見えてしまいます。Room Studioなら、自分の部屋の写真に気になるソファを置いて、色や素材を変えながら「部屋に馴染むか」を先に確かめられます。",
-        "sections": [
-            ("一人暮らしのソファは「色と雰囲気」で決まる", "ソファは面積が大きいぶん、色や素材で部屋全体の印象がぐっと変わります。ナチュラルにまとめたいなら明るいファブリック、引き締めたいならダークカラーやレザー調、と「どんな雰囲気の部屋にしたいか」から考えると色を絞りやすくなります。サイズは置ける範囲で選べば大丈夫。まずは色と質感からイメージを固めましょう。"),
-            ("部屋の写真で、色・素材を変えて試す", "「ベージュとグレー、どっちが部屋に合う？」——頭の中で迷うより、実際の部屋で見比べるのが一番です。Room Studioは、あなたの部屋の写真に置いたソファの色や素材をその場で変えられるので、気になる色をいくつも並べて確かめられます。いま使っているテレビ台やローテーブルを写真に撮って背景を切り抜き、一緒に並べれば、ソファを買い替えた後の部屋を具体的に見られます。"),
-            ("床・壁・カーテンや小物と合わせて、全体で決める", "ソファ単体では良く見えても、部屋に置くと意外と浮くことがあります。Room Studioなら床や壁の色も一緒に変えられるので、カーテンやラグを含めた「部屋全体のトーン」で判断できます。ソファに合わせてラグやクッション、フロアランプの色をそろえるとまとまりが出るので、こうした小物も一緒に置いて見比べましょう。しっくりくる組み合わせが見つかったら、商品リンクからそのまま詳細をチェックできます。"),
-        ],
-        "faq": [
-            ("一人暮らしにはどんなソファが人気ですか？", "省スペースな2人掛けやコンパクトソファなど、部屋を広く使える設計のものがよく選ばれます。大きさよりまず、部屋に合う色や質感から絞るのがおすすめです。"),
-            ("ソファの色は何色が部屋に合わせやすいですか？", "ベージュやグレーなどのニュートラルカラーは、床やカーテンと合わせやすく失敗しにくい色です。実際の部屋の写真で色を変えて見比べると安心して選べます。"),
-            ("買う前に部屋に合うか確認できますか？", "はい。Room Studioなら、部屋の写真に気になるソファを置いて、色や素材を変えながら馴染むかを試せます。しっくりきたら商品リンクから詳細を確認できます。"),
-        ],
-        "related": ["6jo-hitorigurashi-layout", "hokuo-interior"],
-        "hero": {"alt": "ソファのある明るいリビングのイメージ",
-                 "note": "画像が入ります：ソファのある明るい無人のリビング（横長・人物やブランドの写り込みなし）"},
-        "ba": {"heading": "色ちがいを、同じ部屋で見比べる", "label_b": "色ちがい ①", "label_a": "色ちがい ②",
-               "note_b": "例①：ベージュのソファを置いた部屋", "note_a": "例②：グレーのソファを置いた部屋",
-               "alt_b": "Room Studioで部屋にベージュのソファを置いた例",
-               "alt_a": "Room Studioで部屋にグレーのソファを置いた例",
-               "cap": "同じ部屋にソファの色ちがいを置いて見比べた例"},
-        "cta": "色違いのソファを部屋で見比べる",
-    },
-    {
-        "slug": "chintai-kabe-makeover",
-        "title": "賃貸の壁、貼る前に色と雰囲気を試す（原状回復OK）",
-        "desc": "賃貸の壁の模様替えは「部屋に合う色か」を貼る前に知りたいもの。Room Studioなら部屋の写真の壁だけ色や素材を変えて、仕上がりの雰囲気を無料で試せます。",
-        "h1": "賃貸の壁、貼る前に色と雰囲気を試す",
-        "lead": "貼ってはがせる壁紙やウォールシート。気になるけれど、「部屋に合うか」「思ったより派手にならないか」は貼ってみないと分からない…。Room Studioなら、部屋の写真の壁だけ色や素材を変えて、仕上がりの雰囲気を先に確かめられます。",
-        "sections": [
-            ("賃貸でも楽しめる壁の模様替え", "賃貸では原状回復が前提ですが、貼ってはがせるタイプの壁紙やシートなど、退去時に戻しやすい方法もいろいろあります（対応可否や仕上がりは製品によって異なるので、購入前に商品ページの説明を確認しましょう）。まずは「どんな色・雰囲気にしたいか」を決めるのが、失敗しない第一歩です。"),
-            ("壁だけ色・素材を変えてみる", "Room Studioは、写真のなかの壁だけを選んで色や素材を変えられます。一面だけアクセントカラーにする、木目や漆喰風の質感を試す——といった「貼ったらどう見えるか」を、部屋の実際の光や家具ごと確認できます。壁の色を変えたうえで、いま置いている家具を写真で一緒に並べれば、家具と新しい壁色の相性も先に確認できます。"),
-            ("家具やカーテンと合うかを見比べる", "壁の色は、家具やカーテンとの組み合わせで印象が変わります。Room Studioの比較機能を使えば、変える前と後を並べて見比べられるので、壁に合わせてカーテンやアートの色みまで含めて、「本当にこの色でいいか」を落ち着いて判断できます。"),
-        ],
-        "faq": [
-            ("貼ってはがせる壁紙なら、賃貸でも必ず元に戻せますか？", "「はがせる」とされる壁紙でも、貼る期間や下地の状態によっては、はがす際に既存の壁紙を傷めたり、のり跡が残ったりすることがあります。原状回復できるかは製品や物件によって異なるため、購入前に商品説明を確認し、心配な場合は目立たない場所で試すのがおすすめです。賃貸借契約書の原状回復の取り決めも確認しておくと安心です。"),
-            ("Room Studioで壁の色を変えると、実際に貼らずに確認できますか？", "はい。写真の中の壁だけを選んで色や素材を変えられるので、実際に壁紙を貼る前に「部屋に合う色か」「派手すぎないか」を確かめられます。あくまで画面上の仕上がりイメージなので、実際の製品の色や質感は商品ページでも確認してください。"),
-        ],
-        "related": ["6jo-hitorigurashi-layout", "hokuo-interior"],
-        "hero": {"alt": "白い壁の明るい部屋のイメージ",
-                 "note": "画像が入ります：白い壁の明るい無人の部屋（横長・人物やブランドの写り込みなし）"},
-        "ba": {"heading": "壁の色を、貼る前に見比べる", "label_b": "Before", "label_a": "After",
-               "note_b": "編集前：もとの白い壁", "note_a": "編集後：壁の色を変えたイメージ",
-               "alt_b": "Room Studioで壁の色を変える前の部屋",
-               "alt_a": "Room Studioで壁の色を変えた後の部屋",
-               "cap": "Room Studioで壁だけ色を変えた例（Before → After）"},
-        "cta": "壁の色を試してみる",
-    },
-    {
         "slug": "hokuo-interior",
         "title": "北欧インテリアの部屋づくりを、色と質感で試す",
         "desc": "北欧インテリアは色と素材の組み合わせが決め手。Room Studioなら部屋の写真で家具や床・壁の色を変えて、北欧らしい雰囲気になるかを無料で試せます。",
-        "h1": "集めた画像の雰囲気を、自分の部屋で試す",
-        # 他LPからの内部リンクのアンカーは title 寄りの旧H1を維持する（h1 は普遍的な
-        # ペイン訴求に振ったが、リンク文としては検索意図がそのまま出ている方が自然）。
-        "anchor": "北欧インテリアの部屋づくりを、色と質感で試す",
-        "lead": "いいなと思った部屋の画像を集めても、「自分の部屋だとどう見えるか」は分からないまま。集めた画像はどれも他人の部屋で、光の入り方も間取りも床の色も違うからです。Room Studioなら、自分の部屋の写真の上で床や壁、家具の色や素材を変えて、北欧テイストのような憧れの雰囲気に近づけるかを先に確かめられます。",
+        "eyebrow": "集めた画像 / 自分の部屋",
+        "h1": "集めた画像は、自分の部屋じゃない",
+        "lead": "光の入り方も、間取りも、もとの床の色も違う。だから「自分の部屋だとどう見えるか」は、自分の部屋の写真の上でしか分かりません。北欧テイストのような憧れの雰囲気も、床や壁ごと変えて先に試せます。",
         "sections": [
-            ("集めた画像は、自分の部屋ではない", "気になる部屋の画像を集めていくと、好きな色や素材の傾向は見えてきます。でも、そこから先が難しい。集めた画像はどれも他人の部屋で、窓の位置も光の入り方も、もとの床や壁の色も、置いてある家具の量も自分の部屋とは違うからです。同じ色のソファでも、床が濃い部屋と明るい部屋では見え方が変わります。だから「どれが自分の部屋に合うか」は、画像を並べるだけでは決めきれません。答えが出る場所は、集めた画像の側ではなく、自分の部屋の写真の上です。"),
-            ("自分の部屋の写真の上で、確かめる", "Room Studioは、スマホで撮った部屋の写真をそのまま読み込めます。壁や床は面を選んで色や素材を変えられるので、「床を明るい木目にしたら」「壁をグレーに寄せたら」を、いまの光と間取りのまま見比べられます。家具は収集機能のテイスト欄に好きな言葉を入れて集め、置いたあとに大きさや向き、色や素材を調整できます。ラグやカーテン、照明といった雑貨や家電も同じように集められるので、部屋全体のトーンで判断できます。いま使っている家具を撮って背景を切り抜けば、それも一緒に並べて確かめられます。"),
-            ("たとえば、北欧インテリアを目指すなら", "北欧テイストなら、明るい木の質感と白やグレーのベースに、差し色を少しだけ効かせるのが定番です。ただ、同じ組み合わせでも部屋の光やもとの床の色が違えば見え方は変わります。テイスト欄に「北欧」と入れて家具を集め、床を明るい木目に、壁を白やグレーに変えて、自分の部屋でも北欧らしい明るさと素材感が出るかを確かめてみてください。テイスト欄は自由記述なので、「ナチュラル」でも「インダストリアル」でも、目指したい言葉をそのまま入れて同じように試せます。しっくりきたら、商品リンクから詳細もチェックできます。"),
+            ("集めた画像は、自分の部屋ではない", "画像を集めていくと、好きな色や素材の傾向は見えてきます。でも、そこから先が難しい。集めた画像はどれも他人の部屋で、窓の位置も光の入り方も、もとの床や壁の色も違うからです。同じ色のソファでも、床が濃い部屋と明るい部屋では見え方が変わります。答えが出る場所は、集めた画像の側ではなく、自分の部屋の写真の上です。"),
+            ("自分の部屋の写真の上で、確かめる", "スマホで撮った部屋の写真をそのまま読み込めます。壁や床は面を選んで色や素材を変えられるので、「床を明るい木目にしたら」「壁をグレーに寄せたら」を、いまの光と間取りのまま見比べられます。家具はテイスト欄に好きな言葉を入れて集め、置いたあとに大きさや向き、色や素材を調整できます。ラグやカーテン、照明も同じように集められます。"),
+            ("たとえば、北欧インテリアを目指すなら", "北欧テイストなら、明るい木の質感と白やグレーのベースに、差し色を少しだけ効かせるのが定番です。ただ、同じ組み合わせでも部屋の光やもとの床の色が違えば見え方は変わります。テイスト欄に「北欧」と入れて家具を集め、床を明るい木目に、壁を白やグレーに変えて確かめてみてください。「ナチュラル」でも「インダストリアル」でも、目指したい言葉をそのまま入れて同じように試せます。"),
         ],
         "faq": [
             ("集めた画像のイメージを、自分の部屋で確かめる方法はありますか？", "自分の部屋の写真の上で試してみるのがおすすめです。集めた画像は他人の部屋なので、光の入り方も間取りも、もとの床や壁の色も違います。Room Studioなら、部屋の写真で床や壁、家具の色や素材を変えて見比べられるので、どの方向が自分の部屋に合うかを判断しやすくなります。"),
             ("北欧インテリアはどんな色でまとめればいいですか？", "白やグレーなどの明るいベースに木の質感を合わせ、差し色を少しだけ効かせるのが定番です。ただ同じ色でも部屋によって見え方が変わるので、実際の部屋の写真で床や壁の色を変え、収集機能のテイスト欄に「北欧」と入れて集めた家具を置いて確かめると、近づけやすくなります。"),
             ("片付いていない部屋の写真でも試せますか？", "はい。写り込んだ気になるものは消してから試せるので、片付けきれていない部屋の写真のままで大丈夫です。登録もアプリのインストールも不要、無料でブラウザからそのまま使えます。部屋の写真は原則としてお使いの端末の中で処理されます。"),
         ],
-        "related": ["hitorigurashi-sofa", "6jo-hitorigurashi-layout", "chintai-kabe-makeover"],
         "hero": {"alt": "北欧テイストの明るいリビングのイメージ",
                  "note": "画像が入ります：明るい木の質感の北欧テイストな無人リビング（横長・人物やブランドの写り込みなし）"},
-        # Reference LP: shows placeholder boxes for the before/after slots while the
-        # operator prepares the captures (the other three stay hidden until filled).
+        # Shows labelled placeholder boxes for the before/after slots while the operator
+        # prepares the captures. Drop this key to hide the block until both files exist.
         "ph": True,
         "ba": {"heading": "床と壁の色を変える前と、後", "label_b": "Before", "label_a": "After",
                "note_b": "編集前：ふつうの部屋", "note_a": "編集後：床と壁の色と素材を変えた同じ部屋",
@@ -308,16 +234,57 @@ LANDING_PAGES = [
                "alt_b": "Room Studioで床と壁の色を変える前の部屋",
                "alt_a": "Room Studioで床と壁の色と素材を変えた後の部屋",
                "cap": "Room Studioで同じ部屋の床と壁だけを変えた例（Before → After）"},
-        "cta": "自分の部屋の写真で試す",
+        "cta": "自分の部屋で試す",
     },
 ]
 
 _LP_BY_SLUG = {p["slug"]: p for p in LANDING_PAGES}
 
+# LPs retired on 2026-07-28. Their URLs were public and indexed, so they 301 to the
+# surviving page instead of 404-ing — the accumulated ranking signal and any inbound
+# links/bookmarks carry over. Never re-use one of these keys as a live slug.
+LP_REDIRECTS = {
+    "6jo-hitorigurashi-layout": "hokuo-interior",
+    "hitorigurashi-sofa": "hokuo-interior",
+    "chintai-kabe-makeover": "hokuo-interior",
+}
+
+
+def landing_redirect(slug):
+    """Path to 301 a retired LP slug to, or None when there is nothing to redirect.
+
+    Guards against a redirect loop: a slug that is still live, or one pointing at a
+    target that no longer exists (or at itself), returns None so the caller 404s."""
+    if slug in _LP_BY_SLUG:
+        return None
+    target = LP_REDIRECTS.get(slug)
+    if not target or target == slug or target not in _LP_BY_SLUG:
+        return None
+    return "/lp/" + target
+
 
 def landing_slugs():
     """All landing-page slugs (sitemap uses this)."""
     return [p["slug"] for p in LANDING_PAGES]
+
+
+def _phrase(text):
+    """Escape a heading, wrapping each 読点-delimited phrase in an inline-block span.
+
+    Japanese lines may break between any two characters, so a narrow column happily
+    splits 「北欧インテリア」 into 「北欧イン/テリア」. An inline-block is shrink-to-fit,
+    so the browser prefers to break BETWEEN the phrases; a phrase wider than the line
+    still wraps inside its own box, which means this can never cause overflow.
+    (`word-break:auto-phrase` in the stylesheet does the same job on engines that
+    implement it — this is the part that works everywhere.) Text content is unchanged,
+    so headings still read identically to crawlers."""
+    esc = _html.escape
+    parts = [p + "、" for p in text.split("、")]
+    parts[-1] = parts[-1][:-1]
+    parts = [p for p in parts if p]
+    if len(parts) < 2:
+        return esc(text)
+    return "".join(f"<span>{esc(p)}</span>" for p in parts)
 
 
 def _img(name, alt, cls, w, h, eager=False):
@@ -328,7 +295,7 @@ def _img(name, alt, cls, w, h, eager=False):
     delay LCP. Everything below the fold stays lazy."""
     esc = _html.escape
     load = ('loading="eager" fetchpriority="high"' if eager else 'loading="lazy"')
-    return (f'<figure class="{("ph " + cls).strip()}"><img src="/lp-assets/{esc(name)}" '
+    return (f'<figure class="{("media " + cls).strip()}"><img src="/lp-assets/{esc(name)}" '
             f'alt="{esc(alt)}" width="{w}" height="{h}" {load}></figure>')
 
 
@@ -340,8 +307,28 @@ def _img_ph(cls, note):
     shift the layout. `aria-hidden` + the surrounding <figure> keep it out of the
     accessibility tree — it is scaffolding, not content."""
     esc = _html.escape
-    return (f'<figure class="{("ph ph-empty " + cls).strip()}" aria-hidden="true">'
+    return (f'<figure class="{("media media-empty " + cls).strip()}" aria-hidden="true">'
             f'<span class="ph-note">{esc(note)}</span></figure>')
+
+
+def _hero_video(sources, poster_url):
+    """A full-bleed ambient hero video (NOT A HOTEL-style), as inline markup.
+
+    Decorative by design: muted, looping, no controls, so it carries atmosphere
+    rather than information — hence `aria-hidden`, which keeps a controlless media
+    element out of the accessibility tree instead of announcing an unusable player.
+    The h1/lead beside it carry the meaning. `poster` is the still hero photo when
+    one exists, so the first paint (and the LCP candidate) is an image rather than
+    an empty box, and it is also what shows if decoding fails or autoplay is denied.
+    `autoplay` is in the markup so it works without JS; the page script pauses it
+    when the visitor prefers reduced motion."""
+    esc = _html.escape
+    poster = f' poster="{esc(poster_url)}"' if poster_url else ""
+    srcs = "".join(f'<source src="{esc(src)}" type="{esc(ct)}">' for src, ct in sources)
+    return ('<figure class="media media-wide media-video">'
+            f'<video autoplay muted loop playsinline preload="metadata"{poster} '
+            f'width="1600" height="900" aria-hidden="true" tabindex="-1">{srcs}</video>'
+            '</figure>')
 
 
 def _hero_svg(alt):
@@ -349,107 +336,106 @@ def _hero_svg(alt):
     Shown as the hero visual when no free-stock photo is present, so the page reads
     as finished rather than empty and upgrades automatically once a real photo is
     dropped into /lp-assets. Decorative only — it never poses as a real photograph
-    or a Room Studio edit (the before/after proof block stays photo-only)."""
+    or a Room Studio edit (the before/after proof block stays photo-only).
+
+    Drawn in the app's own palette (greige ground, ink line work, one muted accent)
+    so a photo-less LP still reads as part of the product rather than as clip-art."""
     label = _html.escape(alt or "部屋のインテリアのイメージイラスト")
     shapes = (
-        '<rect width="1600" height="900" fill="#F5ECE2"/>'
-        '<circle cx="300" cy="252" r="152" fill="#F3E4CE" opacity=".55"/>'
-        '<rect y="694" width="1600" height="206" fill="#E9DBC9"/>'
-        '<rect y="690" width="1600" height="4" fill="#DDCDB8"/>'
+        '<rect width="1600" height="900" fill="#F4F2ED"/>'
+        # soft ground / light pool — the only filled masses, kept very close in value
+        '<rect y="648" width="1600" height="252" fill="#EFECE5"/>'
+        '<circle cx="352" cy="300" r="186" fill="#EAE6DD"/>'
+        '<ellipse cx="1010" cy="742" rx="470" ry="34" fill="#E7E3DA"/>'
+        # everything below is line work in the app ink colour
+        '<g fill="none" stroke="#2A2824" stroke-opacity=".42" stroke-width="4" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M0 648H1600"/>'
         # window (left)
-        '<rect x="196" y="150" width="330" height="330" rx="12" fill="#E9F0EB" stroke="#6E8E7D" stroke-width="11"/>'
-        '<path d="M361 156V474" stroke="#6E8E7D" stroke-width="8"/>'
-        '<path d="M202 315H520" stroke="#6E8E7D" stroke-width="8"/>'
-        '<circle cx="298" cy="252" r="52" fill="#ECC998"/>'
-        '<rect x="180" y="476" width="362" height="16" rx="7" fill="#D6C4AE"/>'
-        # plant (left, on floor)
-        '<path d="M118 694l14-96h64l14 96z" fill="#C89A78"/>'
-        '<ellipse cx="150" cy="600" rx="24" ry="58" fill="#6E8E7D" transform="rotate(-16 150 600)"/>'
-        '<ellipse cx="176" cy="596" rx="24" ry="58" fill="#84A090" transform="rotate(15 176 596)"/>'
-        '<ellipse cx="163" cy="580" rx="20" ry="50" fill="#93AC9C"/>'
-        # framed art (upper centre)
-        '<rect x="648" y="212" width="150" height="188" rx="8" fill="#F1E9DD" stroke="#C6B39F" stroke-width="9"/>'
-        '<path d="M666 372l34-52 26 30 30-42 20 64z" fill="#AFC1B4"/>'
-        '<circle cx="762" cy="252" r="14" fill="#E3B587"/>'
+        '<rect x="212" y="158" width="300" height="336" rx="6"/>'
+        '<path d="M362 158V494M212 326h300"/>'
+        '<path d="M196 512h332"/>'
+        # plant (left, on the floor)
+        '<path d="M120 648l12-92h72l12 92"/>'
+        '<path d="M156 556c-26-30-32-72-14-104M168 556c22-34 24-78 4-110M162 556c0-40 14-72 40-92"/>'
+        # framed art (centre)
+        '<rect x="688" y="206" width="164" height="204" rx="4"/>'
+        '<path d="M706 372l40-58 30 34 34-46 24 68"/>'
         # floor lamp (right)
-        '<path d="M1340 360h72l-16-66h-40z" fill="#ECC998"/>'
-        '<rect x="1372" y="360" width="8" height="336" rx="4" fill="#6E8E7D"/>'
-        '<ellipse cx="1376" cy="698" rx="34" ry="9" fill="#9CB0A4"/>'
-        # rug + sofa (centre, on floor)
-        '<ellipse cx="1040" cy="744" rx="450" ry="30" fill="#E2D2BF"/>'
-        '<rect x="792" y="470" width="500" height="118" rx="26" fill="#CB897B"/>'
-        '<rect x="770" y="556" width="544" height="150" rx="26" fill="#C68273"/>'
-        '<rect x="800" y="536" width="238" height="120" rx="20" fill="#D79A8C"/>'
-        '<rect x="1046" y="536" width="238" height="120" rx="20" fill="#D79A8C"/>'
-        '<rect x="812" y="560" width="120" height="96" rx="18" fill="#B85042"/>'
-        '<rect x="806" y="700" width="20" height="40" rx="7" fill="#9A7A64"/>'
-        '<rect x="1258" y="700" width="20" height="40" rx="7" fill="#9A7A64"/>'
+        '<path d="M1332 348h96l-22-74h-52z"/>'
+        '<path d="M1380 348v300"/><path d="M1344 648h72"/>'
+        # sofa (centre)
+        '<path d="M782 566v-64a22 22 0 0 1 22-22h404a22 22 0 0 1 22 22v64"/>'
+        '<rect x="748" y="566" width="524" height="112" rx="20"/>'
+        '<path d="M782 678v40M1238 678v40"/>'
+        '<path d="M1010 566v112"/>'
+        # low table
+        '<rect x="600" y="612" width="150" height="16" rx="6"/>'
+        '<path d="M618 628v34M732 628v34"/>'
+        '</g>'
+        # single muted accent: the light from the window
+        '<circle cx="352" cy="300" r="52" fill="#2A2824" fill-opacity=".07"/>'
     )
-    return ('<figure class="ph hero-ph illus">'
+    return ('<figure class="media media-illus">'
             '<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" '
             'role="img" aria-label="' + label + '" xmlns="http://www.w3.org/2000/svg">'
             + shapes + '</svg></figure>')
 
 
-# Shared "how it works" steps (same for every LP; describes the real app flow).
-# Icons are line SVGs coloured via CSS (stroke:currentColor). Copy is honest:
-# no login/install on the public web app; edits happen on the photo; product links
-# go to the ECs. Kept generic so all 4 LPs stay maintainable from one place.
+# "How it works" steps, held apart from the page copy so every LP shares one wording.
+# Copy is honest: no login/install on the public web app; edits happen on the photo;
+# product links go to the ECs. Rendered as mono-numbered rows (no icons) to match
+# the app's own chrome.
 _STEPS = [
-    ('<svg viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7H7l1.2-2h7.6L17 7h2.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.3"/></svg>',
-     "01", "部屋の写真をアップ",
-     "スマホで撮った部屋の写真を読み込むだけ。会員登録もアプリのインストールもいりません。"),
-    ('<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg>',
-     "02", "家具を置いて、色や素材を試す",
-     "家具の配置や色、壁・床の色や素材まで、写真の上でその場で自由に変えられます。"),
-    ('<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="8.2" height="15" rx="1.6"/><rect x="12.8" y="4.5" width="8.2" height="15" rx="1.6"/></svg>',
-     "03", "見比べて、リンクから選ぶ",
-     "変える前と後をならべて見比べ、しっくりきたら商品リンクから詳細をチェックできます。"),
+    ("01", "部屋の写真を読み込む",
+     "スマホで撮った写真をそのまま。会員登録もインストールもいりません。"),
+    ("02", "置いて、色と素材を変える",
+     "家具の配置も、壁・床の色や質感も、写真の上でその場で変えられます。"),
+    ("03", "見比べて、リンクへ",
+     "変える前と後を並べて見比べ、しっくりきたら商品リンクから詳細へ。"),
 ]
 
 
 def _steps_html():
-    """Render the shared 3-step 'how it works' section (same on every LP)."""
+    """Render the shared 3-step 'how it works' section."""
     esc = _html.escape
     items = "\n".join(
-        f'<div class="step"><div class="step-ic">{ic}</div>'
-        f'<div class="step-no">{esc(no)}</div>'
+        f'<div class="step rv"><span class="idx">{esc(no)}</span>'
         f'<h3>{esc(t)}</h3><p>{esc(b)}</p></div>'
-        for ic, no, t, b in _STEPS)
-    return ('<section class="steps"><h2>使い方は、かんたん3ステップ</h2>\n'
-            f'<div class="steps-grid">\n{items}\n</div></section>')
+        for no, t, b in _STEPS)
+    return ('<section class="sec"><div class="wrap"><div class="grid2">'
+            '<div class="col-h"><span class="idx">HOW IT WORKS</span><h2>使い方は、3ステップ</h2></div>'
+            f'<div class="steps">\n{items}\n</div>'
+            '</div></div></section>')
 
 
-# Shared "what you can do" capability cards (same for every LP). Each line maps to a
+# "What you can do" capability cards, shared by every LP. Each line maps to a
 # real app feature described in the LP copy — placing furniture, changing colour /
 # material, editing walls & floors, dropping in cut-out photos of owned furniture,
 # collecting by taste, and the product links. No fabricated features or claims.
 _FEATURES = [
-    ('<svg viewBox="0 0 24 24"><rect x="3" y="10" width="18" height="7" rx="2"/><path d="M6 10V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M6 17v2M18 17v2"/></svg>',
-     "家具を置いて配置を調整", "気になる家具を部屋の写真に置き、大きさや向きを整えられます。"),
-    ('<svg viewBox="0 0 24 24"><path d="M12 3.5c3 3.6 5 6.4 5 8.8a5 5 0 0 1-10 0c0-2.4 2-5.2 5-8.8z"/></svg>',
-     "色や素材を変える", "家具の色や素材をその場で切り替え、部屋に馴染む組み合わせを探せます。"),
-    ('<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 14h17"/></svg>',
-     "壁・床を変える", "壁だけ・床だけを選んで、色や質感を変えた仕上がりを試せます。"),
-    ('<svg viewBox="0 0 24 24"><path d="M6.5 2.5v13a2 2 0 0 0 2 2h13"/><path d="M2.5 6.5h13a2 2 0 0 1 2 2v13"/></svg>',
-     "手持ちの家具も置ける", "いま使っている家具を撮って背景を切り抜き、模様替え後の部屋に並べられます。"),
-    ('<svg viewBox="0 0 24 24"><path d="M4 4.5h7.2L20 13.3l-6.7 6.7L4.5 11.2z"/><circle cx="8" cy="8" r="1.4"/></svg>',
-     "テイストで家具を集める", "「北欧」などのテイストで家具を集めて、まとめて置いて試せます。"),
-    ('<svg viewBox="0 0 24 24"><path d="M6 8.5h12l-1 11H7z"/><path d="M9.2 8.5V6.2a2.8 2.8 0 0 1 5.6 0v2.3"/></svg>',
-     "商品リンクで詳細へ", "しっくりくる組み合わせが見つかったら、商品リンクから詳細を確認できます。"),
+    ("家具を置く", "気になる家具を部屋の写真に置き、大きさや向きを整えられます。"),
+    ("色と素材を変える", "家具の色や素材をその場で切り替え、部屋に馴染む組み合わせを探せます。"),
+    ("壁・床を変える", "壁だけ・床だけを選んで、色や質感を変えた仕上がりを試せます。"),
+    ("手持ちの家具も置く", "いま使っている家具を撮って背景を切り抜き、模様替え後の部屋に並べられます。"),
+    ("テイストで集める", "「北欧」などのテイストで家具を集めて、まとめて置いて試せます。"),
+    ("商品リンクで詳細へ", "しっくりくる組み合わせが見つかったら、商品リンクから詳細を確認できます。"),
 ]
 
 
 def _features_html():
-    """Render the shared 'what you can do' capability grid (same on every LP)."""
+    """Render the shared 'what you can do' capability grid.
+    A hairline lattice (1px grid gaps over a rule-coloured background) rather than
+    six bordered cards — the same flat treatment the rest of the page uses."""
     esc = _html.escape
     cards = "\n".join(
-        f'<div class="feat-card"><div class="feat-ic">{ic}</div>'
-        f'<div><h3>{esc(t)}</h3><p>{esc(b)}</p></div></div>'
-        for ic, t, b in _FEATURES)
-    return ('<section class="feat"><h2>Room Studioでできること</h2>\n'
-            '<p class="feat-sub">写真の上で、模様替えをまるごと試せます。</p>\n'
-            f'<div class="feat-grid">\n{cards}\n</div></section>')
+        f'<div class="feat-card"><span class="idx">{i:02d}</span>'
+        f'<h3>{esc(t)}</h3><p>{esc(b)}</p></div>'
+        for i, (t, b) in enumerate(_FEATURES, 1))
+    return ('<section class="sec"><div class="wrap">'
+            '<div class="sec-h rv"><span class="idx">FEATURES</span>'
+            '<h2>写真の上で、模様替えをまるごと</h2></div>'
+            f'<div class="feat-grid rv">\n{cards}\n</div></div></section>')
 
 
 def landing_html(slug, assets_dir=None):
@@ -466,53 +452,85 @@ def landing_html(slug, assets_dir=None):
     url = f"{SITE_BASE_URL}/lp/{slug}"
     app_url = f"/?ref=lp-{slug}"
     ga4 = ga4_head_snippet()
-    # Body sections: the first is the intro, the rest sit after the before/after visual.
+    # Body sections: editorial two-column blocks, numbered 01.. in a mono index.
+    # The first sits directly under the hero; the rest follow the before/after visual.
     secs = p["sections"]
-    sec0 = "".join(
-        f'<section class="block"><h2>{esc(h)}</h2><p>{esc(b)}</p></section>' for h, b in secs[:1])
-    sec_rest = "\n".join(
-        f'<section class="block"><h2>{esc(h)}</h2><p>{esc(b)}</p></section>' for h, b in secs[1:])
+
+    def _block(i, h, b):
+        return ('<section class="sec"><div class="wrap"><div class="grid2 rv">'
+                f'<div class="col-h"><span class="idx">{i:02d}</span><h2>{_phrase(h)}</h2></div>'
+                f'<div class="col-b"><p>{esc(b)}</p></div>'
+                '</div></div></section>')
+    sec0 = "".join(_block(i, h, b) for i, (h, b) in enumerate(secs[:1], 1))
+    sec_rest = "\n".join(_block(i, h, b) for i, (h, b) in enumerate(secs[1:], 2))
     # Hero photo (free-stock room, slot A) + before/after app captures (slot B).
     # `ph` opts an LP into showing labelled placeholder boxes while slot B is still
     # empty; without it the block stays hidden until both captures exist.
     show_ph = bool(p.get("ph"))
     hero = p.get("hero") or {}
     hero_alt = hero.get("alt", "")
-    # Real free-stock photo when the operator has added one; otherwise a calm inline
-    # SVG illustration so the hero is never empty (auto-upgrades to the photo later).
+    # Hero visual, best available first: an ambient video, else a real free-stock
+    # photo, else a calm inline SVG illustration so it is never empty. Each tier
+    # upgrades automatically as the operator drops files into /lp-assets.
     # The hero is above the fold, hence eager.
-    hero_fig = (_img(f"{slug}-hero", hero_alt, "hero-ph", 1600, 900, eager=True)
-                if _has(f"{slug}-hero") else _hero_svg(hero_alt))
-    hero_media = f'<div class="hero-media">{hero_fig}</div>'
+    hero_vid = [(f"/lp-assets/{slug}-hero{ext}", ct) for ext, ct in _LP_VIDEO_CT.items()
+                if _lp_asset_path(assets_dir, f"{slug}-hero{ext}", _LP_VIDEO_CT)
+                ] if assets_dir else []
+    if hero_vid:
+        hero_fig = _hero_video(hero_vid, f"/lp-assets/{slug}-hero" if _has(f"{slug}-hero") else "")
+    elif _has(f"{slug}-hero"):
+        hero_fig = _img(f"{slug}-hero", hero_alt, "media-wide", 1600, 900, eager=True)
+    else:
+        hero_fig = _hero_svg(hero_alt)
+    hero_media = f'<div class="bleed rv">{hero_fig}</div>'
     steps_html = _steps_html()
     feat_html = _features_html()
     ba = p.get("ba")
     ba_html = ""
-    # The signature visual of these LPs: Before = a plain room the operator supplies,
+    # The signature visual of the LP: Before = a plain room the operator supplies,
     # After = that SAME room actually edited in Room Studio and screenshotted. The
     # After image must be real product output — never a stock photo or a mockup —
     # because the whole block exists to prove the feature does what the page claims.
     if ba and (show_ph or (_has(f"{slug}-before") and _has(f"{slug}-after"))):
-        def _slot(role, alt, note):
-            if _has(f"{slug}-{role}"):
-                return _img(f"{slug}-{role}", alt, "", 800, 600)
-            return _img_ph("", note)
-        fb = _slot("before", ba["alt_b"], ba["ph_b"])
-        fa = _slot("after", ba["alt_a"], ba["ph_a"])
+        both = _has(f"{slug}-before") and _has(f"{slug}-after")
+
+        def _side(role, alt, note, label, cls):
+            fig = (_img(f"{slug}-{role}", alt, "", 800, 600) if _has(f"{slug}-{role}")
+                   else _img_ph("", note))
+            return (f'<div class="cmp-side {cls}">{fig}'
+                    f'<span class="cmp-tag">{esc(label)}</span></div>')
+        sides = (_side("before", ba["alt_b"], ba.get("ph_b", ""), ba["label_b"], "b")
+                 + _side("after", ba["alt_a"], ba.get("ph_a", ""), ba["label_a"], "a"))
+        if both:
+            # Both captures exist → a draggable comparison. The range input carries the
+            # whole interaction, so it is keyboard-operable for free; without JS the CSS
+            # falls back to the plain two-up grid below (no --x is ever applied).
+            aria = f'{ba["label_b"]}と{ba["label_a"]}の表示位置'
+            cmp_html = (
+                f'<div class="cmp" data-cmp style="--x:50%">{sides}'
+                '<input class="cmp-range" type="range" min="0" max="100" value="50" step="0.1" '
+                f'aria-label="{esc(aria)}">'
+                '<span class="cmp-bar" aria-hidden="true"><span class="cmp-knob"></span></span>'
+                '</div>'
+                '<p class="cmp-hint">ハンドルを左右に動かすと見比べられます。</p>')
+        else:
+            cmp_html = (f'<div class="cmp cmp-static">{sides}</div>'
+                        f'<p class="cmp-hint">{esc(ba["note_b"])}／{esc(ba["note_a"])}</p>')
         ba_html = (
-            f'<section class="ba"><h2>{esc(ba["heading"])}</h2>\n<div class="ba-grid">'
-            f'<div class="ba-item before">{fb}<span class="ba-label">{esc(ba["label_b"])}</span>'
-            f'<p class="ba-note">{esc(ba["note_b"])}</p></div>'
-            f'<div class="ba-item after">{fa}<span class="ba-label">{esc(ba["label_a"])}</span>'
-            f'<p class="ba-note">{esc(ba["note_a"])}</p></div>'
-            f'</div>\n<p class="ba-cap">{esc(ba["cap"])}</p></section>')
+            '<section class="sec sec-ba"><div class="wrap">'
+            f'<div class="sec-h rv"><span class="idx">BEFORE / AFTER</span>'
+            f'<h2>{_phrase(ba["heading"])}</h2></div>\n<div class="rv">{cmp_html}</div>\n'
+            f'<p class="cap">{esc(ba["cap"])}</p></div></section>')
     # FAQ block (styled as cards) + FAQPage structured data (unchanged content).
     faq = p.get("faq") or []
     faq_html = faq_jsonld = ""
     if faq:
         items = "\n".join(
-            f'<div class="faq"><h3>{esc(q)}</h3><p>{esc(a)}</p></div>' for q, a in faq)
-        faq_html = f'<section class="faqwrap"><h2>よくある質問</h2>\n{items}</section>'
+            f'<div class="faq rv"><h3>{_phrase(q)}</h3><p>{esc(a)}</p></div>' for q, a in faq)
+        faq_html = ('<section class="sec"><div class="wrap">'
+                    '<div class="sec-h rv"><span class="idx">FAQ</span>'
+                    f'<h2>よくある質問</h2></div>\n<div class="faq-list">{items}</div>'
+                    '</div></section>')
         faq_jsonld = '<script type="application/ld+json">' + json.dumps({
             "@context": "https://schema.org", "@type": "FAQPage",
             "mainEntity": [
@@ -529,9 +547,12 @@ def landing_html(slug, assets_dir=None):
             t = _LP_BY_SLUG[s]
             return t.get("anchor") or t["h1"]
         cards = "\n".join(
-            f'<a class="rel-card" href="/lp/{s}">{esc(_anchor(s))} <span class="arw">→</span></a>'
-            for s in related)
-        rel_html = f'<section class="relwrap"><h2>関連ページ</h2>\n<div class="rel-grid">\n{cards}\n</div></section>'
+            f'<a class="rel-a rv" href="/lp/{s}"><span>{esc(_anchor(s))}</span>'
+            '<span class="arw">→</span></a>' for s in related)
+        rel_html = ('<section class="sec"><div class="wrap">'
+                    '<div class="sec-h rv"><span class="idx">MORE</span>'
+                    f'<h2>関連ページ</h2></div>\n<div class="rel-list">\n{cards}\n</div>'
+                    '</div></section>')
     cta = esc(p["cta"])
     jsonld = json.dumps({
         "@context": "https://schema.org", "@type": "WebPage",
@@ -552,96 +573,180 @@ def landing_html(slug, assets_dir=None):
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">{jsonld}</script>{faq_jsonld}{ga4}
+<script>document.documentElement.className+=" js";</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  :root{{--bg:#FBF9F6;--panel:#F3EEE8;--text:#3A2E2A;--muted:#6B615C;--acc:#B85042;--acc-h:#8F3D32;--acc2:#6E8E7D;--line:#E5DDD4}}
+  /* Tokens are the app's own (room-studio.html :root) so the LP and the editor read
+     as one product: greige ground, ink type, hairline rules, one blue accent. */
+  :root{{--bg:#FBFAF8;--sub:#F4F2ED;--ink:#2A2824;--muted:#7C776E;--faint:#A49E94;
+    --line:rgba(0,0,0,.10);--hair:rgba(0,0,0,.07);--accent:#3B6FE0;--r:4px}}
   *{{box-sizing:border-box}}
-  body{{margin:0;background:var(--bg);color:var(--text);font-family:"Zen Kaku Gothic New",system-ui,sans-serif;line-height:1.85;-webkit-font-smoothing:antialiased}}
-  .wrap{{max-width:860px;margin:0 auto;padding:0 20px}}
-  a{{color:var(--acc)}}
-  h1,h2{{font-family:"Zen Old Mincho","Zen Kaku Gothic New",serif;letter-spacing:.02em}}
-  .hero{{position:relative;padding:76px 0 8px;text-align:center;background:radial-gradient(120% 78% at 50% -8%,#F7EFE5 0%,rgba(247,239,229,0) 60%)}}
-  .hero h1{{font-size:30px;font-weight:700;line-height:1.55;margin:0 0 18px}}
-  .lead{{font-size:16px;color:var(--muted);max-width:620px;margin:0 auto 26px;line-height:1.95}}
-  .cta{{display:inline-block;background:var(--acc);color:#fff;text-decoration:none;padding:15px 34px;border-radius:10px;font-weight:700;font-size:15.5px;box-shadow:0 2px 12px rgba(0,0,0,.06);transition:background .2s,transform .2s}}
-  .cta:hover{{background:var(--acc-h);transform:translateY(-1px)}}
-  .cta-note{{font-size:12.5px;color:var(--muted);margin:14px 0 0}}
-  .hero-media{{margin:44px 0 0}}
-  .ph{{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;place-items:center}}
-  .ph.hero-ph{{aspect-ratio:16/9}}
-  .ph img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
-  .ph.illus{{background:linear-gradient(160deg,#F7F0E7,#F0E7DC)}}
-  .ph svg{{position:absolute;inset:0;width:100%;height:100%;display:block}}
-  .steps{{padding:56px 0;border-top:1px solid var(--line)}}
-  .steps>h2{{text-align:center;margin-bottom:34px}}
-  .steps-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
-  .step{{position:relative;background:#fff;border:1px solid var(--line);border-radius:12px;padding:28px 22px;text-align:center}}
-  .step-ic{{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:var(--panel);color:var(--acc2)}}
-  .step-ic svg{{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}}
-  .step-no{{font-family:"Zen Old Mincho",serif;font-size:12.5px;letter-spacing:.16em;color:var(--acc);font-weight:700;margin-bottom:6px}}
-  .step h3{{font-family:"Zen Kaku Gothic New",sans-serif;font-size:15.5px;font-weight:700;margin:0 0 9px}}
-  .step p{{font-size:13.5px;color:#4a3f3a;line-height:1.8;margin:0}}
-  .feat{{padding:56px 0;border-top:1px solid var(--line)}}
-  .feat>h2{{text-align:center;margin-bottom:8px}}
-  .feat-sub{{text-align:center;color:var(--muted);font-size:14px;margin:0 auto 30px;max-width:560px}}
-  .feat-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:16px}}
-  .feat-card{{display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px 20px}}
-  .feat-ic{{flex:0 0 auto;width:42px;height:42px;border-radius:10px;display:grid;place-items:center;background:var(--panel);color:var(--acc)}}
-  .feat-ic svg{{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}}
-  .feat-card h3{{font-family:"Zen Kaku Gothic New",sans-serif;font-size:14.5px;font-weight:700;margin:0 0 5px}}
-  .feat-card p{{font-size:13px;color:#4a3f3a;line-height:1.75;margin:0}}
-  section.block{{padding:56px 0;border-top:1px solid var(--line)}}
-  .block h2,.ba h2,.faqwrap>h2,.relwrap>h2,.steps>h2,.feat>h2{{font-size:21px;font-weight:700;line-height:1.6;margin:0 0 16px}}
-  .block p{{font-size:15px;color:#4a3f3a;margin:0}}
-  .ba{{padding:56px 0;border-top:1px solid var(--line)}}
-  .ba h2{{text-align:center;margin-bottom:22px}}
-  .ba-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
-  .ba-item .ph{{aspect-ratio:4/3}}
-  .ba-label{{display:inline-block;margin:10px 0 0;font-size:12px;font-weight:700;color:#fff;background:var(--acc2);padding:3px 12px;border-radius:999px}}
-  .ba-item.after .ba-label{{background:var(--acc)}}
-  .ba-note{{font-size:13px;color:var(--muted);margin:8px 0 0;line-height:1.6}}
-  /* Empty slot: reuses .ph entirely (same box, same greige panel, same centring),
-     so dropping the real file in never shifts anything. Only the border becomes
-     dashed — that reads as scaffolding rather than as a broken image. */
-  .ph-empty{{border-style:dashed}}
-  .ph-note{{font-size:12.5px;line-height:1.7;color:var(--muted);text-align:center;padding:0 16px;max-width:24em}}
-  .ba-cap{{text-align:center;color:var(--muted);font-size:13px;margin:20px 0 0}}
-  .faqwrap{{padding:56px 0;border-top:1px solid var(--line)}}
-  .faqwrap>h2{{text-align:center}}
-  .faq{{border:1px solid var(--line);border-radius:10px;background:#fff;padding:18px 20px;margin:0 0 12px}}
-  .faq h3{{font-family:"Zen Kaku Gothic New",sans-serif;font-size:15px;font-weight:700;margin:0 0 8px}}
-  .faq p{{font-size:14px;color:#4a3f3a;margin:0}}
-  .relwrap{{padding:56px 0;border-top:1px solid var(--line)}}
-  .relwrap>h2{{text-align:center;font-size:19px}}
-  .rel-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}}
-  .rel-card{{display:block;border:1px solid var(--line);border-radius:10px;background:#fff;padding:18px;text-decoration:none;color:var(--text);font-weight:700;font-size:14.5px;line-height:1.6;transition:border-color .2s,box-shadow .2s}}
-  .rel-card:hover{{border-color:var(--acc2);box-shadow:0 2px 12px rgba(0,0,0,.06)}}
-  .arw{{color:var(--acc2)}}
-  .foot{{padding:66px 0 24px;text-align:center;border-top:1px solid var(--line)}}
-  .foot h2{{font-size:20px;margin:0 0 22px}}
-  .pr{{font-size:11.5px;color:var(--muted);margin:30px auto 0;max-width:640px;line-height:1.7}}
-  nav.legal{{margin-top:16px;font-size:12px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center}}
-  nav.legal a{{color:var(--muted)}}
-  a:focus-visible,.cta:focus-visible{{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}}
-  @media (prefers-reduced-motion:reduce){{*{{transition:none!important;scroll-behavior:auto!important}}}}
-  @media (max-width:640px){{
-    .hero{{padding:48px 0 4px}} .hero h1{{font-size:24px}} .lead{{font-size:15px}}
-    section.block,.ba,.faqwrap,.relwrap,.steps,.feat{{padding:40px 0}}
-    .ba-grid{{grid-template-columns:1fr;gap:22px}} .foot{{padding:48px 0 24px}}
-    .steps-grid{{grid-template-columns:1fr;gap:14px}} .steps>h2{{margin-bottom:24px}}
+  html{{-webkit-text-size-adjust:100%}}
+  body{{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.9;
+    font-family:"Zen Kaku Gothic New",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1}}
+  img{{max-width:100%;display:block}}
+  a{{color:inherit}}
+  .wrap{{max-width:1080px;margin:0 auto;padding:0 24px}}
+  .idx{{display:block;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;
+    letter-spacing:.2em;color:var(--faint);margin:0 0 14px}}
+  /* auto-phrase keeps Japanese headings from breaking mid-word (「北欧イン/テリア」);
+     browsers without it fall back to the normal break rules. Deliberately no
+     overflow-wrap here — it re-enables break-anywhere and cancels auto-phrase. */
+  h1,h2,h3{{letter-spacing:.01em;word-break:auto-phrase}}
+  /* phrase spans from _phrase(): shrink-to-fit boxes, so a line prefers to break
+     between them and only wraps inside one when the phrase alone is too wide. */
+  h1>span,h2>span,h3>span{{display:inline-block}}
+  h2{{font-size:clamp(20px,2.6vw,28px);font-weight:900;line-height:1.6;margin:0}}
+  /* sticky bar */
+  .bar{{position:sticky;top:0;z-index:50;background:rgba(251,250,248,.85);
+    backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);
+    border-bottom:1px solid var(--hair)}}
+  .bar-in{{display:flex;align-items:center;gap:14px;height:58px}}
+  .brand{{margin-right:auto;display:flex;align-items:baseline;gap:10px;text-decoration:none}}
+  .brand .mark{{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:700;font-size:14px;
+    letter-spacing:.02em;white-space:nowrap}}
+  .brand .mark b{{background:var(--ink);color:var(--bg);padding:2px 6px;border-radius:3px}}
+  .brand .tag{{font-size:11.5px;color:var(--muted);white-space:nowrap}}
+  /* buttons */
+  .btn{{display:inline-flex;align-items:center;gap:12px;background:var(--ink);color:var(--bg);
+    text-decoration:none;font-weight:700;font-size:15px;letter-spacing:.03em;padding:17px 32px;
+    border-radius:var(--r);white-space:nowrap;transition:opacity .2s ease,transform .2s ease}}
+  .btn:hover{{opacity:.85;transform:translateY(-1px)}}
+  .btn .ar{{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:400;font-size:13px}}
+  .btn.sm{{font-size:12.5px;padding:9px 16px;gap:8px}}
+  .cta-row{{display:flex;align-items:center;gap:20px;flex-wrap:wrap}}
+  .cta-note{{font-size:12px;color:var(--faint);letter-spacing:.03em}}
+  /* hero */
+  .hero{{padding:clamp(52px,9vw,104px) 0 0}}
+  .eyebrow{{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    color:var(--faint);margin:0 0 clamp(20px,3vw,30px)}}
+  h1{{font-size:clamp(26px,5vw,52px);font-weight:900;line-height:1.45;max-width:19em;
+    margin:0 0 clamp(20px,3vw,30px)}}
+  .lead{{font-size:clamp(14.5px,1.5vw,16.5px);color:var(--muted);line-height:2.05;max-width:32em;
+    margin:0 0 clamp(28px,4vw,42px)}}
+  /* media: full-bleed band under the hero, greige box while empty */
+  .bleed{{margin-top:clamp(40px,6vw,72px)}}
+  .media{{position:relative;margin:0;background:var(--sub);overflow:hidden;display:grid;place-items:center}}
+  .media-wide,.media-illus{{aspect-ratio:16/9;max-height:76vh}}
+  .media img,.media svg,.media video{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
+  /* Empty slot: same box, same greige, only the border turns dashed — it reads as
+     scaffolding rather than a broken image, and dropping the file in shifts nothing. */
+  .media-empty{{border:1px dashed var(--line)}}
+  .ph-note{{font-size:12px;line-height:1.8;color:var(--muted);text-align:center;padding:0 18px;max-width:22em}}
+  /* sections */
+  .sec{{padding:clamp(56px,8vw,108px) 0;border-top:1px solid var(--hair)}}
+  .grid2{{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);
+    gap:clamp(20px,5vw,72px);align-items:start}}
+  .col-b p{{margin:0;color:#4C4640;font-size:15px;line-height:2.1}}
+  .sec-h{{margin:0 0 clamp(28px,4vw,44px)}}
+  /* steps */
+  .step{{padding:clamp(20px,2.6vw,28px) 0;border-top:1px solid var(--hair)}}
+  .step:first-child{{border-top:0;padding-top:0}}
+  .step .idx{{margin-bottom:10px}}
+  .step h3{{font-size:clamp(16px,1.9vw,19px);font-weight:700;margin:0 0 8px;line-height:1.7}}
+  .step p{{margin:0;color:var(--muted);font-size:14px;line-height:1.95}}
+  /* features: a hairline lattice, not six bordered cards */
+  .feat-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+    background:var(--hair);border:1px solid var(--hair)}}
+  .feat-card{{background:var(--bg);padding:clamp(22px,2.6vw,32px)}}
+  .feat-card .idx{{margin-bottom:12px}}
+  .feat-card h3{{font-size:15.5px;font-weight:700;margin:0 0 7px;line-height:1.7}}
+  .feat-card p{{margin:0;color:var(--muted);font-size:13.5px;line-height:1.95}}
+  /* before/after: two-up by default, a drag comparison once JS is available */
+  .cmp{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+  .cmp-side{{position:relative}}
+  .cmp-side .media{{aspect-ratio:4/3}}
+  .cmp-tag{{position:absolute;top:12px;left:12px;z-index:2;background:rgba(42,40,36,.74);
+    color:#FBFAF8;border-radius:3px;padding:5px 10px;
+    font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.16em}}
+  .cmp-bar,.cmp-range{{display:none}}
+  .js .cmp:not(.cmp-static){{display:block;position:relative;aspect-ratio:4/3;max-width:960px;
+    margin:0 auto;overflow:hidden;background:var(--sub);border-radius:var(--r);touch-action:pan-y}}
+  .js .cmp:not(.cmp-static) .cmp-side{{position:absolute;inset:0}}
+  .js .cmp:not(.cmp-static) .cmp-side .media{{position:absolute;inset:0;aspect-ratio:auto}}
+  .js .cmp:not(.cmp-static) .cmp-side.a{{clip-path:inset(0 0 0 var(--x,50%))}}
+  .js .cmp:not(.cmp-static) .cmp-side.a .cmp-tag{{left:auto;right:12px}}
+  .js .cmp:not(.cmp-static) .cmp-range{{display:block;position:absolute;inset:0;width:100%;height:100%;
+    margin:0;padding:0;opacity:0;z-index:4;cursor:ew-resize;background:none;
+    -webkit-appearance:none;appearance:none}}
+  .cmp-range::-webkit-slider-thumb{{-webkit-appearance:none;width:56px;height:100%;cursor:ew-resize}}
+  .cmp-range::-moz-range-thumb{{width:56px;height:100%;border:0;border-radius:0;background:transparent}}
+  .js .cmp:not(.cmp-static) .cmp-bar{{display:block;position:absolute;top:0;bottom:0;
+    left:var(--x,50%);width:2px;margin-left:-1px;z-index:3;pointer-events:none;
+    background:rgba(251,250,248,.92);box-shadow:0 0 0 1px rgba(0,0,0,.10)}}
+  .cmp-range:focus-visible ~ .cmp-bar{{background:var(--accent);box-shadow:0 0 0 2px rgba(59,111,224,.4)}}
+  .cmp-knob{{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:46px;height:46px;
+    border-radius:50%;background:var(--bg);box-shadow:0 2px 12px rgba(0,0,0,.22)}}
+  .cmp-knob::before{{content:"◀ ▶";position:absolute;inset:0;display:grid;place-items:center;
+    font-size:11px;color:var(--ink)}}
+  .cmp-hint{{text-align:center;color:var(--faint);font-size:12.5px;margin:16px 0 0}}
+  .cap{{text-align:center;color:var(--muted);font-size:13px;margin:clamp(20px,3vw,28px) 0 0}}
+  /* faq */
+  .faq{{padding:clamp(20px,2.6vw,28px) 0;border-top:1px solid var(--hair);display:grid;
+    grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:clamp(12px,5vw,72px)}}
+  .faq h3{{font-size:15.5px;font-weight:700;margin:0;line-height:1.8}}
+  .faq p{{margin:0;color:var(--muted);font-size:14px;line-height:2}}
+  /* related */
+  .rel-a{{display:flex;align-items:center;justify-content:space-between;gap:20px;text-decoration:none;
+    padding:clamp(20px,2.4vw,26px) 0;border-top:1px solid var(--hair);font-weight:700;
+    font-size:clamp(15px,1.8vw,18px);line-height:1.7;transition:padding-left .22s ease,color .22s ease}}
+  .rel-a:hover{{padding-left:10px;color:var(--accent)}}
+  .rel-a .arw{{flex:0 0 auto;font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:400;
+    color:var(--faint)}}
+  /* footer */
+  .foot h2{{font-size:clamp(22px,3.4vw,38px);max-width:16em;margin:0 0 clamp(26px,4vw,38px)}}
+  .pr{{font-size:11.5px;color:var(--faint);line-height:1.8;max-width:44em;margin:clamp(44px,6vw,72px) 0 0}}
+  nav.legal{{margin-top:16px;display:flex;gap:18px;flex-wrap:wrap;font-size:12px}}
+  nav.legal a{{color:var(--muted);text-decoration:none}}
+  nav.legal a:hover{{color:var(--ink);text-decoration:underline}}
+  /* mobile dock CTA: slides in once the hero CTA has scrolled away */
+  .dock{{position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(251,250,248,.94);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--hair);
+    transform:translateY(130%);transition:transform .3s ease}}
+  .dock .btn{{width:100%;justify-content:center;padding:15px 20px}}
+  .dock.show{{transform:none}}
+  /* scroll reveal (only ever applied when JS is running, so no-JS shows everything) */
+  .js .rv{{opacity:0;transform:translateY(18px)}}
+  .js .rv.in{{opacity:1;transform:none;
+    transition:opacity .8s ease,transform .8s cubic-bezier(.22,.61,.36,1)}}
+  a:focus-visible,.btn:focus-visible{{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}}
+  @media (prefers-reduced-motion:reduce){{
+    *{{transition:none!important;scroll-behavior:auto!important}}
+    .js .rv{{opacity:1;transform:none}}
+  }}
+  @media (max-width:860px){{.feat-grid{{grid-template-columns:repeat(2,1fr)}}}}
+  @media (max-width:820px){{
+    .grid2{{grid-template-columns:1fr;gap:14px}}
+    .faq{{grid-template-columns:1fr;gap:8px}}
+  }}
+  @media (max-width:760px){{.dock{{display:block}}}}
+  @media (max-width:680px){{.brand .tag{{display:none}}}}
+  @media (max-width:560px){{
+    .wrap{{padding:0 20px}}
     .feat-grid{{grid-template-columns:1fr}}
+    .cmp{{grid-template-columns:1fr}}
+    .btn{{width:100%;justify-content:center}}
+    .bar .btn.sm{{width:auto}}
   }}
 </style></head><body>
-<header class="hero"><div class="wrap">
-<h1>{esc(p['h1'])}</h1>
-<p class="lead">{esc(p['lead'])}</p>
-<a class="cta" href="{esc(app_url)}">{cta} →</a>
-<p class="cta-note">登録不要・ブラウザでそのまま試せます</p>
-{hero_media}
+<header class="bar"><div class="wrap bar-in">
+<a class="brand" href="{esc(app_url)}"><span class="mark">Room<b>Studio</b></span><span class="tag">部屋の写真で試す模様替え</span></a>
+<a class="btn sm" href="{esc(app_url)}">試してみる<span class="ar">→</span></a>
 </div></header>
-<main class="wrap">
+<main>
+<section class="hero"><div class="wrap">
+<p class="eyebrow">{esc(p.get('eyebrow', SITE_NAME))}</p>
+<h1>{_phrase(p['h1'])}</h1>
+<p class="lead">{esc(p['lead'])}</p>
+<div class="cta-row"><a class="btn hero-cta" href="{esc(app_url)}">{cta}<span class="ar">→</span></a>
+<span class="cta-note">登録不要・インストール不要・ブラウザで完結</span></div>
+</div>
+{hero_media}
+</section>
 {sec0}
 {steps_html}
 {ba_html}
@@ -649,31 +754,81 @@ def landing_html(slug, assets_dir=None):
 {feat_html}
 {faq_html}
 {rel_html}
-<section class="foot">
-<h2>あなたの部屋で、試してみませんか？</h2>
-<a class="cta" href="{esc(app_url)}">{cta} →</a>
+<section class="sec foot"><div class="wrap">
+<h2>あなたの部屋の写真で、試してみませんか。</h2>
+<div class="cta-row"><a class="btn" href="{esc(app_url)}">{cta}<span class="ar">→</span></a>
+<span class="cta-note">登録不要・インストール不要・ブラウザで完結</span></div>
 <p class="pr">{esc(_PR_LINE)}</p>
 <nav class="legal"><a href="/">アプリを開く</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
-</section>
+</div></section>
 </main>
+<div class="dock"><a class="btn" href="{esc(app_url)}">{cta}<span class="ar">→</span></a></div>
+<script>
+(function(){{
+  var d=document,rm=false;
+  try{{rm=matchMedia("(prefers-reduced-motion:reduce)").matches}}catch(e){{}}
+  if(rm){{
+    // Reduced motion: the ambient hero must not loop. autoplay lives in the markup
+    // so it still plays with JS off; here we stop it and fall back to the poster.
+    [].forEach.call(d.querySelectorAll("video[autoplay]"),function(v){{
+      try{{v.removeAttribute("autoplay");v.pause();v.currentTime=0;}}catch(e){{}}
+    }});
+  }}
+  var rv=[].slice.call(d.querySelectorAll(".rv"));
+  if(rm||!("IntersectionObserver" in window)){{
+    rv.forEach(function(e){{e.classList.add("in")}});
+  }}else{{
+    var io=new IntersectionObserver(function(en){{
+      en.forEach(function(x){{if(x.isIntersecting){{x.target.classList.add("in");io.unobserve(x.target)}}}});
+    }},{{rootMargin:"0px 0px -6% 0px",threshold:.06}});
+    rv.forEach(function(e){{io.observe(e)}});
+  }}
+  [].forEach.call(d.querySelectorAll("[data-cmp]"),function(c){{
+    var r=c.querySelector(".cmp-range");if(!r)return;
+    var set=function(){{c.style.setProperty("--x",r.value+"%")}};
+    r.addEventListener("input",set);set();
+  }});
+  var dock=d.querySelector(".dock"),hc=d.querySelector(".hero-cta");
+  if(dock&&hc&&"IntersectionObserver" in window){{
+    new IntersectionObserver(function(en){{
+      var e=en[0];
+      dock.classList.toggle("show",!e.isIntersecting&&e.boundingClientRect.top<0);
+    }},{{threshold:0}}).observe(hc);
+  }}
+}})();
+</script>
 </body></html>"""
 
 
-# ---- landing-page image assets (/lp-assets/<name>) ---------------------------
-_LP_ASSET_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                ".png": "image/png", ".avif": "image/avif"}
+# ---- landing-page assets (/lp-assets/<name>) ---------------------------------
+_LP_IMG_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+              ".png": "image/png", ".avif": "image/avif"}
+# webm first: browsers pick the first <source> they can decode, and VP9/webm is the
+# smaller file wherever it is supported. mp4/H.264 stays as the universal fallback.
+_LP_VIDEO_CT = {".webm": "video/webm", ".mp4": "video/mp4"}
+_LP_ASSET_CT = dict(_LP_IMG_CT, **_LP_VIDEO_CT)
+
+# One response is capped well under Vercel's ~4.5MB serverless response limit. An
+# open-ended range ("bytes=0-") is answered with at most this much and a 206, which
+# is a legal partial answer — so a hero video larger than the cap still streams
+# instead of failing outright. See docs/LP_IMAGE_GUIDE.md for the recommended size.
+_LP_MAX_CHUNK = 3 * 1024 * 1024
 
 
-def _lp_asset_path(assets_dir, name):
-    """Resolve an LP image to an existing file path under assets_dir, or None.
-    Path-safe: only a bare filename is accepted; a name without extension matches
-    any supported image type (webp/jpg/jpeg/png/avif)."""
+def _lp_asset_path(assets_dir, name, types=None):
+    """Resolve an LP asset to an existing file path under assets_dir, or None.
+
+    Path-safe: only a bare filename is accepted. `types` is the extension→MIME map
+    to consider; a name WITHOUT an extension is tried against each type in turn.
+    It defaults to images only, so an image slot keeps resolving to the picture even
+    when a same-named video sits beside it (`<slug>-hero.webp` vs `<slug>-hero.mp4`)."""
+    types = types or _LP_IMG_CT
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name or ""):
         return None
     ext = os.path.splitext(name)[1].lower()
-    names = [name] if ext in _LP_ASSET_CT else [name + e for e in _LP_ASSET_CT]
+    names = [name] if ext in types else [name + e for e in types]
     for fn in names:
-        if os.path.splitext(fn)[1].lower() not in _LP_ASSET_CT:
+        if os.path.splitext(fn)[1].lower() not in types:
             continue
         path = os.path.join(assets_dir, fn)
         if os.path.isfile(path):
@@ -681,13 +836,67 @@ def _lp_asset_path(assets_dir, name):
     return None
 
 
-def lp_asset(assets_dir, name):
-    """Return (bytes, content_type) for an LP image, or None if not found."""
-    path = _lp_asset_path(assets_dir, name)
+def _parse_range(header, size):
+    """Parse a single HTTP byte range into an inclusive (start, end), or None.
+
+    Returns None for a malformed, multi-range or unsatisfiable header — the caller
+    turns that into 416. Supports "bytes=N-", "bytes=N-M" and the suffix "bytes=-N"."""
+    m = re.fullmatch(r"\s*bytes=(\d*)-(\d*)\s*", header or "")
+    if not m or size <= 0:
+        return None
+    first, last = m.group(1), m.group(2)
+    if first == "":                       # suffix range: the final `last` bytes
+        if last == "":
+            return None
+        start, end = max(0, size - int(last)), size - 1
+    else:
+        start = int(first)
+        end = int(last) if last else size - 1
+    if start >= size or end < start:
+        return None
+    return start, min(end, size - 1)
+
+
+def lp_asset_range(assets_dir, name, range_header=None):
+    """(status, body, headers) for an LP asset, or None when it does not exist.
+
+    Honours one HTTP Range with a 206. This is what makes the video hero viable:
+    iOS Safari refuses to play a <video> served by an endpoint that ignores Range,
+    and an unranged full-file response would also hit Vercel's response size cap."""
+    path = _lp_asset_path(assets_dir, name, _LP_ASSET_CT)
     if not path:
         return None
+    ctype = _LP_ASSET_CT[os.path.splitext(path)[1].lower()]
+    size = os.path.getsize(path)
+    headers = {"Content-Type": ctype, "Accept-Ranges": "bytes",
+               "Cache-Control": "public, max-age=86400"}
+    if range_header:
+        rng = _parse_range(range_header, size)
+        if rng is None:
+            headers["Content-Range"] = f"bytes */{size}"
+            return 416, b"", headers
+        start, end = rng
+        end = min(end, start + _LP_MAX_CHUNK - 1)     # keep the response under the cap
+        with open(path, "rb") as f:
+            f.seek(start)
+            body = f.read(end - start + 1)
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+        headers["Content-Length"] = str(len(body))
+        return 206, body, headers
     with open(path, "rb") as f:
-        return f.read(), _LP_ASSET_CT[os.path.splitext(path)[1].lower()]
+        body = f.read()
+    headers["Content-Length"] = str(len(body))
+    return 200, body, headers
+
+
+def lp_asset(assets_dir, name):
+    """Return (bytes, content_type) for a whole LP asset, or None if not found.
+    Kept for the /materials/ route, which serves small tiles and never needs ranges."""
+    res = lp_asset_range(assets_dir, name)
+    if res is None:
+        return None
+    _status, body, headers = res
+    return body, headers["Content-Type"]
 
 
 # ---- robots.txt / sitemap.xml -------------------------------------------------

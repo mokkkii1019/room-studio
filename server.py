@@ -28,9 +28,9 @@ import re
 import threading
 import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel
 from PIL import Image
 import numpy as np
@@ -254,18 +254,24 @@ def landing(slug: str):
     """検索意図別ランディングページ（サーバーレンダリング・GA4対応）。"""
     page = _site.landing_html(slug, os.path.join(APP_DIR, "lp-assets"))
     if page is None:
+        # 廃止したLPは404ではなく、生き残ったLPへ301（検索評価と流入を引き継ぐ）。
+        dest = _site.landing_redirect(slug)
+        if dest:
+            return RedirectResponse(dest, status_code=301)
         raise HTTPException(status_code=404, detail="not found")
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/lp-assets/{name}")
-def lp_asset(name: str):
-    """LP用画像（ヒーロー写真／before-afterキャプチャ）。lp-assets/ に置いたファイルを配信。"""
-    res = _site.lp_asset(os.path.join(APP_DIR, "lp-assets"), name)
+def lp_asset(name: str, request: Request):
+    """LP用メディア（ヒーロー写真/動画・before-afterキャプチャ）。lp-assets/ から配信。
+    Rangeリクエスト対応（iOS Safari は Range が無いと <video> を再生しない）。"""
+    res = _site.lp_asset_range(os.path.join(APP_DIR, "lp-assets"), name,
+                               request.headers.get("range"))
     if res is None:
         raise HTTPException(status_code=404, detail="not found")
-    data, ctype = res
-    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+    status, body, headers = res
+    return Response(content=body, status_code=status, headers=headers)
 
 
 @app.get("/materials/{name}")
