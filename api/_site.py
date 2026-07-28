@@ -212,6 +212,10 @@ LANDING_PAGES = [
         "eyebrow": "集めた画像 / 自分の部屋",
         "h1": "集めた画像は、自分の部屋じゃない",
         "lead": "光の入り方も、間取りも、もとの床の色も違う。だから「自分の部屋だとどう見えるか」は、自分の部屋の写真の上でしか分かりません。憧れの雰囲気に近づけるかどうかも、家具や床・壁ごと変えて先に試せます。",
+        # The hero sits ON the image now, so its copy is cut to two sentences. The
+        # full `lead` above is kept because section 01 covers the same ground in
+        # depth — nothing is lost from the page, only from the first screen.
+        "hero_lead": "いいなと思って集めた画像は、どれも他人の部屋。自分の部屋だとどう見えるかは、自分の部屋の写真の上でしか分かりません。",
         "sections": [
             ("集めた画像は、自分の部屋ではない", "画像を集めていくと、好きな色や素材の傾向は見えてきます。でも、そこから先が難しい。集めた画像はどれも他人の部屋で、窓の位置も光の入り方も、もとの床や壁の色も違うからです。同じ色のソファでも、床が濃い部屋と明るい部屋では見え方が変わります。答えが出る場所は、集めた画像の側ではなく、自分の部屋の写真の上です。"),
             ("自分の部屋の写真の上で、確かめる", "スマホで撮った部屋の写真をそのまま読み込めます。壁や床は面を選んで色や素材を変えられるので、「床を明るい木目にしたら」「壁をグレーに寄せたら」を、いまの光と間取りのまま見比べられます。家具はテイスト欄に好きな言葉を入れて集め、置いたあとに大きさや向き、色や素材を調整できます。ラグやカーテン、照明も同じように集められます。"),
@@ -485,10 +489,15 @@ def landing_html(slug, assets_dir=None):
     if hero_vid:
         hero_fig = _hero_video(hero_vid, f"/lp-assets/{slug}-hero" if _has(f"{slug}-hero") else "")
     elif _has(f"{slug}-hero"):
-        hero_fig = _img(f"{slug}-hero", hero_alt, "media-wide", 1600, 900, eager=True)
+        hero_fig = _img(f"{slug}-hero", hero_alt, "media-fill", 2400, 1350, eager=True)
     else:
         hero_fig = _hero_svg(hero_alt)
-    hero_media = f'<div class="bleed rv">{hero_fig}</div>'
+    # The hero is now full-bleed with the copy sitting ON the media, so it always
+    # carries a scrim. The scrim is not decorative polish — white text over an
+    # unknown photo is unreadable without it (see .hero-scrim for the contrast
+    # budget), and it is applied on the illustration fallback too.
+    hero_media = (f'<div class="hero-media">{hero_fig}</div>'
+                  '<div class="hero-scrim" aria-hidden="true"></div>')
     steps_html = _steps_html()
     feat_html = _features_html()
     ba = p.get("ba")
@@ -501,7 +510,7 @@ def landing_html(slug, assets_dir=None):
         both = _has(f"{slug}-before") and _has(f"{slug}-after")
 
         def _side(role, alt, note, label, cls):
-            fig = (_img(f"{slug}-{role}", alt, "", 800, 600) if _has(f"{slug}-{role}")
+            fig = (_img(f"{slug}-{role}", alt, "", 1600, 900) if _has(f"{slug}-{role}")
                    else _img_ph("", note))
             return (f'<div class="cmp-side {cls}">{fig}'
                     f'<span class="cmp-tag">{esc(label)}</span></div>')
@@ -523,7 +532,11 @@ def landing_html(slug, assets_dir=None):
             cmp_html = (f'<div class="cmp cmp-static">{sides}</div>'
                         f'<p class="cmp-hint">{esc(ba["note_b"])}／{esc(ba["note_a"])}</p>')
         ba_html = (
-            '<section class="sec sec-ba"><div class="wrap">'
+            # A live before/after becomes a full-bleed band, so the page reads
+            # text → big image → text. While the captures are still placeholders it
+            # stays inside .wrap: a dashed empty box spanning the viewport would read
+            # as a broken page rather than as scaffolding.
+            f'<section class="sec sec-ba {"is-live" if both else "is-ph"}"><div class="wrap">'
             f'<div class="sec-h rv"><span class="idx">BEFORE / AFTER</span>'
             f'<h2>{_phrase(ba["heading"])}</h2></div>\n<div class="rv">{cmp_html}</div>\n'
             f'<p class="cap">{esc(ba["cap"])}</p></div></section>')
@@ -625,16 +638,46 @@ def landing_html(slug, assets_dir=None):
   .btn.sm{{font-size:12.5px;padding:9px 16px;gap:8px}}
   .cta-row{{display:flex;align-items:center;gap:20px;flex-wrap:wrap}}
   .cta-note{{font-size:12px;color:var(--faint);letter-spacing:.03em}}
-  /* hero */
-  .hero{{padding:clamp(52px,9vw,104px) 0 0}}
+  /* ---- hero: full-bleed media with the copy sitting on top ------------------
+     78vh sits in the middle of the 70–85vh band. It is deliberately NOT 100vh:
+     the next section has to peek above the fold, otherwise a full-screen hero
+     reads as the whole page and people leave. max-height keeps it sane on tall
+     desktop monitors; svh (with a vh fallback) stops iOS from jumping when the
+     URL bar collapses. */
+  .hero{{position:relative;display:flex;flex-direction:column;justify-content:flex-end;
+    isolation:isolate;overflow:hidden;min-height:78vh;min-height:78svh;max-height:900px;
+    padding:0 0 clamp(56px,8vh,96px)}}
+  .hero-media{{position:absolute;inset:0;z-index:0}}
+  .hero-media .media{{position:absolute;inset:0;aspect-ratio:auto;height:100%}}
+  /* Contrast budget: the copy is white over an image we do not control, so the
+     scrim is sized for the worst case — a pure-white photo. Under the text the
+     scrim is >=.62, i.e. 255*0.38 = 97 -> about 6.2:1 against white, clearing
+     WCAG AA (4.5:1) for the 15px lead as well as the h1. On the illustration
+     fallback (#F4F2ED) the same scrim gives roughly 9.7:1. */
+  .hero-scrim{{position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(90deg,rgba(18,16,14,.78) 0%,rgba(18,16,14,.66) 30%,
+      rgba(18,16,14,.42) 55%,rgba(18,16,14,.16) 80%,rgba(18,16,14,.06) 100%)}}
+  .hero-in{{position:relative;z-index:2;color:#fff}}
+  .hero .eyebrow{{color:rgba(255,255,255,.72)}}
+  .hero h1{{color:#fff;text-wrap:balance}}
+  .hero .lead{{color:rgba(255,255,255,.88)}}
+  .hero .cta-note{{color:rgba(255,255,255,.66)}}
+  .hero .btn{{background:#fff;color:var(--ink)}}
+  .hero .btn:hover{{opacity:1;background:rgba(255,255,255,.88)}}
   .eyebrow{{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
     color:var(--faint);margin:0 0 clamp(20px,3vw,30px)}}
-  h1{{font-size:clamp(26px,5vw,52px);font-weight:900;line-height:1.45;max-width:19em;
-    margin:0 0 clamp(20px,3vw,30px)}}
+  h1{{font-size:clamp(30px,6.2vw,68px);font-weight:900;line-height:1.34;letter-spacing:.035em;
+    max-width:16em;margin:0 0 clamp(22px,3vw,32px)}}
   .lead{{font-size:clamp(14.5px,1.5vw,16.5px);color:var(--muted);line-height:2.05;max-width:32em;
     margin:0 0 clamp(28px,4vw,42px)}}
-  /* media: full-bleed band under the hero, greige box while empty */
-  .bleed{{margin-top:clamp(40px,6vw,72px)}}
+  /* scroll cue: a plain link, so it is keyboard reachable and focusable */
+  .cue{{position:absolute;z-index:2;left:50%;bottom:18px;transform:translateX(-50%);
+    width:44px;height:44px;display:grid;place-items:center;border-radius:50%;
+    text-decoration:none;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.28)}}
+  .cue-a{{width:9px;height:9px;border-right:1.6px solid #fff;border-bottom:1.6px solid #fff;
+    transform:translateY(-2px) rotate(45deg);animation:cue 2.4s ease-in-out infinite}}
+  @keyframes cue{{0%,100%{{transform:translateY(-3px) rotate(45deg)}}50%{{transform:translateY(2px) rotate(45deg)}}}}
+  /* media boxes elsewhere on the page */
   .media{{position:relative;margin:0;background:var(--sub);overflow:hidden;display:grid;place-items:center}}
   .media-wide,.media-illus{{aspect-ratio:16/9;max-height:76vh}}
   .media img,.media svg,.media video{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
@@ -643,7 +686,7 @@ def landing_html(slug, assets_dir=None):
   .media-empty{{border:1px dashed var(--line)}}
   .ph-note{{font-size:12px;line-height:1.8;color:var(--muted);text-align:center;padding:0 18px;max-width:22em}}
   /* sections */
-  .sec{{padding:clamp(56px,8vw,108px) 0;border-top:1px solid var(--hair)}}
+  .sec{{padding:clamp(72px,10vw,140px) 0;border-top:1px solid var(--hair)}}
   .grid2{{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);
     gap:clamp(20px,5vw,72px);align-items:start}}
   .col-b p{{margin:0;color:#4C4640;font-size:15px;line-height:2.1}}
@@ -661,15 +704,26 @@ def landing_html(slug, assets_dir=None):
   .feat-card .idx{{margin-bottom:12px}}
   .feat-card h3{{font-size:15.5px;font-weight:700;margin:0 0 7px;line-height:1.7}}
   .feat-card p{{margin:0;color:var(--muted);font-size:13.5px;line-height:1.95}}
+  /* A live before/after breaks out of .wrap to a full-bleed band, giving the page
+     a text -> big image -> text rhythm. 100vw + the negative margin trick, with
+     no horizontal scrollbar because the body never overflows. */
+  .sec-ba.is-live > .wrap{{max-width:none;padding:0}}
+  /* Height is set explicitly: at full width a 4/3 (or 16/9) aspect-ratio box would
+     be over 1000px tall and swallow the screen. A capped band keeps it cinematic. */
+  .sec-ba.is-live .cmp{{max-width:none}}
+  .js .sec-ba.is-live .cmp:not(.cmp-static){{max-width:none;aspect-ratio:auto;
+    height:min(72vh,700px);border-radius:0}}
+  .sec-ba.is-live .sec-h,.sec-ba.is-live .cap,.sec-ba.is-live .cmp-hint{{
+    max-width:1080px;margin-left:auto;margin-right:auto;padding:0 24px}}
   /* before/after: two-up by default, a drag comparison once JS is available */
   .cmp{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
   .cmp-side{{position:relative}}
-  .cmp-side .media{{aspect-ratio:4/3}}
+  .cmp-side .media{{aspect-ratio:16/9}}
   .cmp-tag{{position:absolute;top:12px;left:12px;z-index:2;background:rgba(42,40,36,.74);
     color:#FBFAF8;border-radius:3px;padding:5px 10px;
     font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.16em}}
   .cmp-bar,.cmp-range{{display:none}}
-  .js .cmp:not(.cmp-static){{display:block;position:relative;aspect-ratio:4/3;max-width:960px;
+  .js .cmp:not(.cmp-static){{display:block;position:relative;aspect-ratio:16/9;max-width:1000px;
     margin:0 auto;overflow:hidden;background:var(--sub);border-radius:var(--r);touch-action:pan-y}}
   .js .cmp:not(.cmp-static) .cmp-side{{position:absolute;inset:0}}
   .js .cmp:not(.cmp-static) .cmp-side .media{{position:absolute;inset:0;aspect-ratio:auto}}
@@ -720,9 +774,13 @@ def landing_html(slug, assets_dir=None):
   .js .rv.in{{opacity:1;transform:none;
     transition:opacity .8s ease,transform .8s cubic-bezier(.22,.61,.36,1)}}
   a:focus-visible,.btn:focus-visible{{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}}
+  /* The hero sits on a dark scrim, where the blue accent ring is hard to see.
+     White keeps the focus indicator visible against the photo. */
+  .hero a:focus-visible{{outline-color:#fff}}
   @media (prefers-reduced-motion:reduce){{
-    *{{transition:none!important;scroll-behavior:auto!important}}
+    *{{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
     .js .rv{{opacity:1;transform:none}}
+    .cue-a{{transform:translateY(-1px) rotate(45deg)}}
   }}
   @media (max-width:860px){{.feat-grid{{grid-template-columns:repeat(2,1fr)}}}}
   @media (max-width:820px){{
@@ -731,6 +789,14 @@ def landing_html(slug, assets_dir=None):
   }}
   @media (max-width:760px){{.dock{{display:block}}}}
   @media (max-width:680px){{.brand .tag{{display:none}}}}
+  @media (max-width:820px){{
+    /* the copy spans the full width here, so the scrim has to darken from the
+       bottom instead of from the left — same >=.62 under the text. */
+    .hero-scrim{{background:linear-gradient(180deg,rgba(18,16,14,.34) 0%,
+      rgba(18,16,14,.52) 42%,rgba(18,16,14,.74) 74%,rgba(18,16,14,.84) 100%)}}
+    .hero{{min-height:76vh;min-height:76svh;padding-bottom:clamp(64px,10vh,96px)}}
+    h1{{letter-spacing:.02em;max-width:none}}
+  }}
   @media (max-width:560px){{
     .wrap{{padding:0 20px}}
     .feat-grid{{grid-template-columns:1fr}}
@@ -744,15 +810,18 @@ def landing_html(slug, assets_dir=None):
 <a class="btn sm" href="{esc(app_url)}">試してみる<span class="ar">→</span></a>
 </div></header>
 <main>
-<section class="hero"><div class="wrap">
+<section class="hero">
+{hero_media}
+<div class="wrap hero-in">
 <p class="eyebrow">{esc(p.get('eyebrow', SITE_NAME))}</p>
 <h1>{_phrase(p['h1'])}</h1>
-<p class="lead">{esc(p['lead'])}</p>
+<p class="lead">{esc(p.get('hero_lead') or p['lead'])}</p>
 <div class="cta-row"><a class="btn hero-cta" href="{esc(app_url)}">{cta}<span class="ar">→</span></a>
-<span class="cta-note">登録不要・インストール不要・ブラウザで完結</span></div>
+<span class="cta-note">登録不要</span></div>
 </div>
-{hero_media}
+<a class="cue" href="#start" aria-label="下へスクロール"><span class="cue-a" aria-hidden="true"></span></a>
 </section>
+<span id="start"></span>
 {sec0}
 {steps_html}
 {ba_html}
