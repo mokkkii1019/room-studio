@@ -2797,15 +2797,18 @@ function dropPosToCanvas(e){ const rect=overlay.getBoundingClientRect(); const s
 function imageFilesFrom(dt){ return [...(dt&&dt.files?dt.files:[])].filter(f=>f.type && f.type.startsWith('image/')); }
 function loadImageURL(url, cb, onerr){ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); cb(c); }catch(e){ onerr&&onerr(e); } }; im.onerror=()=>onerr&&onerr(); im.src=url; }
 function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); if(m<=maxSide) return src; const s=maxSide/m, c=document.createElement('canvas'); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); const x=c.getContext('2d'); x.imageSmoothingEnabled=true; x.drawImage(src,0,0,c.width,c.height); return c; }
-/* 収集結果の並び順（指示016・運営が戻せるフラグ）。Vercel の環境変数 COLLECT_RANKING で
-   切り替える（未設定ならここの既定値。/try・/demo の ENABLE_TRY_DEMO と同じ運用）:
+/* 収集結果の並び順（指示016・運営が戻せるフラグ）:
      'off' … 配置しやすさを一切計算しない。従来どおりで追加コストは0
-     'log' … 計算してコンソールに出すだけ。**並び順は変えない**
+     'log' … 計算してコンソールに出すだけ。**並び順は変えない**（＝現在の本番の既定）
      'on'  … 配置しやすさスコア順に並べ替える
-   サーバー側の注入は api/_site.py の inject_collect_ranking()。
-   既定を 'on' にしたのは第2段階（2026-07-30）。根拠は docs/COLLECT_RANKING_REPORT.md —
-   本番が実際に配る210枚で、無地背景の商品写真が上位5件に入る数が 7→11 に増える。 */
-const COLLECT_RANKING='on';
+   **既定は 'log'。** 指示018 の判断で、まず実データのスコア分布を観察してから 'on' に
+   するか決める。並び替え自体の実測（本番が配る210枚で、無地背景の商品写真が上位5件に
+   入る数が 7→11）と、上位10件の文字/合成物が2枚増える副作用は
+   docs/COLLECT_RANKING_REPORT.md。分布の確認手順も同書にある。
+   'on' への切り替えは Vercel の環境変数 COLLECT_RANKING でもできる（未設定ならここの
+   既定値。/try・/demo の ENABLE_TRY_DEMO と同じ運用）。注入は api/_site.py の
+   inject_collect_ranking()。 */
+const COLLECT_RANKING='log';
 /* ---- 候補画像の採点 ----------------------------------------------------------
    楽天が返す候補は大半が販促物で、単体商品写真は少数派。実測（212枚を目視ラベル付け）:
 
