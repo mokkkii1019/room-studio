@@ -249,6 +249,13 @@ def sitemap():
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/try", response_class=HTMLResponse)
+def try_page():
+    """スマホ30秒ミニ体験（/try）。アプリ本体を読み込まない独立ページ。"""
+    return HTMLResponse(_site.try_html(os.path.join(APP_DIR, "lp-assets")),
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
 @app.get("/lp/{slug}", response_class=HTMLResponse)
 def landing(slug: str):
     """検索意図別ランディングページ（サーバーレンダリング・GA4対応）。"""

@@ -127,6 +127,14 @@ def sitemap():
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/try", response_class=HTMLResponse)
+def try_page():
+    # /try — スマホ30秒ミニ体験（BUZZ_FOUNDATION_INSTRUCTIONS §1）。
+    # アプリ本体は読み込まない独立ページ。サンプル画像は lp-assets/ から取る。
+    return HTMLResponse(_site.try_html(os.path.join(ROOT, "lp-assets")),
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
 @app.get("/lp/{slug}", response_class=HTMLResponse)
 def landing(slug: str):
     page = _site.landing_html(slug, os.path.join(ROOT, "lp-assets"))

@@ -875,6 +875,432 @@ def landing_html(slug, assets_dir=None):
 </body></html>"""
 
 
+# =============================================================================
+# /try — スマホ30秒ミニ体験（docs/BUZZ_FOUNDATION_INSTRUCTIONS.md §1）
+#
+# SNSからスマホで来た人に「3秒で表示、30秒で変わる体験」をさせるための超軽量ページ。
+# アプリ本体（room-studio.html・319KB）は SAM/LaMa/楽天収集まで一体化しており、
+# 読み込むだけで性能目標に届かない。そこで本体には一切触れず、LPと同じ流儀で
+# ここに独立した自己完結ページを生成する（ビルド不要・外部依存ゼロ）。
+#
+# 面の指定は本体のようにブラシ/SAM/ポリゴンで選ばせるのではなく、部屋ごとに
+# **正規化ポリゴン座標を固定で持つ**。0..1 の相対座標なので写真の実寸に依存せず、
+# 写真が確定したら座標だけ差し替えればよい。マスク画像を配信するより軽く、
+# 運営が用意するのは写真1枚で済む。
+#
+# 再着色は本体 rebuildSurface() の移植ではなく最小の再実装。元ピクセルの明度を
+# 保ったまま色相・彩度だけ差し替える方式で、質感（木目・陰影）が残る。
+# =============================================================================
+
+# 壁・床のスウォッチ。1色目は必ず「元のまま」。色数を絞るのは操作を迷わせないため。
+TRY_WALL_COLORS = [
+    ("元のまま", ""),
+    ("生成り", "#EFE9DF"),
+    ("グレージュ", "#D6CEC2"),
+    ("淡いグリーン", "#C7D3C6"),
+    ("ブルーグレー", "#C4CED7"),
+    ("チャコール", "#6E6A64"),
+]
+TRY_FLOOR_COLORS = [
+    ("元のまま", ""),
+    ("明るい木", "#DCC29B"),
+    ("ナチュラル", "#C6A67E"),
+    ("ウォルナット", "#8A6A4E"),
+    ("グレー木目", "#B5AFA6"),
+]
+
+# サンプル部屋。`img` のファイルが lp-assets/ にあればそれを、無ければ簡易SVG相当の
+# プレースホルダをキャンバスに描く（どちらでも再着色の経路は同一）。
+# poly は 0..1 の正規化座標。**窓やドアは避けて定義する**（囲むと一緒に着色されるため）。
+TRY_ROOM = {
+    "img": "try-room-1",
+    "wall": [[0.0, 0.0], [1.0, 0.0], [1.0, 0.605], [0.0, 0.605]],
+    "floor": [[0.0, 0.605], [1.0, 0.605], [1.0, 1.0], [0.0, 1.0]],
+    # 家具プレースホルダの配置（正規化）。実画像 try-furni-1 があればそれを描く。
+    "furni": [0.30, 0.44, 0.46, 0.34],
+}
+
+# 収益接点。楽天の商品は実行時にAPIで取るものでURLを固定できないため、既定は空。
+# 運営が実在の商品を1〜2件ここに入れるとブロックが出る（空ならセクションごと非表示）。
+# 形式: {"title": ..., "url": <アフィリエイトURL>, "shop": ...}
+TRY_PRODUCTS = []
+
+
+def _try_swatches(items, kind):
+    esc = _html.escape
+    out = []
+    for i, (label, hexv) in enumerate(items):
+        style = f' style="background:{esc(hexv)}"' if hexv else ""
+        cls = "sw" + (" sw-none" if not hexv else "") + (" on" if i == 0 else "")
+        out.append(f'<button class="{cls}" type="button" role="radio" aria-checked="'
+                   f'{"true" if i == 0 else "false"}" data-kind="{kind}" '
+                   f'data-color="{esc(hexv)}" aria-label="{esc(label)}" title="{esc(label)}">'
+                   f'<i{style}></i><span>{esc(label)}</span></button>')
+    return "\n".join(out)
+
+
+def try_html(assets_dir=None):
+    """Render /try — the lightweight mobile mini-experience. Self-contained."""
+    esc = _html.escape
+    url = f"{SITE_BASE_URL}/try"
+    app_url = "/?ref=try"
+    ga4 = ga4_head_snippet()
+    title = "30秒でためす模様替え｜部屋の壁と床の色を変えてみる"
+    desc = ("スマホでそのまま。サンプルの部屋の壁と床の色をタップで切り替えて、"
+            "模様替えの見え方を30秒でためせます。登録もインストールも不要です。")
+    has_room = bool(assets_dir) and _lp_asset_path(assets_dir, TRY_ROOM["img"]) is not None
+    has_furni = bool(assets_dir) and _lp_asset_path(assets_dir, "try-furni-1") is not None
+    room_src = f"/lp-assets/{TRY_ROOM['img']}" if has_room else ""
+    furni_src = "/lp-assets/try-furni-1" if has_furni else ""
+    prod_html = ""
+    if TRY_PRODUCTS:
+        rows = "\n".join(
+            f'<a class="prod" href="{esc(p["url"])}" target="_blank" rel="nofollow noopener sponsored" '
+            f'data-track="{esc(p.get("shop", ""))}">{esc(p["title"])}<span class="arw">→</span></a>'
+            for p in TRY_PRODUCTS)
+        prod_html = ('<section class="blk"><h2>この部屋で使った家具</h2>'
+                     f'<div class="prods">{rows}</div>'
+                     '<p class="fine">リンク先は各ECサイトです（PR）。</p></section>')
+    jsonld = json.dumps({
+        "@context": "https://schema.org", "@type": "WebPage",
+        "name": title, "description": desc, "url": url, "inLanguage": "ja",
+        "isPartOf": {"@type": "WebSite", "name": SITE_NAME, "url": SITE_BASE_URL + "/"},
+    }, ensure_ascii=False)
+    cfg = json.dumps({
+        "img": room_src, "furni": furni_src,
+        "wall": TRY_ROOM["wall"], "floor": TRY_ROOM["floor"], "frect": TRY_ROOM["furni"],
+    }, ensure_ascii=False)
+    return f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{esc(title)}｜{esc(SITE_NAME)}</title>
+<meta name="description" content="{esc(desc)}">
+<link rel="canonical" href="{esc(url)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{esc(SITE_NAME)}">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(desc)}">
+<meta property="og:url" content="{esc(url)}">
+<meta property="og:image" content="{esc(SITE_BASE_URL)}/og.png">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{jsonld}</script>{ga4}
+<style>
+  /* 性能最優先のため Web フォントは読まない（本体/LPは Google Fonts を使うが、
+     ここは初回表示3秒が要件なのでレンダリングブロッキングを持ち込まない）。 */
+  :root{{--bg:#FBFAF8;--sub:#F1EFEA;--ink:#2A2824;--muted:#7C776E;--faint:#A49E94;
+    --line:rgba(0,0,0,.10);--hair:rgba(0,0,0,.07);--accent:#3B6FE0;--r:10px}}
+  *{{box-sizing:border-box}}
+  html{{-webkit-text-size-adjust:100%}}
+  body{{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.7;
+    font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+    -webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1}}
+  img{{max-width:100%;display:block}}
+  a{{color:inherit}}
+  .wrap{{max-width:560px;margin:0 auto;padding:0 16px}}
+  header.bar{{position:sticky;top:0;z-index:20;background:rgba(251,250,248,.92);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--hair)}}
+  .bar-in{{display:flex;align-items:center;gap:10px;height:50px}}
+  .mark{{font-weight:800;font-size:14px;letter-spacing:.02em;margin-right:auto}}
+  .mark b{{background:var(--ink);color:var(--bg);padding:2px 6px;border-radius:4px}}
+  h1{{font-size:clamp(19px,5.2vw,25px);font-weight:800;line-height:1.5;margin:18px 0 6px;
+    letter-spacing:.01em}}
+  .sub{{color:var(--muted);font-size:13.5px;margin:0 0 14px}}
+  /* ステージ: 画像の縦横比が決まるまで箱を確保して CLS を出さない */
+  .stage{{position:relative;background:var(--sub);border-radius:var(--r);overflow:hidden;
+    aspect-ratio:3/2}}
+  .stage canvas{{width:100%;height:100%;display:block;touch-action:pan-y}}
+  .badge{{position:absolute;left:10px;top:10px;background:rgba(42,40,36,.72);color:#fff;
+    font-size:11px;letter-spacing:.08em;padding:4px 9px;border-radius:99px;pointer-events:none;
+    opacity:0;transition:opacity .18s}}
+  .badge.on{{opacity:1}}
+  .ctl{{margin:14px 0 0}}
+  .ctl h2{{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;margin:0 0 8px}}
+  .sws{{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}}
+  .sw{{flex:0 0 auto;border:0;background:none;padding:0;cursor:pointer;width:56px;
+    display:flex;flex-direction:column;align-items:center;gap:5px;font:inherit}}
+  .sw i{{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);display:block;
+    background:var(--sub);transition:transform .15s,box-shadow .15s}}
+  .sw.sw-none i{{background:
+    linear-gradient(135deg,transparent 46%,var(--faint) 46%,var(--faint) 54%,transparent 54%),var(--sub)}}
+  .sw span{{font-size:10.5px;color:var(--muted);line-height:1.3;text-align:center}}
+  .sw.on i{{box-shadow:0 0 0 2px var(--ink);transform:scale(1.04)}}
+  .sw.on span{{color:var(--ink);font-weight:700}}
+  .row{{display:flex;gap:8px;margin:16px 0 0;flex-wrap:wrap}}
+  .tog{{flex:1 1 0;min-width:130px;border:1px solid var(--line);background:#fff;color:var(--ink);
+    border-radius:var(--r);padding:12px 10px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}}
+  .tog[aria-pressed="true"]{{background:var(--ink);color:var(--bg);border-color:var(--ink)}}
+  .btn{{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--ink);
+    color:var(--bg);text-decoration:none;font-weight:700;font-size:15.5px;padding:16px 20px;
+    border-radius:var(--r);width:100%;border:0;cursor:pointer;font-family:inherit}}
+  .cta-note{{font-size:12px;color:var(--faint);text-align:center;margin:8px 0 0}}
+  .blk{{padding:26px 0;border-top:1px solid var(--hair);margin-top:26px}}
+  .blk h2{{font-size:15px;font-weight:800;margin:0 0 8px}}
+  .blk p{{margin:0;font-size:13.5px;color:var(--muted)}}
+  .pcbox{{background:var(--sub);border-radius:var(--r);padding:14px;margin-top:10px}}
+  .pcbox p{{margin:0 0 10px;font-size:13px;color:#4C4640}}
+  .copy{{border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 12px;
+    font:inherit;font-size:13px;font-weight:700;cursor:pointer;width:100%}}
+  .prods{{display:flex;flex-direction:column;gap:8px}}
+  .prod{{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--line);
+    background:#fff;border-radius:8px;padding:12px;text-decoration:none;font-size:13.5px;font-weight:700}}
+  .fine{{font-size:11.5px;color:var(--faint);margin:8px 0 0}}
+  .rel{{display:block;padding:14px 0;border-top:1px solid var(--hair);text-decoration:none;
+    font-weight:700;font-size:14px}}
+  footer{{padding:24px 0 40px;border-top:1px solid var(--hair);margin-top:26px}}
+  .pr{{font-size:11px;color:var(--faint);line-height:1.7;margin:0}}
+  nav.legal{{margin-top:12px;display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px}}
+  nav.legal a{{color:var(--muted);text-decoration:none}}
+  button:focus-visible,a:focus-visible{{outline:2px solid var(--accent);outline-offset:2px}}
+  @media (prefers-reduced-motion:reduce){{*{{transition:none!important}}}}
+</style></head><body>
+<header class="bar"><div class="wrap bar-in">
+<span class="mark">Room<b>Studio</b></span>
+<a class="sw-link" href="{esc(app_url)}" style="font-size:12.5px;font-weight:700;text-decoration:none">フル版 →</a>
+</div></header>
+<main class="wrap">
+<h1>この部屋の壁と床、<br>色を変えてみてください</h1>
+<p class="sub">タップするだけ。写真のアップロードは要りません。</p>
+
+<div class="stage" id="stage">
+  <canvas id="cv" width="1200" height="800" aria-label="サンプルの部屋。壁と床の色を切り替えられます"></canvas>
+  <span class="badge" id="badge">BEFORE</span>
+</div>
+
+<div class="ctl"><h2>壁の色</h2><div class="sws" role="radiogroup" aria-label="壁の色">
+{_try_swatches(TRY_WALL_COLORS, "wall")}
+</div></div>
+<div class="ctl"><h2>床の色</h2><div class="sws" role="radiogroup" aria-label="床の色">
+{_try_swatches(TRY_FLOOR_COLORS, "floor")}
+</div></div>
+
+<div class="row">
+  <button class="tog" id="togFurni" type="button" aria-pressed="false">家具を置く</button>
+  <button class="tog" id="togBefore" type="button" aria-pressed="false">変える前と見比べる</button>
+</div>
+
+<div class="blk">
+  <h2>自分の部屋の写真でやってみる</h2>
+  <p>同じことを、自分の部屋の写真の上でできます。家具を置く・不要なものを消すまで、ブラウザだけで完結します。</p>
+  <div style="margin-top:12px"><a class="btn" id="ctaMain" href="{esc(app_url)}">自分の部屋で試す →</a></div>
+  <p class="cta-note">登録不要・インストール不要</p>
+  <div class="pcbox" id="pcbox" hidden>
+    <p><b>パソコンで開くと</b>、写真の読み込み・家具の配置・不要物の削除までフル機能が使えます。このページのURLを控えておくと便利です。</p>
+    <button class="copy" id="btnCopy" type="button">このページのURLをコピー</button>
+  </div>
+</div>
+{prod_html}
+<a class="rel" href="/lp/moyougae-simulation">模様替えシミュレーションとは？ <span class="arw">→</span></a>
+<footer>
+<p class="pr">{esc(_PR_LINE)}</p>
+<nav class="legal"><a href="/">アプリを開く</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
+</footer>
+</main>
+<script>
+(function(){{
+  var CFG={cfg};
+  var cv=document.getElementById('cv'), ctx=cv.getContext('2d',{{willReadFrequently:true}});
+  var W=cv.width, H=cv.height;
+  var base=document.createElement('canvas'); base.width=W; base.height=H;
+  var bx=base.getContext('2d',{{willReadFrequently:true}});
+  var layers={{}}, state={{wall:'',floor:'',furni:false,before:false}}, furniImg=null;
+
+  function ev(name,params){{ try{{ if(window.gtag) window.gtag('event',name,params||{{}}); }}catch(e){{}} }}
+
+  /* --- 素の部屋を描く。写真があればそれを cover で敷き、無ければプレースホルダの
+     部屋を描く。どちらでも以降の再着色の経路は同一なので、写真が来たら差し替わるだけ。 --- */
+  function drawPlaceholder(c){{
+    var hz=CFG.wall[2][1]*H;                      // 壁と床の境目
+    c.fillStyle='#E4E0D8'; c.fillRect(0,0,W,hz);   // 壁
+    var g=c.createLinearGradient(0,0,W,hz);        // 窓からの光を思わせる淡いむら
+    g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(.55,'rgba(255,255,255,0)');
+    c.fillStyle=g; c.fillRect(0,0,W,hz);
+    c.fillStyle='#CDBFA8'; c.fillRect(0,hz,W,H-hz); // 床
+    var fg=c.createLinearGradient(0,hz,0,H);        // 奥ほど暗い＝明暗差を残す確認用
+    fg.addColorStop(0,'rgba(0,0,0,.16)'); fg.addColorStop(1,'rgba(255,255,255,.10)');
+    c.fillStyle=fg; c.fillRect(0,hz,W,H-hz);
+    for(var i=0;i<26;i++){{                          // 床板の目地（質感が残ることの確認用）
+      c.fillStyle='rgba(0,0,0,.045)';
+      c.fillRect(0, hz+((H-hz)/26)*i, W, 1);
+    }}
+  }}
+  /* 窓・巾木は面の「上」に描く。壁ポリゴンに含めると一緒に着色されてしまうため、
+     実写真を使うときも同じ理由でポリゴンは窓やドアを避けて定義する。 */
+  function drawFg(c){{
+    if(CFG.img) return;                            // 実写真のときは前景を描かない
+    var hz=CFG.wall[2][1]*H;
+    c.fillStyle='#F7F5F1'; c.fillRect(W*0.06,H*0.10,W*0.26,H*0.34);
+    c.strokeStyle='rgba(42,40,36,.35)'; c.lineWidth=3;
+    c.strokeRect(W*0.06,H*0.10,W*0.26,H*0.34);
+    c.beginPath(); c.moveTo(W*0.19,H*0.10); c.lineTo(W*0.19,H*0.44); c.stroke();
+    c.fillStyle='rgba(42,40,36,.16)'; c.fillRect(0,hz-6,W,6);
+  }}
+  function drawFurni(c){{
+    if(furniImg){{
+      c.drawImage(furniImg, CFG.frect[0]*W, CFG.frect[1]*H, CFG.frect[2]*W, CFG.frect[3]*H);
+      return;
+    }}
+    var x=CFG.frect[0]*W, y=CFG.frect[1]*H, w=CFG.frect[2]*W, h=CFG.frect[3]*H;
+    c.fillStyle='#B9A894';                          // 家具プレースホルダ（ソファのシルエット）
+    c.fillRect(x, y+h*0.30, w, h*0.52);
+    c.fillRect(x+w*0.02, y, w*0.96, h*0.42);
+    c.fillStyle='rgba(0,0,0,.14)';
+    c.fillRect(x+w*0.05, y+h*0.82, w*0.06, h*0.16);
+    c.fillRect(x+w*0.89, y+h*0.82, w*0.06, h*0.16);
+    c.fillStyle='rgba(0,0,0,.10)';
+    c.beginPath(); c.ellipse(x+w/2, y+h*0.99, w*0.56, h*0.06, 0, 0, 6.2832); c.fill();
+  }}
+
+  function bbox(poly){{
+    var x0=1,y0=1,x1=0,y1=0;
+    poly.forEach(function(p){{ x0=Math.min(x0,p[0]); y0=Math.min(y0,p[1]);
+                              x1=Math.max(x1,p[0]); y1=Math.max(y1,p[1]); }});
+    return {{x:Math.floor(x0*W), y:Math.floor(y0*H),
+             w:Math.ceil((x1-x0)*W), h:Math.ceil((y1-y0)*H)}};
+  }}
+  /* ポリゴンでクリップして素の部屋を写し取る＝これがそのままマスクになる（縁のAAも無料）。 */
+  function makeLayer(poly){{
+    var c=document.createElement('canvas'); c.width=W; c.height=H;
+    var x=c.getContext('2d',{{willReadFrequently:true}});
+    x.save(); x.beginPath();
+    poly.forEach(function(p,i){{ var px=p[0]*W, py=p[1]*H; if(i) x.lineTo(px,py); else x.moveTo(px,py); }});
+    x.closePath(); x.clip(); x.drawImage(base,0,0); x.restore();
+    var bb=bbox(poly);
+    var src=x.getImageData(bb.x,bb.y,bb.w,bb.h), sd=src.data, sum=0, n=0;
+    for(var i=0;i<sd.length;i+=4){{
+      if(!sd[i+3]) continue;
+      var r=sd[i],g=sd[i+1],bl=sd[i+2];
+      var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
+      sum+=(mx+mn)/510; n++;
+    }}
+    return {{cv:c, ctx:x, bb:bb, src:src, meanL:n?sum/n:0.5}};
+  }}
+  function hex2hs(hex){{
+    var r=parseInt(hex.substr(1,2),16)/255, g=parseInt(hex.substr(3,2),16)/255, b=parseInt(hex.substr(5,2),16)/255;
+    var mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn, h=0, l=(mx+mn)/2;
+    var s=d===0?0:d/(1-Math.abs(2*l-1));
+    if(d!==0){{ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0)h+=360; }}
+    return [h,s,l];
+  }}
+  function hsl2rgb(h,s,l){{
+    var c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2, r=0,g=0,b=0;
+    if(h<60){{r=c;g=x;}} else if(h<120){{r=x;g=c;}} else if(h<180){{g=c;b=x;}}
+    else if(h<240){{g=x;b=c;}} else if(h<300){{r=x;b=c;}} else {{r=c;b=x;}}
+    return [(r+m)*255,(g+m)*255,(b+m)*255];
+  }}
+  /* 色相・彩度は目標色に置き換え、明度は「面全体を目標色の明るさへ寄せる」オフセットだけ
+     かける。ピクセルごとの明暗差（木目・陰影・光のむら）はそのまま残るので、ベタ塗りに
+     ならずに「その部屋の壁が別の色だったら」に見える。オフセットを入れないと、
+     ウォルナットのような暗い色を選んでも床が暗くならず不自然になる。 */
+  function tint(L,hex,strength){{
+    var s=L.src, d=L.ctx.createImageData(s.width,s.height), sd=s.data, dd=d.data;
+    var t=hex2hs(hex), th=t[0], ts=t[1];
+    var dl=(t[2]-L.meanL)*0.92;                   // 面全体にかける明度オフセット
+    for(var i=0;i<sd.length;i+=4){{
+      var a=sd[i+3];
+      if(!a){{ dd[i+3]=0; continue; }}
+      var r=sd[i], g=sd[i+1], b=sd[i+2];
+      var mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b);
+      var nl=(mx+mn)/510+dl; nl=nl<0.03?0.03:(nl>0.97?0.97:nl);
+      var rgb=hsl2rgb(th,ts,nl);
+      dd[i]  = r+(rgb[0]-r)*strength;
+      dd[i+1]= g+(rgb[1]-g)*strength;
+      dd[i+2]= b+(rgb[2]-b)*strength;
+      dd[i+3]= a;
+    }}
+    L.ctx.putImageData(d, L.bb.x, L.bb.y);
+  }}
+
+  function render(){{
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(base,0,0);
+    if(!state.before){{
+      ['wall','floor'].forEach(function(k){{
+        if(state[k]) ctx.drawImage(layers[k].cv,0,0);
+      }});
+    }}
+    drawFg(ctx);
+    if(state.furni && !state.before) drawFurni(ctx);
+  }}
+  function setColor(kind,hex){{
+    state[kind]=hex;
+    if(hex) tint(layers[kind], hex, kind==='wall'?0.86:0.80);
+    render();
+  }}
+
+  function boot(){{
+    layers.wall=makeLayer(CFG.wall); layers.floor=makeLayer(CFG.floor);
+    render();
+    ev('try_view',{{has_photo:!!CFG.img}});
+  }}
+  function start(){{
+    if(CFG.img){{
+      var im=new Image(); im.decoding='async';
+      im.onload=function(){{
+        var sc=Math.max(W/im.width, H/im.height), dw=im.width*sc, dh=im.height*sc;
+        bx.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh); boot();
+      }};
+      im.onerror=function(){{ drawPlaceholder(bx); boot(); }};
+      im.src=CFG.img;
+    }} else {{ drawPlaceholder(bx); boot(); }}
+    if(CFG.furni){{ var f=new Image(); f.onload=function(){{ furniImg=f; if(state.furni) render(); }}; f.src=CFG.furni; }}
+  }}
+
+  Array.prototype.forEach.call(document.querySelectorAll('.sw'),function(b){{
+    b.addEventListener('click',function(){{
+      var kind=b.dataset.kind;
+      Array.prototype.forEach.call(document.querySelectorAll('.sw[data-kind="'+kind+'"]'),function(o){{
+        o.classList.toggle('on',o===b); o.setAttribute('aria-checked',o===b?'true':'false');
+      }});
+      if(state.before) setBefore(false);
+      setColor(kind,b.dataset.color);
+      ev('try_color_change',{{surface:kind,color:b.dataset.color||'original'}});
+    }});
+  }});
+  var bd=document.getElementById('badge');
+  function setBefore(v){{
+    state.before=v;
+    var t=document.getElementById('togBefore');
+    t.setAttribute('aria-pressed',v?'true':'false');
+    bd.textContent=v?'BEFORE':'AFTER'; bd.classList.toggle('on', v || !!(state.wall||state.floor));
+    render();
+  }}
+  document.getElementById('togBefore').addEventListener('click',function(){{
+    setBefore(!state.before); ev('try_before_after',{{on:state.before}});
+  }});
+  document.getElementById('togFurni').addEventListener('click',function(){{
+    state.furni=!state.furni;
+    this.setAttribute('aria-pressed',state.furni?'true':'false');
+    this.textContent=state.furni?'家具を外す':'家具を置く';
+    render(); ev('try_furniture',{{on:state.furni}});
+  }});
+  document.getElementById('ctaMain').addEventListener('click',function(){{ ev('try_cta_click',{{to:'app'}}); }});
+  Array.prototype.forEach.call(document.querySelectorAll('.prod'),function(a){{
+    a.addEventListener('click',function(){{
+      ev('select_item',{{link_url:a.href,shop:a.dataset.track||''}});
+      try{{ var q=new URLSearchParams({{id:'',type:'try',url:a.href,shop:a.dataset.track||'',src:'try'}});
+            if(navigator.sendBeacon) navigator.sendBeacon('/track?'+q.toString()); }}catch(e){{}}
+    }});
+  }});
+  /* スマホには「PCで開くとフル機能」の案内とURLコピーを出す（本体はPC前提のため）。 */
+  if(matchMedia('(max-width:820px)').matches){{
+    var box=document.getElementById('pcbox'); box.hidden=false;
+    document.getElementById('btnCopy').addEventListener('click',function(){{
+      var u=location.origin+'/', btn=this;
+      var ok=function(){{ btn.textContent='コピーしました';
+        setTimeout(function(){{ btn.textContent='このページのURLをコピー'; }},1800); }};
+      var ng=function(){{ prompt('URLをコピーしてください',u); }};
+      if(navigator.clipboard&&navigator.clipboard.writeText){{
+        navigator.clipboard.writeText(u).then(ok,ng);
+      }} else {{ ng(); }}
+      ev('try_copy_url');
+    }});
+  }}
+  start();
+}})();
+</script>
+</body></html>"""
+
+
 # ---- landing-page assets (/lp-assets/<name>) ---------------------------------
 _LP_IMG_CT = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
               ".png": "image/png", ".avif": "image/avif"}
@@ -988,7 +1414,9 @@ def sitemap_xml(lastmod=None):
     `lastmod` is a YYYY-MM-DD string (caller passes the app's file mtime); falls
     back to today if omitted."""
     lm = lastmod or time.strftime("%Y-%m-%d")
-    paths = ["/", "/about", "/privacy", "/tokushoho"] + [f"/lp/{s}" for s in landing_slugs()]
+    # /try は SNS からの着地ページなので通常どおり公開・掲載する
+    # （運営専用の /demo は §2 で noindex + 非掲載にする）。
+    paths = ["/", "/try", "/about", "/privacy", "/tokushoho"] + [f"/lp/{s}" for s in landing_slugs()]
     esc = _html.escape
     urls = "\n".join(
         f"  <url><loc>{esc(SITE_BASE_URL + p)}</loc><lastmod>{esc(lm)}</lastmod></url>"
