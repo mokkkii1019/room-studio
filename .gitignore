@@ -12,3 +12,8 @@ node_modules/
 !apple-touch-icon.png
 # Documentation screenshots (kept small; excluded from the Vercel bundle via .vercelignore)
 !docs/img/*.png
+# Master photos: the untouched originals we derive the served crops from. Needed to
+# re-cut other sizes later (LP hero/before), so they must be versioned. docs/ is in
+# .vercelignore, so these never reach the serverless bundle.
+!docs/src/*.png
+!docs/src/*.jpg
