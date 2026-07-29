@@ -87,6 +87,15 @@ SITE_BASE_URL = (os.environ.get("SITE_BASE_URL", "").strip().rstrip("/") or _DEF
 TRY_DEMO_ENABLED = os.environ.get("ENABLE_TRY_DEMO", "").strip() == "1"
 
 
+# ---- 収集結果の並び順（指示016）----------------------------------------------
+# 'off' 配置しやすさを計算しない（従来どおり・追加コスト0）
+# 'log' 計算してブラウザのコンソールに出すだけ。並び順は変えない
+# 'on'  配置しやすさスコア順に並べ替える
+# 未設定なら room-studio.html に書かれた既定値をそのまま使う。運営が戻すときは Vercel の
+# 環境変数 COLLECT_RANKING に off または log を入れるだけでよい。
+COLLECT_RANKING = os.environ.get("COLLECT_RANKING", "").strip().lower()
+
+
 # ---- analytics (GA4) ---------------------------------------------------------
 # Set env GA4_ID (e.g. G-XXXXXXXXXX) to enable analytics: the id is stamped into
 # the served HTML, where the app then loads gtag.js. Unset = nothing is sent.
@@ -113,10 +122,19 @@ def inject_base_url(html):
     return html.replace(_DEFAULT_BASE, SITE_BASE_URL)
 
 
+def inject_collect_ranking(html):
+    """Override the app's COLLECT_RANKING default from the environment (no-op when unset
+    or invalid, so a typo cannot silently change behaviour)."""
+    if COLLECT_RANKING not in ("off", "log", "on"):
+        return html
+    return re.sub(r"const COLLECT_RANKING='[a-z]*'",
+                  "const COLLECT_RANKING='" + COLLECT_RANKING + "'", html, count=1)
+
+
 def render_app_html(html):
-    """Serve-time injections for the single-file app: base URL + GA4.
+    """Serve-time injections for the single-file app: base URL + GA4 + collect ranking.
     Both the Vercel entry (api/index.py) and local server.py call this."""
-    return inject_ga4(inject_base_url(html))
+    return inject_collect_ranking(inject_ga4(inject_base_url(html)))
 
 
 def ga4_head_snippet():
@@ -139,7 +157,9 @@ def log_track(event):
     On Vercel this lands in the function logs; locally it prints to the server console.
     (No DB in this phase — swap this for a real sink later without touching callers.)"""
     try:
-        event = dict(event or {})
+        # 空欄は落とす（/track はイベント種別ごとに使う項目が違うので、そのまま出すと
+        # 1行の大半が空文字になる）
+        event = {k: v for k, v in dict(event or {}).items() if v not in ("", None)}
         event.setdefault("ts", int(time.time()))
         print("TRACK " + json.dumps(event, ensure_ascii=False))
     except Exception:  # noqa: BLE001

@@ -108,10 +108,17 @@ def bgcut(url: str = "", v: str = "1"):
 
 
 @app.get("/track")
-def track(id: str = "", type: str = "", url: str = "", src: str = "", shop: str = ""):
+def track(id: str = "", type: str = "", url: str = "", src: str = "", shop: str = "",
+          item_category: str = "", count: str = "", rank: str = "", score: str = "",
+          ranked: str = "", source: str = "", item_id: str = ""):
     # Purchase/affiliate click logging. Self-clicks are excluded client-side (localStorage opt-out).
     # `shop` (maker/storefront) enables per-maker click analysis later.
-    _site.log_track({"id": id, "type": type, "url": url, "src": src, "shop": shop})
+    # 指示016 also routes collect_done / collect_shop / place_item here: collect_shop is the
+    # denominator (images handed out per shop), place_item the numerator (actually placed).
+    # Nothing personal is accepted and no score is persisted server-side.
+    _site.log_track({"id": id or item_id, "type": type, "url": url, "src": src, "shop": shop,
+                     "cat": item_category, "count": count, "rank": rank, "score": score,
+                     "ranked": ranked, "source": source})
     return Response(status_code=204)
 
 
