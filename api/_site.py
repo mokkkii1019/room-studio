@@ -297,7 +297,7 @@ def _phrase(text):
     return "".join(f"<span>{esc(p)}</span>" for p in parts)
 
 
-def _img(name, alt, cls, w, h, eager=False):
+def _img(name, alt, cls, w, h, eager=False, ver=""):
     """A filled image slot (the operator has dropped a file in /lp-assets).
     Space is reserved twice over — the container's aspect-ratio and the intrinsic
     width/height attributes — so neither path can produce layout shift.
@@ -305,7 +305,7 @@ def _img(name, alt, cls, w, h, eager=False):
     delay LCP. Everything below the fold stays lazy."""
     esc = _html.escape
     load = ('loading="eager" fetchpriority="high"' if eager else 'loading="lazy"')
-    return (f'<figure class="{("media " + cls).strip()}"><img src="/lp-assets/{esc(name)}" '
+    return (f'<figure class="{("media " + cls).strip()}"><img src="/lp-assets/{esc(name)}{ver}" '
             f'alt="{esc(alt)}" width="{w}" height="{h}" {load}></figure>')
 
 
@@ -483,13 +483,18 @@ def landing_html(slug, assets_dir=None):
     # photo, else a calm inline SVG illustration so it is never empty. Each tier
     # upgrades automatically as the operator drops files into /lp-assets.
     # The hero is above the fold, hence eager.
-    hero_vid = [(f"/lp-assets/{slug}-hero{ext}", ct) for ext, ct in _LP_VIDEO_CT.items()
+    hero_vid = [(f"/lp-assets/{slug}-hero{ext}" + _asset_ver(assets_dir, f"{slug}-hero{ext}",
+                                                              _LP_VIDEO_CT), ct)
+                for ext, ct in _LP_VIDEO_CT.items()
                 if _lp_asset_path(assets_dir, f"{slug}-hero{ext}", _LP_VIDEO_CT)
                 ] if assets_dir else []
     if hero_vid:
-        hero_fig = _hero_video(hero_vid, f"/lp-assets/{slug}-hero" if _has(f"{slug}-hero") else "")
+        hero_fig = _hero_video(hero_vid, (f"/lp-assets/{slug}-hero"
+                                          + _asset_ver(assets_dir, f"{slug}-hero"))
+                               if _has(f"{slug}-hero") else "")
     elif _has(f"{slug}-hero"):
-        hero_fig = _img(f"{slug}-hero", hero_alt, "media-fill", 2400, 1350, eager=True)
+        hero_fig = _img(f"{slug}-hero", hero_alt, "media-fill", 2400, 1350, eager=True,
+                        ver=_asset_ver(assets_dir, f"{slug}-hero"))
     else:
         hero_fig = _hero_svg(hero_alt)
     # The hero is now full-bleed with the copy sitting ON the media, so it always
@@ -510,7 +515,8 @@ def landing_html(slug, assets_dir=None):
         both = _has(f"{slug}-before") and _has(f"{slug}-after")
 
         def _side(role, alt, note, label, cls):
-            fig = (_img(f"{slug}-{role}", alt, "", 1600, 900) if _has(f"{slug}-{role}")
+            fig = (_img(f"{slug}-{role}", alt, "", 1600, 900,
+                        ver=_asset_ver(assets_dir, f"{slug}-{role}")) if _has(f"{slug}-{role}")
                    else _img_ph("", note))
             return (f'<div class="cmp-side {cls}">{fig}'
                     f'<span class="cmp-tag">{esc(label)}</span></div>')
@@ -729,9 +735,12 @@ def landing_html(slug, assets_dir=None):
   .js .cmp:not(.cmp-static) .cmp-side .media{{position:absolute;inset:0;aspect-ratio:auto}}
   .js .cmp:not(.cmp-static) .cmp-side.a{{clip-path:inset(0 0 0 var(--x,50%))}}
   .js .cmp:not(.cmp-static) .cmp-side.a .cmp-tag{{left:auto;right:12px}}
+  /* pointer-events:none — ポインタ操作は .cmp 側で拾うので、range に横取りさせない。
+     キーボードのフォーカスは pointer-events と無関係なので従来どおり効く。 */
   .js .cmp:not(.cmp-static) .cmp-range{{display:block;position:absolute;inset:0;width:100%;height:100%;
-    margin:0;padding:0;opacity:0;z-index:4;cursor:ew-resize;background:none;
+    margin:0;padding:0;opacity:0;z-index:4;background:none;pointer-events:none;
     -webkit-appearance:none;appearance:none}}
+  .js .cmp:not(.cmp-static){{cursor:ew-resize}}
   .cmp-range::-webkit-slider-thumb{{-webkit-appearance:none;width:56px;height:100%;cursor:ew-resize}}
   .cmp-range::-moz-range-thumb{{width:56px;height:100%;border:0;border-radius:0;background:transparent}}
   .js .cmp:not(.cmp-static) .cmp-bar{{display:block;position:absolute;top:0;bottom:0;
@@ -864,8 +873,34 @@ def landing_html(slug, assets_dir=None):
   }}
   [].forEach.call(d.querySelectorAll("[data-cmp]"),function(c){{
     var r=c.querySelector(".cmp-range");if(!r)return;
-    var set=function(){{c.style.setProperty("--x",r.value+"%")}};
-    r.addEventListener("input",set);set();
+    var set=function(v){{
+      v=v<0?0:(v>100?100:v);
+      r.value=v; c.style.setProperty("--x",v+"%");
+    }};
+    r.addEventListener("input",function(){{ set(+r.value); }});
+    set(+r.value);
+    /* ネイティブの <input type=range> はタッチでの掴み方・トラックタップの挙動が
+       端末差が大きく、実機のスマホで「押しても動かない」状態になった。ポインタ操作は
+       自前で拾って値に変換する。range 自体はキーボード操作とアクセシビリティのために残す
+       （フォーカスして矢印キーで動かせる）。 */
+    var drag=false;
+    var at=function(e){{
+      var b=c.getBoundingClientRect();
+      if(b.width) set(((e.clientX-b.left)/b.width)*100);
+    }};
+    c.addEventListener("pointerdown",function(e){{
+      drag=true;
+      try{{ c.setPointerCapture(e.pointerId); }}catch(_){{}}
+      at(e); e.preventDefault();
+    }});
+    c.addEventListener("pointermove",function(e){{ if(drag){{ at(e); e.preventDefault(); }} }});
+    var end=function(e){{
+      if(!drag) return;
+      drag=false;
+      try{{ c.releasePointerCapture(e.pointerId); }}catch(_){{}}
+    }};
+    c.addEventListener("pointerup",end);
+    c.addEventListener("pointercancel",end);
   }});
   var dock=d.querySelector(".dock"),hc=d.querySelector(".hero-cta");
   if(dock&&hc&&"IntersectionObserver" in window){{
@@ -1176,8 +1211,8 @@ def try_html(assets_dir=None):
             "模様替えの見え方を30秒でためせます。登録もインストールも不要です。")
     has_room = bool(assets_dir) and _lp_asset_path(assets_dir, TRY_ROOM["img"]) is not None
     has_furni = bool(assets_dir) and _lp_asset_path(assets_dir, "try-furni-1") is not None
-    room_src = f"/lp-assets/{TRY_ROOM['img']}" if has_room else ""
-    furni_src = "/lp-assets/try-furni-1" if has_furni else ""
+    room_src = (f"/lp-assets/{TRY_ROOM['img']}" + _asset_ver(assets_dir, TRY_ROOM["img"])) if has_room else ""
+    furni_src = ("/lp-assets/try-furni-1" + _asset_ver(assets_dir, "try-furni-1")) if has_furni else ""
     prod_html = ""
     if TRY_PRODUCTS:
         rows = "\n".join(
@@ -1416,8 +1451,8 @@ def demo_html(assets_dir=None, length=15, ratio="16x9", clean=False, preset=None
     has_room = bool(assets_dir) and _lp_asset_path(assets_dir, TRY_ROOM["img"]) is not None
     has_furni = bool(assets_dir) and _lp_asset_path(assets_dir, "try-furni-1") is not None
     cfg = json.dumps({
-        "img": f"/lp-assets/{TRY_ROOM['img']}" if has_room else "",
-        "furni": "/lp-assets/try-furni-1" if has_furni else "",
+        "img": (f"/lp-assets/{TRY_ROOM['img']}" + _asset_ver(assets_dir, TRY_ROOM["img"])) if has_room else "",
+        "furni": ("/lp-assets/try-furni-1" + _asset_ver(assets_dir, "try-furni-1")) if has_furni else "",
         "walls": TRY_ROOM["walls"], "floor": TRY_ROOM["floor"], "frect": TRY_ROOM["furni"],
     }, ensure_ascii=False)
     steps = json.dumps(DEMO_PRESETS[preset], ensure_ascii=False)
@@ -1525,6 +1560,23 @@ _LP_ASSET_CT = dict(_LP_IMG_CT, **_LP_VIDEO_CT)
 # is a legal partial answer — so a hero video larger than the cap still streams
 # instead of failing outright. See docs/LP_IMAGE_GUIDE.md for the recommended size.
 _LP_MAX_CHUNK = 3 * 1024 * 1024
+
+
+def _asset_ver(assets_dir, name, types=None):
+    """`?v=...` を返す。ファイルの mtime とサイズから作る内容依存のトークン。
+
+    画像は同じ名前で差し替えられる運用なので、URLが変わらないと 24時間の
+    Cache-Control のせいで古い画像が出続ける（実際に、差し替えたのにスマホだけ
+    前の画像が表示され続ける事象が起きた）。バージョンを付ければURLが変わるため
+    即座に反映され、かつキャッシュは長いまま効かせられる。"""
+    p = _lp_asset_path(assets_dir, name, types) if assets_dir else None
+    if not p:
+        return ""
+    try:
+        st = os.stat(p)
+        return "?v=%x" % (((int(st.st_mtime) & 0xFFFFFFF) << 16) ^ (st.st_size & 0xFFFF))
+    except OSError:
+        return ""
 
 
 def _lp_asset_path(assets_dir, name, types=None):
