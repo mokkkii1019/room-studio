@@ -153,9 +153,10 @@
   .zoom-ctl button:hover{background:var(--panel-2); color:var(--ink)}
   .zoom-ctl #zoomLabel{font-family:"JetBrains Mono",monospace; font-size:11px; min-width:44px; text-align:center; display:inline-block; color:var(--ink)}
   /* on-device status pill (README §4.4) */
-  .status-pill{position:absolute; right:14px; bottom:14px; display:flex; align-items:center; gap:7px;
-    background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:6px 12px; box-shadow:var(--shadow); z-index:6; font-size:11px; color:var(--muted)}
-  .status-pill .sdot{width:8px;height:8px;border-radius:50%;background:var(--on); flex:0 0 auto; animation:rs-pulse 2.4s ease-in-out infinite}
+  /* 状態表示はフッターの一項目。キャンバスに浮かせると編集中の画像に重なるため、
+     浮遊するピルではなくフッターの文字列として置く（枠・影・角丸なし）。 */
+  .status-pill{display:flex; align-items:center; gap:6px; flex:0 0 auto; white-space:nowrap; color:var(--muted)}
+  .status-pill .sdot{width:6px;height:6px;border-radius:50%;background:var(--on); flex:0 0 auto; animation:rs-pulse 2.4s ease-in-out infinite}
   @keyframes rs-pulse{0%,100%{opacity:1; box-shadow:0 0 0 0 rgba(90,160,106,.5)} 50%{opacity:.55; box-shadow:0 0 0 5px rgba(90,160,106,0)}}
   .empty-hint{
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -441,10 +442,13 @@
     .canvas-viewport{padding:12px}
     .scroll{padding:12px}
     .zoom-ctl{left:10px; bottom:10px}
-    .status-pill{right:10px; bottom:10px}
     .seg button{padding:8px 4px}
     .stage-wrap{height:44vh}
-    .site-foot{font-size:9.5px; padding:4px 10px; gap:8px}
+    /* 狭い幅ではPR表記が省略されてしまうので、詰めずに折り返させる */
+    .site-foot{font-size:9.5px; padding:4px 10px; gap:4px 8px; flex-wrap:wrap}
+    .site-foot .pr{white-space:normal; overflow:visible; text-overflow:clip; flex:1 0 100%}
+    .site-foot .foot-links{margin-left:0}
+    .status-pill{margin-left:auto}
     .tut-box{width:auto; left:12px!important; right:12px!important; max-width:none}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
@@ -544,9 +548,6 @@
       <button id="zoomOut" title="縮小">−</button>
       <button id="zoomReset" title="全体表示にリセット"><span id="zoomLabel">100%</span></button>
       <button id="zoomIn" title="拡大">＋</button>
-    </div>
-    <div class="status-pill" id="statusPill" style="display:none" title="画像は端末内だけで処理され、どこにも送信されません">
-      <span class="sdot"></span><span id="statusText">端末内で処理</span>
     </div>
     <button class="reopen reopen-l" id="reopenPanel" title="詳細パネルを表示">›</button>
     <button class="reopen reopen-r" id="reopenLayers" title="レイヤーを表示">‹</button>
@@ -919,6 +920,11 @@
     <a href="/about" target="_blank" rel="noopener">運営者情報</a>
     <a href="/privacy" target="_blank" rel="noopener">プライバシー</a>
     <a href="/tokushoho" target="_blank" rel="noopener">特商法表記</a>
+  </span>
+  <!-- 状態表示。以前はキャンバス右下に浮かせていたが、編集中の画像に重なるためフッターへ移した。
+       .foot-links の後に置くことで、非表示時（画像未読込）もフッターの並びが変わらない。 -->
+  <span class="status-pill" id="statusPill" style="display:none" title="画像は端末内だけで処理され、どこにも送信されません">
+    <span class="sdot"></span><span id="statusText">端末内で処理</span>
   </span>
 </footer>
 
@@ -1888,7 +1894,8 @@ function updateEraseBadge(){ const b=$('eraseEngine'); if(!b) return;
   else { b.textContent='○ ブラウザ内補完（PatchMatch）で動作中'; b.className='engine'; }
   updateStatusPill();
 }
-/* キャンバス右下の状態ピル（README §4.4）。画像は端末内で処理という主旨＋補完エンジン状態。 */
+/* フッター右端の状態表示（README §4.4）。画像は端末内で処理という主旨＋補完エンジン状態。
+   もとはキャンバス右下に浮かせていたが、編集中の画像に重なるためフッターへ移した。 */
 function updateStatusPill(){ const t=$('statusText'); if(!t) return;
   t.textContent = SERVER.inpaint ? '端末内で処理 · AI補完 接続' : '端末内で処理 · サーバー未接続'; }
 function dataURLToCanvas(url, w, h){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(im,0,0,w,h); res(c); }; im.onerror=rej; im.src=url; }); }
