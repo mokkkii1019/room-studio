@@ -136,12 +136,57 @@ alt と `width`/`height` はコード側で付与済み（CLSが出ないよう�
 旧URL `/lp/hokuo-interior` は新URLへ301）。
 before/after は**床・壁だけを変えた例**にしてください（家具を置くと🔴の楽天ルールに触れます）。
 
-| ファイル名 | 種別 | 内容の指示 |
-|---|---|---|
-| `moyougae-simulation-hero` | A | **「変わる前のふつうの部屋」**（下の🏠を必読） |
-| `moyougae-simulation-hero.mp4` | A | 同上を**動画**で（任意。置くと写真より優先。上の🎬参照） |
-| `moyougae-simulation-before` | B | Room Studioで**床と壁の色を変える前**のふつうの部屋 |
-| `moyougae-simulation-after` | B | 同じ部屋をRoom Studioで**床と壁だけ色・素材を変えた後** |
+| ファイル名 | 種別 | 内容の指示 | 状態 |
+|---|---|---|---|
+| `moyougae-simulation-hero` | A | **「変わる前のふつうの部屋」**（下の🏠を必読） | 差し替え検討中 |
+| `moyougae-simulation-hero.mp4` | A | 同上を**動画**で（任意。置くと写真より優先。上の🎬参照） | 未配置 |
+| `moyougae-simulation-before` | B | Room Studioで**床と壁の色を変える前**のふつうの部屋 | ✅ **配置済み**（下記） |
+| `moyougae-simulation-after` | B | 同じ部屋をRoom Studioで**床と壁だけ色・素材を変えた後** | ⏳ **運営が作成**（下記） |
+
+---
+
+## 🔧 before は配置済み／after の作り方（運営作業・2026-07-29）
+
+### before（配置済み・作業不要）
+
+`/try` 用に受領した空室写真から切り出して配置しました。
+
+| | |
+|---|---|
+| ファイル | **`lp-assets/moyougae-simulation-before.webp`** |
+| 実寸・比率・容量 | **1600×900 / 16:9 / 149KB** |
+| 作り方 | `docs/src/try-room-1-master.png`（1100×733）の**上89px・下26pxを落として**1100×618にし、1600×900へ拡大 |
+
+天井側を多めに落としてあります。窓が中央に残り、床の量も保たれる構図です。
+
+### after（運営がRoom Studioで作成）
+
+| | |
+|---|---|
+| ファイル名 | **`moyougae-simulation-after`**（拡張子任意。`.webp` 推奨） |
+| 置き場所 | **`lp-assets/`** |
+| 実寸・比率 | **1600×900 / 16:9**（beforeと完全に同一） |
+| 容量 | **250KB以下** |
+
+**手順（画角を揃えるための肝）**
+
+1. **`lp-assets/moyougae-simulation-before.webp` そのものをRoom Studioに読み込む**
+   - ⚠️ `docs/src/try-room-1-master.png`（原本）や `try-room-1.webp` は**使わないでください**。
+     トリミングが違うため、beforeと画角がずれてスライダーがガタつきます
+   - beforeファイル自体を読み込めば、**画角も実寸も自動的に一致**します
+2. **壁と床の色・素材だけを変える**（家具は置かない）
+3. 「共有・書き出し」でPNG書き出し → WebPに変換して250KB以下に圧縮
+4. `lp-assets/moyougae-simulation-after.webp` として配置
+
+**変更してよいのは壁と床だけです。**
+
+🔴 **家具は置かないでください。** 楽天から収集した家具を配置したキャプチャをLPに載せることは
+楽天ウェブサービス利用規約に反します（上の🔴参照）。壁・床の色替えだけで
+before/after は十分成立します。天井を変えるかは任意ですが、
+`/try` と揃えるなら白のままが自然です。
+
+**afterを置くと自動でドラッグ比較スライダーになります**（2枚そろったときだけ）。
+それまでは before と破線のプレースホルダが横並びで出ます。
 
 ---
 
