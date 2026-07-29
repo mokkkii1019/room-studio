@@ -912,12 +912,36 @@ TRY_FLOOR_COLORS = [
 # サンプル部屋。`img` のファイルが lp-assets/ にあればそれを、無ければ簡易SVG相当の
 # プレースホルダをキャンバスに描く（どちらでも再着色の経路は同一）。
 # poly は 0..1 の正規化座標。**窓やドアは避けて定義する**（囲むと一緒に着色されるため）。
+# `walls` は面ごとのポリゴンの配列（左・正面・右など）。1枚の平面しか無い部屋なら1要素でよい。
+# **天井は含めない**（理由は docs/BUZZ_FOUNDATION_PLAN.md）。
+# 座標は 0..1 の正規化。実写真に差し替えるときは、この座標だけ写真に合わせて引き直す。
+#
+# 座標は try-room-1（白壁3面＋オーク床の空室・1100x733）から実測して定義した。
+# 壁/床の境界は「下向きに走査して暖色（木床）になる最初の行」を列ごとに拾って直線を当て、
+# 壁/天井の境界は白同士で目視できないためコントラストを伸ばして稜線を読み取っている。
+# 奥壁は窓を避けるため「窓の左・窓の上・窓の右」の3枚に割っている（1枚の多角形に穴を
+# 開ける代わり。walls が配列なので素直に表現できる）。
 TRY_ROOM = {
     "img": "try-room-1",
-    "wall": [[0.0, 0.0], [1.0, 0.0], [1.0, 0.605], [0.0, 0.605]],
-    "floor": [[0.0, 0.605], [1.0, 0.605], [1.0, 1.0], [0.0, 1.0]],
+    "walls": [
+        # 左壁: 天井稜線 (0,0.115)→(0.25,0.245)、床線 (0,0.784)→(0.25,0.633)
+        [[0.000, 0.115], [0.250, 0.245], [0.250, 0.633], [0.000, 0.784]],
+        # 奥壁・窓の左
+        [[0.250, 0.245], [0.412, 0.243], [0.412, 0.620], [0.300, 0.623], [0.250, 0.633]],
+        # 奥壁・窓の上（窓の開口 x0.412-0.578 / y0.293-0.607 を避ける）
+        [[0.412, 0.243], [0.578, 0.242], [0.578, 0.293], [0.412, 0.293]],
+        # 奥壁・窓の右（x0.665 付近に入隅があり床線が一段下がる）
+        [[0.578, 0.242], [0.755, 0.232], [0.755, 0.649], [0.680, 0.643],
+         [0.665, 0.623], [0.650, 0.618], [0.578, 0.619]],
+        # 右壁: 天井稜線 (0.755,0.232)→(1,0.075)、床線 (0.755,0.649)→(1,0.816)
+        [[0.755, 0.232], [1.000, 0.075], [1.000, 0.816], [0.755, 0.649]],
+    ],
+    "floor": [[0.000, 0.784], [0.250, 0.633], [0.300, 0.623], [0.650, 0.618],
+              [0.665, 0.623], [0.680, 0.643], [0.755, 0.649], [1.000, 0.816],
+              [1.000, 1.000], [0.000, 1.000]],
     # 家具プレースホルダの配置（正規化）。実画像 try-furni-1 があればそれを描く。
-    "furni": [0.30, 0.44, 0.46, 0.34],
+    # 奥壁の手前・床の上に収まる位置。
+    "furni": [0.32, 0.595, 0.36, 0.195],
 }
 
 # 収益接点。楽天の商品は実行時にAPIで取るものでURLを固定できないため、既定は空。
@@ -968,7 +992,7 @@ def try_html(assets_dir=None):
     }, ensure_ascii=False)
     cfg = json.dumps({
         "img": room_src, "furni": furni_src,
-        "wall": TRY_ROOM["wall"], "floor": TRY_ROOM["floor"], "frect": TRY_ROOM["furni"],
+        "walls": TRY_ROOM["walls"], "floor": TRY_ROOM["floor"], "frect": TRY_ROOM["furni"],
     }, ensure_ascii=False)
     return f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -1102,52 +1126,68 @@ def try_html(assets_dir=None):
   var W=cv.width, H=cv.height;
   var base=document.createElement('canvas'); base.width=W; base.height=H;
   var bx=base.getContext('2d',{{willReadFrequently:true}});
-  var layers={{}}, state={{wall:'',floor:'',furni:false,before:false}}, furniImg=null;
+  var groups={{}}, state={{wall:'',floor:'',furni:false,before:false}}, furniImg=null;
 
   function ev(name,params){{ try{{ if(window.gtag) window.gtag('event',name,params||{{}}); }}catch(e){{}} }}
 
   /* --- 素の部屋を描く。写真があればそれを cover で敷き、無ければプレースホルダの
      部屋を描く。どちらでも以降の再着色の経路は同一なので、写真が来たら差し替わるだけ。 --- */
+  function fill(c,poly,style){{
+    c.beginPath();
+    poly.forEach(function(p,i){{ var x=p[0]*W, y=p[1]*H; if(i) c.lineTo(x,y); else c.moveTo(x,y); }});
+    c.closePath(); c.fillStyle=style; c.fill();
+  }}
+  /* 実写真が来るまでのプレースホルダ。一点透視で左・正面・右の壁と床を描き、
+     3面に**わざと違う明るさ**を与える（正面が最も明るく、左が最も暗い）。
+     再着色後もこの明暗差が残ることが、面ごとの光を潰していない証拠になる。
+     天井は描くが着色対象のポリゴンには入れない＝除外の挙動もここで確認できる。 */
   function drawPlaceholder(c){{
-    var hz=CFG.wall[2][1]*H;                      // 壁と床の境目
-    c.fillStyle='#E4E0D8'; c.fillRect(0,0,W,hz);   // 壁
-    var g=c.createLinearGradient(0,0,W,hz);        // 窓からの光を思わせる淡いむら
-    g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(.55,'rgba(255,255,255,0)');
-    c.fillStyle=g; c.fillRect(0,0,W,hz);
-    c.fillStyle='#CDBFA8'; c.fillRect(0,hz,W,H-hz); // 床
-    var fg=c.createLinearGradient(0,hz,0,H);        // 奥ほど暗い＝明暗差を残す確認用
-    fg.addColorStop(0,'rgba(0,0,0,.16)'); fg.addColorStop(1,'rgba(255,255,255,.10)');
-    c.fillStyle=fg; c.fillRect(0,hz,W,H-hz);
-    for(var i=0;i<26;i++){{                          // 床板の目地（質感が残ることの確認用）
-      c.fillStyle='rgba(0,0,0,.045)';
-      c.fillRect(0, hz+((H-hz)/26)*i, W, 1);
-    }}
+    fill(c,[[0,0],[0.22,0.10],[0.78,0.10],[1,0]],'#F3F1ED');   // 天井（着色対象外）
+    fill(c,CFG.walls[0],'#D8D2C8');                            // 左壁（暗め）
+    fill(c,CFG.walls[1],'#EAE6DE');                            // 正面壁（明るい）
+    fill(c,CFG.walls[2],'#E0DAD1');                            // 右壁（中間）
+    fill(c,CFG.floor,'#CDBFA8');                               // 床
+    var hz=0.62*H, fg=c.createLinearGradient(0,hz,0,H);        // 奥ほど暗い＝明暗差
+    fg.addColorStop(0,'rgba(0,0,0,.18)'); fg.addColorStop(1,'rgba(255,255,255,.10)');
+    c.save(); c.beginPath();
+    CFG.floor.forEach(function(p,i){{ var x=p[0]*W, y=p[1]*H; if(i) c.lineTo(x,y); else c.moveTo(x,y); }});
+    c.closePath(); c.clip(); c.fillStyle=fg; c.fillRect(0,hz,W,H-hz);
+    for(var i=0;i<20;i++){{ c.fillStyle='rgba(0,0,0,.05)'; c.fillRect(0,hz+((H-hz)/20)*i,W,1); }}
+    c.restore();
   }}
   /* 窓・巾木は面の「上」に描く。壁ポリゴンに含めると一緒に着色されてしまうため、
      実写真を使うときも同じ理由でポリゴンは窓やドアを避けて定義する。 */
   function drawFg(c){{
     if(CFG.img) return;                            // 実写真のときは前景を描かない
-    var hz=CFG.wall[2][1]*H;
-    c.fillStyle='#F7F5F1'; c.fillRect(W*0.06,H*0.10,W*0.26,H*0.34);
-    c.strokeStyle='rgba(42,40,36,.35)'; c.lineWidth=3;
-    c.strokeRect(W*0.06,H*0.10,W*0.26,H*0.34);
-    c.beginPath(); c.moveTo(W*0.19,H*0.10); c.lineTo(W*0.19,H*0.44); c.stroke();
-    c.fillStyle='rgba(42,40,36,.16)'; c.fillRect(0,hz-6,W,6);
+    c.fillStyle='#F8F6F2'; c.fillRect(W*0.28,H*0.18,W*0.20,H*0.28);
+    c.strokeStyle='rgba(42,40,36,.32)'; c.lineWidth=3;
+    c.strokeRect(W*0.28,H*0.18,W*0.20,H*0.28);
+    c.beginPath(); c.moveTo(W*0.38,H*0.18); c.lineTo(W*0.38,H*0.46); c.stroke();
+    c.fillStyle='rgba(42,40,36,.14)'; c.fillRect(W*0.22,H*0.62-5,W*0.56,5);
   }}
   function drawFurni(c){{
     if(furniImg){{
       c.drawImage(furniImg, CFG.frect[0]*W, CFG.frect[1]*H, CFG.frect[2]*W, CFG.frect[3]*H);
       return;
     }}
+    /* 実画像 try-furni-1 が未配置のときのシルエット。面ごとに明度を変えて
+       背もたれ・座面・肘掛けを描き分けないと、ただの板に見えてしまう。 */
     var x=CFG.frect[0]*W, y=CFG.frect[1]*H, w=CFG.frect[2]*W, h=CFG.frect[3]*H;
-    c.fillStyle='#B9A894';                          // 家具プレースホルダ（ソファのシルエット）
-    c.fillRect(x, y+h*0.30, w, h*0.52);
-    c.fillRect(x+w*0.02, y, w*0.96, h*0.42);
-    c.fillStyle='rgba(0,0,0,.14)';
-    c.fillRect(x+w*0.05, y+h*0.82, w*0.06, h*0.16);
-    c.fillRect(x+w*0.89, y+h*0.82, w*0.06, h*0.16);
-    c.fillStyle='rgba(0,0,0,.10)';
-    c.beginPath(); c.ellipse(x+w/2, y+h*0.99, w*0.56, h*0.06, 0, 0, 6.2832); c.fill();
+    var rr=function(px,py,pw,ph,r,fill){{
+      c.beginPath();
+      if(c.roundRect) c.roundRect(px,py,pw,ph,r); else c.rect(px,py,pw,ph);
+      c.fillStyle=fill; c.fill();
+    }};
+    c.fillStyle='rgba(0,0,0,.13)';                                  // 接地影
+    c.beginPath(); c.ellipse(x+w/2, y+h*0.99, w*0.52, h*0.07, 0, 0, 6.2832); c.fill();
+    rr(x+w*0.07, y+h*0.86, w*0.05, h*0.14, 2, '#8C7A6D');           // 脚
+    rr(x+w*0.88, y+h*0.86, w*0.05, h*0.14, 2, '#8C7A6D');
+    rr(x+w*0.04, y,        w*0.92, h*0.56, h*0.14, '#B3A08B');      // 背もたれ（やや暗い）
+    rr(x,        y+h*0.44, w,      h*0.44, h*0.13, '#C6B4A0');      // 座面（明るい）
+    rr(x,        y+h*0.30, w*0.11, h*0.58, h*0.10, '#AD9A85');      // 肘掛け 左
+    rr(x+w*0.89, y+h*0.30, w*0.11, h*0.58, h*0.10, '#AD9A85');      // 肘掛け 右
+    c.fillStyle='rgba(0,0,0,.10)';                                  // 座面の切れ目
+    c.fillRect(x+w*0.49, y+h*0.48, w*0.02, h*0.36);
   }}
 
   function bbox(poly){{
@@ -1165,14 +1205,14 @@ def try_html(assets_dir=None):
     poly.forEach(function(p,i){{ var px=p[0]*W, py=p[1]*H; if(i) x.lineTo(px,py); else x.moveTo(px,py); }});
     x.closePath(); x.clip(); x.drawImage(base,0,0); x.restore();
     var bb=bbox(poly);
-    var src=x.getImageData(bb.x,bb.y,bb.w,bb.h), sd=src.data, sum=0, n=0;
+    var src=x.getImageData(bb.x,bb.y,bb.w,bb.h), sd=src.data, sum=0, n=0;  // 合計輝度と画素数
     for(var i=0;i<sd.length;i+=4){{
       if(!sd[i+3]) continue;
       var r=sd[i],g=sd[i+1],bl=sd[i+2];
       var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
       sum+=(mx+mn)/510; n++;
     }}
-    return {{cv:c, ctx:x, bb:bb, src:src, meanL:n?sum/n:0.5}};
+    return {{cv:c, ctx:x, bb:bb, src:src, sumL:sum, n:n}};
   }}
   function hex2hs(hex){{
     var r=parseInt(hex.substr(1,2),16)/255, g=parseInt(hex.substr(3,2),16)/255, b=parseInt(hex.substr(5,2),16)/255;
@@ -1191,10 +1231,14 @@ def try_html(assets_dir=None):
      かける。ピクセルごとの明暗差（木目・陰影・光のむら）はそのまま残るので、ベタ塗りに
      ならずに「その部屋の壁が別の色だったら」に見える。オフセットを入れないと、
      ウォルナットのような暗い色を選んでも床が暗くならず不自然になる。 */
-  function tint(L,hex,strength){{
+  /* 壁が左・正面・右のように複数面あるとき、明度オフセットを面ごとに出すと
+     各面が同じ明るさへ正規化され、**面ごとの光の違い（正面は明るく側面は暗い）が
+     潰れて書き割りになる**。そのためオフセットはグループ全体の平均輝度から1つだけ
+     求め、全面に同じ値を適用する。面どうしの相対的な明暗差はそのまま残る。 */
+  function tint(L,hex,strength,meanL){{
     var s=L.src, d=L.ctx.createImageData(s.width,s.height), sd=s.data, dd=d.data;
     var t=hex2hs(hex), th=t[0], ts=t[1];
-    var dl=(t[2]-L.meanL)*0.92;                   // 面全体にかける明度オフセット
+    var dl=(t[2]-meanL)*0.92;                     // グループ共通の明度オフセット
     for(var i=0;i<sd.length;i+=4){{
       var a=sd[i+3];
       if(!a){{ dd[i+3]=0; continue; }}
@@ -1210,12 +1254,19 @@ def try_html(assets_dir=None):
     L.ctx.putImageData(d, L.bb.x, L.bb.y);
   }}
 
+  /* 面のグループ（壁=複数面 / 床=1面）。平均輝度はグループ単位で持つ。 */
+  function makeGroup(polys){{
+    var ls=polys.map(makeLayer), sum=0, n=0;
+    ls.forEach(function(L){{ sum+=L.sumL; n+=L.n; }});
+    return {{layers:ls, meanL:n?sum/n:0.5}};
+  }}
   function render(){{
     ctx.clearRect(0,0,W,H);
     ctx.drawImage(base,0,0);
     if(!state.before){{
       ['wall','floor'].forEach(function(k){{
-        if(state[k]) ctx.drawImage(layers[k].cv,0,0);
+        if(!state[k]) return;
+        groups[k].layers.forEach(function(L){{ ctx.drawImage(L.cv,0,0); }});
       }});
     }}
     drawFg(ctx);
@@ -1223,14 +1274,17 @@ def try_html(assets_dir=None):
   }}
   function setColor(kind,hex){{
     state[kind]=hex;
-    if(hex) tint(layers[kind], hex, kind==='wall'?0.86:0.80);
+    if(hex){{
+      var G=groups[kind], st=(kind==='wall'?0.86:0.80);
+      G.layers.forEach(function(L){{ tint(L,hex,st,G.meanL); }});
+    }}
     render();
   }}
 
   function boot(){{
-    layers.wall=makeLayer(CFG.wall); layers.floor=makeLayer(CFG.floor);
+    groups.wall=makeGroup(CFG.walls); groups.floor=makeGroup([CFG.floor]);
     render();
-    ev('try_view',{{has_photo:!!CFG.img}});
+    ev('try_view',{{has_photo:!!CFG.img, planes:CFG.walls.length}});
   }}
   function start(){{
     if(CFG.img){{
