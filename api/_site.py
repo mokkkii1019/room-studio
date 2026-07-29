@@ -297,16 +297,27 @@ def _phrase(text):
     return "".join(f"<span>{esc(p)}</span>" for p in parts)
 
 
-def _img(name, alt, cls, w, h, eager=False, ver=""):
+def _img(name, alt, cls, w, h, eager=False, ver="", hd=None, sizes="100vw"):
     """A filled image slot (the operator has dropped a file in /lp-assets).
     Space is reserved twice over — the container's aspect-ratio and the intrinsic
     width/height attributes — so neither path can produce layout shift.
     `eager` is for the hero only: it is above the fold, so lazy-loading it would
-    delay LCP. Everything below the fold stays lazy."""
+    delay LCP. Everything below the fold stays lazy.
+
+    `hd` is (name, ver, width) of a high-DPR variant; when present the browser
+    picks per device. Without it a full-bleed image is stretched by the DPR: a
+    1600px file on a DPR2 desktop is blown up 1.8-2.4x and the softness shows.
+    Phones stay on the 1x file (390 CSS px * DPR3 = 1170 <= 1600), so the bigger
+    file is only ever fetched where it is actually needed."""
     esc = _html.escape
     load = ('loading="eager" fetchpriority="high"' if eager else 'loading="lazy"')
-    return (f'<figure class="{("media " + cls).strip()}"><img src="/lp-assets/{esc(name)}{ver}" '
-            f'alt="{esc(alt)}" width="{w}" height="{h}" {load}></figure>')
+    srcset = ""
+    if hd:
+        hd_name, hd_ver, hd_w = hd
+        srcset = (f' srcset="/lp-assets/{esc(name)}{ver} {w}w, '
+                  f'/lp-assets/{esc(hd_name)}{hd_ver} {hd_w}w" sizes="{esc(sizes)}"')
+    return (f'<figure class="{("media " + cls).strip()}"><img src="/lp-assets/{esc(name)}{ver}"'
+            f'{srcset} alt="{esc(alt)}" width="{w}" height="{h}" {load}></figure>')
 
 
 def _img_ph(cls, note):
@@ -515,9 +526,12 @@ def landing_html(slug, assets_dir=None):
         both = _has(f"{slug}-before") and _has(f"{slug}-after")
 
         def _side(role, alt, note, label, cls):
+            # -2x があれば高DPRの端末だけがそれを取る。無ければ従来どおり1枚。
+            hd_nm = f"{slug}-{role}-2x"
+            hd = ((hd_nm, _asset_ver(assets_dir, hd_nm), 2400) if _has(hd_nm) else None)
             fig = (_img(f"{slug}-{role}", alt, "", 1600, 900,
-                        ver=_asset_ver(assets_dir, f"{slug}-{role}")) if _has(f"{slug}-{role}")
-                   else _img_ph("", note))
+                        ver=_asset_ver(assets_dir, f"{slug}-{role}"), hd=hd)
+                   if _has(f"{slug}-{role}") else _img_ph("", note))
             return (f'<div class="cmp-side {cls}">{fig}'
                     f'<span class="cmp-tag">{esc(label)}</span></div>')
         sides = (_side("before", ba["alt_b"], ba.get("ph_b", ""), ba["label_b"], "b")
