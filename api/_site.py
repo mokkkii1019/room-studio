@@ -950,6 +950,204 @@ TRY_ROOM = {
 TRY_PRODUCTS = []
 
 
+ROOM_ENGINE_JS = r"""/* /try と /demo が共有する部屋の描画エンジン。
+   ページ側は RS.init() で初期化し、setColor/setFurni/setBefore を叩くだけ。
+   ここに UI も計測も持たせない（/try はスウォッチ、/demo はタイムラインが叩く）。 */
+window.RS=(function(){
+  var cv, ctx;
+  var W, H;
+  var base;
+  var bx;
+  var groups={}, state={wall:'',floor:'',furni:false,before:false}, furniImg=null, CFG, onReady;
+
+  function ev(name,params){ try{ if(window.gtag) window.gtag('event',name,params||{}); }catch(e){} }
+
+  /* --- 素の部屋を描く。写真があればそれを cover で敷き、無ければプレースホルダの
+     部屋を描く。どちらでも以降の再着色の経路は同一なので、写真が来たら差し替わるだけ。 --- */
+  function fill(c,poly,style){
+    c.beginPath();
+    poly.forEach(function(p,i){ var x=p[0]*W, y=p[1]*H; if(i) c.lineTo(x,y); else c.moveTo(x,y); });
+    c.closePath(); c.fillStyle=style; c.fill();
+  }
+  /* 実写真が来るまでのプレースホルダ。一点透視で左・正面・右の壁と床を描き、
+     3面に**わざと違う明るさ**を与える（正面が最も明るく、左が最も暗い）。
+     再着色後もこの明暗差が残ることが、面ごとの光を潰していない証拠になる。
+     天井は描くが着色対象のポリゴンには入れない＝除外の挙動もここで確認できる。 */
+  function drawPlaceholder(c){
+    fill(c,[[0,0],[0.22,0.10],[0.78,0.10],[1,0]],'#F3F1ED');   // 天井（着色対象外）
+    fill(c,CFG.walls[0],'#D8D2C8');                            // 左壁（暗め）
+    fill(c,CFG.walls[1],'#EAE6DE');                            // 正面壁（明るい）
+    fill(c,CFG.walls[2],'#E0DAD1');                            // 右壁（中間）
+    fill(c,CFG.floor,'#CDBFA8');                               // 床
+    var hz=0.62*H, fg=c.createLinearGradient(0,hz,0,H);        // 奥ほど暗い＝明暗差
+    fg.addColorStop(0,'rgba(0,0,0,.18)'); fg.addColorStop(1,'rgba(255,255,255,.10)');
+    c.save(); c.beginPath();
+    CFG.floor.forEach(function(p,i){ var x=p[0]*W, y=p[1]*H; if(i) c.lineTo(x,y); else c.moveTo(x,y); });
+    c.closePath(); c.clip(); c.fillStyle=fg; c.fillRect(0,hz,W,H-hz);
+    for(var i=0;i<20;i++){ c.fillStyle='rgba(0,0,0,.05)'; c.fillRect(0,hz+((H-hz)/20)*i,W,1); }
+    c.restore();
+  }
+  /* 窓・巾木は面の「上」に描く。壁ポリゴンに含めると一緒に着色されてしまうため、
+     実写真を使うときも同じ理由でポリゴンは窓やドアを避けて定義する。 */
+  function drawFg(c){
+    if(CFG.img) return;                            // 実写真のときは前景を描かない
+    c.fillStyle='#F8F6F2'; c.fillRect(W*0.28,H*0.18,W*0.20,H*0.28);
+    c.strokeStyle='rgba(42,40,36,.32)'; c.lineWidth=3;
+    c.strokeRect(W*0.28,H*0.18,W*0.20,H*0.28);
+    c.beginPath(); c.moveTo(W*0.38,H*0.18); c.lineTo(W*0.38,H*0.46); c.stroke();
+    c.fillStyle='rgba(42,40,36,.14)'; c.fillRect(W*0.22,H*0.62-5,W*0.56,5);
+  }
+  function drawFurni(c){
+    if(furniImg){
+      c.drawImage(furniImg, CFG.frect[0]*W, CFG.frect[1]*H, CFG.frect[2]*W, CFG.frect[3]*H);
+      return;
+    }
+    /* 実画像 try-furni-1 が未配置のときのシルエット。面ごとに明度を変えて
+       背もたれ・座面・肘掛けを描き分けないと、ただの板に見えてしまう。 */
+    var x=CFG.frect[0]*W, y=CFG.frect[1]*H, w=CFG.frect[2]*W, h=CFG.frect[3]*H;
+    var rr=function(px,py,pw,ph,r,fill){
+      c.beginPath();
+      if(c.roundRect) c.roundRect(px,py,pw,ph,r); else c.rect(px,py,pw,ph);
+      c.fillStyle=fill; c.fill();
+    };
+    c.fillStyle='rgba(0,0,0,.13)';                                  // 接地影
+    c.beginPath(); c.ellipse(x+w/2, y+h*0.99, w*0.52, h*0.07, 0, 0, 6.2832); c.fill();
+    rr(x+w*0.07, y+h*0.86, w*0.05, h*0.14, 2, '#8C7A6D');           // 脚
+    rr(x+w*0.88, y+h*0.86, w*0.05, h*0.14, 2, '#8C7A6D');
+    rr(x+w*0.04, y,        w*0.92, h*0.56, h*0.14, '#B3A08B');      // 背もたれ（やや暗い）
+    rr(x,        y+h*0.44, w,      h*0.44, h*0.13, '#C6B4A0');      // 座面（明るい）
+    rr(x,        y+h*0.30, w*0.11, h*0.58, h*0.10, '#AD9A85');      // 肘掛け 左
+    rr(x+w*0.89, y+h*0.30, w*0.11, h*0.58, h*0.10, '#AD9A85');      // 肘掛け 右
+    c.fillStyle='rgba(0,0,0,.10)';                                  // 座面の切れ目
+    c.fillRect(x+w*0.49, y+h*0.48, w*0.02, h*0.36);
+  }
+
+  function bbox(poly){
+    var x0=1,y0=1,x1=0,y1=0;
+    poly.forEach(function(p){ x0=Math.min(x0,p[0]); y0=Math.min(y0,p[1]);
+                              x1=Math.max(x1,p[0]); y1=Math.max(y1,p[1]); });
+    return {x:Math.floor(x0*W), y:Math.floor(y0*H),
+             w:Math.ceil((x1-x0)*W), h:Math.ceil((y1-y0)*H)};
+  }
+  /* ポリゴンでクリップして素の部屋を写し取る＝これがそのままマスクになる（縁のAAも無料）。 */
+  function makeLayer(poly){
+    var c=document.createElement('canvas'); c.width=W; c.height=H;
+    var x=c.getContext('2d',{willReadFrequently:true});
+    x.save(); x.beginPath();
+    poly.forEach(function(p,i){ var px=p[0]*W, py=p[1]*H; if(i) x.lineTo(px,py); else x.moveTo(px,py); });
+    x.closePath(); x.clip(); x.drawImage(base,0,0); x.restore();
+    var bb=bbox(poly);
+    var src=x.getImageData(bb.x,bb.y,bb.w,bb.h), sd=src.data, sum=0, n=0;  // 合計輝度と画素数
+    for(var i=0;i<sd.length;i+=4){
+      if(!sd[i+3]) continue;
+      var r=sd[i],g=sd[i+1],bl=sd[i+2];
+      var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
+      sum+=(mx+mn)/510; n++;
+    }
+    return {cv:c, ctx:x, bb:bb, src:src, sumL:sum, n:n};
+  }
+  function hex2hs(hex){
+    var r=parseInt(hex.substr(1,2),16)/255, g=parseInt(hex.substr(3,2),16)/255, b=parseInt(hex.substr(5,2),16)/255;
+    var mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn, h=0, l=(mx+mn)/2;
+    var s=d===0?0:d/(1-Math.abs(2*l-1));
+    if(d!==0){ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0)h+=360; }
+    return [h,s,l];
+  }
+  function hsl2rgb(h,s,l){
+    var c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2, r=0,g=0,b=0;
+    if(h<60){r=c;g=x;} else if(h<120){r=x;g=c;} else if(h<180){g=c;b=x;}
+    else if(h<240){g=x;b=c;} else if(h<300){r=x;b=c;} else {r=c;b=x;}
+    return [(r+m)*255,(g+m)*255,(b+m)*255];
+  }
+  /* 色相・彩度は目標色に置き換え、明度は「面全体を目標色の明るさへ寄せる」オフセットだけ
+     かける。ピクセルごとの明暗差（木目・陰影・光のむら）はそのまま残るので、ベタ塗りに
+     ならずに「その部屋の壁が別の色だったら」に見える。オフセットを入れないと、
+     ウォルナットのような暗い色を選んでも床が暗くならず不自然になる。 */
+  /* 壁が左・正面・右のように複数面あるとき、明度オフセットを面ごとに出すと
+     各面が同じ明るさへ正規化され、**面ごとの光の違い（正面は明るく側面は暗い）が
+     潰れて書き割りになる**。そのためオフセットはグループ全体の平均輝度から1つだけ
+     求め、全面に同じ値を適用する。面どうしの相対的な明暗差はそのまま残る。 */
+  function tint(L,hex,strength,meanL){
+    var s=L.src, d=L.ctx.createImageData(s.width,s.height), sd=s.data, dd=d.data;
+    var t=hex2hs(hex), th=t[0], ts=t[1];
+    var dl=(t[2]-meanL)*0.92;                     // グループ共通の明度オフセット
+    for(var i=0;i<sd.length;i+=4){
+      var a=sd[i+3];
+      if(!a){ dd[i+3]=0; continue; }
+      var r=sd[i], g=sd[i+1], b=sd[i+2];
+      var mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b);
+      var nl=(mx+mn)/510+dl; nl=nl<0.03?0.03:(nl>0.97?0.97:nl);
+      var rgb=hsl2rgb(th,ts,nl);
+      dd[i]  = r+(rgb[0]-r)*strength;
+      dd[i+1]= g+(rgb[1]-g)*strength;
+      dd[i+2]= b+(rgb[2]-b)*strength;
+      dd[i+3]= a;
+    }
+    L.ctx.putImageData(d, L.bb.x, L.bb.y);
+  }
+
+  /* 面のグループ（壁=複数面 / 床=1面）。平均輝度はグループ単位で持つ。 */
+  function makeGroup(polys){
+    var ls=polys.map(makeLayer), sum=0, n=0;
+    ls.forEach(function(L){ sum+=L.sumL; n+=L.n; });
+    return {layers:ls, meanL:n?sum/n:0.5};
+  }
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(base,0,0);
+    if(!state.before){
+      ['wall','floor'].forEach(function(k){
+        if(!state[k]) return;
+        groups[k].layers.forEach(function(L){ ctx.drawImage(L.cv,0,0); });
+      });
+    }
+    drawFg(ctx);
+    if(state.furni && !state.before) drawFurni(ctx);
+  }
+  function setColor(kind,hex){
+    state[kind]=hex;
+    if(hex){
+      var G=groups[kind], st=(kind==='wall'?0.86:0.80);
+      G.layers.forEach(function(L){ tint(L,hex,st,G.meanL); });
+    }
+    render();
+  }
+
+  function boot(){
+    groups.wall=makeGroup(CFG.walls); groups.floor=makeGroup([CFG.floor]);
+    render();
+    onReady();
+  }
+  function start(){
+    if(CFG.img){
+      var im=new Image(); im.decoding='async';
+      im.onload=function(){
+        var sc=Math.max(W/im.width, H/im.height), dw=im.width*sc, dh=im.height*sc;
+        bx.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh); boot();
+      };
+      im.onerror=function(){ drawPlaceholder(bx); boot(); };
+      im.src=CFG.img;
+    } else { drawPlaceholder(bx); boot(); }
+    if(CFG.furni){ var f=new Image(); f.onload=function(){ furniImg=f; if(state.furni) render(); }; f.src=CFG.furni; }
+  }
+  return {
+    init:function(cfg, canvas, cb){
+      CFG=cfg; cv=canvas; onReady=cb||function(){};
+      ctx=cv.getContext('2d',{willReadFrequently:true});
+      W=cv.width; H=cv.height;
+      base=document.createElement('canvas'); base.width=W; base.height=H;
+      bx=base.getContext('2d',{willReadFrequently:true});
+      start();
+    },
+    setColor:setColor,
+    setFurni:function(v){ state.furni=!!v; render(); },
+    setBefore:function(v){ state.before=!!v; render(); },
+    state:state, render:render, ev:ev
+  };
+})();
+"""
+
+
 def _try_swatches(items, kind):
     esc = _html.escape
     out = []
@@ -1119,237 +1317,192 @@ def try_html(assets_dir=None):
 <nav class="legal"><a href="/">アプリを開く</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
 </footer>
 </main>
+<script>{ROOM_ENGINE_JS}</script>
 <script>
 (function(){{
-  var CFG={cfg};
-  var cv=document.getElementById('cv'), ctx=cv.getContext('2d',{{willReadFrequently:true}});
-  var W=cv.width, H=cv.height;
-  var base=document.createElement('canvas'); base.width=W; base.height=H;
-  var bx=base.getContext('2d',{{willReadFrequently:true}});
-  var groups={{}}, state={{wall:'',floor:'',furni:false,before:false}}, furniImg=null;
-
-  function ev(name,params){{ try{{ if(window.gtag) window.gtag('event',name,params||{{}}); }}catch(e){{}} }}
-
-  /* --- 素の部屋を描く。写真があればそれを cover で敷き、無ければプレースホルダの
-     部屋を描く。どちらでも以降の再着色の経路は同一なので、写真が来たら差し替わるだけ。 --- */
-  function fill(c,poly,style){{
-    c.beginPath();
-    poly.forEach(function(p,i){{ var x=p[0]*W, y=p[1]*H; if(i) c.lineTo(x,y); else c.moveTo(x,y); }});
-    c.closePath(); c.fillStyle=style; c.fill();
+  var cfg={cfg};
+  RS.init(cfg, document.getElementById('cv'), function(){{
+    RS.ev('try_view',{{has_photo:!!cfg.img, planes:cfg.walls.length}});
+  }});
+  var d=document, bd=d.getElementById('badge');
+  function setBefore(v){{
+    RS.setBefore(v);
+    d.getElementById('togBefore').setAttribute('aria-pressed', v?'true':'false');
+    bd.textContent = v?'BEFORE':'AFTER';
+    bd.classList.toggle('on', v || !!(RS.state.wall||RS.state.floor));
   }}
-  /* 実写真が来るまでのプレースホルダ。一点透視で左・正面・右の壁と床を描き、
-     3面に**わざと違う明るさ**を与える（正面が最も明るく、左が最も暗い）。
-     再着色後もこの明暗差が残ることが、面ごとの光を潰していない証拠になる。
-     天井は描くが着色対象のポリゴンには入れない＝除外の挙動もここで確認できる。 */
-  function drawPlaceholder(c){{
-    fill(c,[[0,0],[0.22,0.10],[0.78,0.10],[1,0]],'#F3F1ED');   // 天井（着色対象外）
-    fill(c,CFG.walls[0],'#D8D2C8');                            // 左壁（暗め）
-    fill(c,CFG.walls[1],'#EAE6DE');                            // 正面壁（明るい）
-    fill(c,CFG.walls[2],'#E0DAD1');                            // 右壁（中間）
-    fill(c,CFG.floor,'#CDBFA8');                               // 床
-    var hz=0.62*H, fg=c.createLinearGradient(0,hz,0,H);        // 奥ほど暗い＝明暗差
-    fg.addColorStop(0,'rgba(0,0,0,.18)'); fg.addColorStop(1,'rgba(255,255,255,.10)');
-    c.save(); c.beginPath();
-    CFG.floor.forEach(function(p,i){{ var x=p[0]*W, y=p[1]*H; if(i) c.lineTo(x,y); else c.moveTo(x,y); }});
-    c.closePath(); c.clip(); c.fillStyle=fg; c.fillRect(0,hz,W,H-hz);
-    for(var i=0;i<20;i++){{ c.fillStyle='rgba(0,0,0,.05)'; c.fillRect(0,hz+((H-hz)/20)*i,W,1); }}
-    c.restore();
-  }}
-  /* 窓・巾木は面の「上」に描く。壁ポリゴンに含めると一緒に着色されてしまうため、
-     実写真を使うときも同じ理由でポリゴンは窓やドアを避けて定義する。 */
-  function drawFg(c){{
-    if(CFG.img) return;                            // 実写真のときは前景を描かない
-    c.fillStyle='#F8F6F2'; c.fillRect(W*0.28,H*0.18,W*0.20,H*0.28);
-    c.strokeStyle='rgba(42,40,36,.32)'; c.lineWidth=3;
-    c.strokeRect(W*0.28,H*0.18,W*0.20,H*0.28);
-    c.beginPath(); c.moveTo(W*0.38,H*0.18); c.lineTo(W*0.38,H*0.46); c.stroke();
-    c.fillStyle='rgba(42,40,36,.14)'; c.fillRect(W*0.22,H*0.62-5,W*0.56,5);
-  }}
-  function drawFurni(c){{
-    if(furniImg){{
-      c.drawImage(furniImg, CFG.frect[0]*W, CFG.frect[1]*H, CFG.frect[2]*W, CFG.frect[3]*H);
-      return;
-    }}
-    /* 実画像 try-furni-1 が未配置のときのシルエット。面ごとに明度を変えて
-       背もたれ・座面・肘掛けを描き分けないと、ただの板に見えてしまう。 */
-    var x=CFG.frect[0]*W, y=CFG.frect[1]*H, w=CFG.frect[2]*W, h=CFG.frect[3]*H;
-    var rr=function(px,py,pw,ph,r,fill){{
-      c.beginPath();
-      if(c.roundRect) c.roundRect(px,py,pw,ph,r); else c.rect(px,py,pw,ph);
-      c.fillStyle=fill; c.fill();
-    }};
-    c.fillStyle='rgba(0,0,0,.13)';                                  // 接地影
-    c.beginPath(); c.ellipse(x+w/2, y+h*0.99, w*0.52, h*0.07, 0, 0, 6.2832); c.fill();
-    rr(x+w*0.07, y+h*0.86, w*0.05, h*0.14, 2, '#8C7A6D');           // 脚
-    rr(x+w*0.88, y+h*0.86, w*0.05, h*0.14, 2, '#8C7A6D');
-    rr(x+w*0.04, y,        w*0.92, h*0.56, h*0.14, '#B3A08B');      // 背もたれ（やや暗い）
-    rr(x,        y+h*0.44, w,      h*0.44, h*0.13, '#C6B4A0');      // 座面（明るい）
-    rr(x,        y+h*0.30, w*0.11, h*0.58, h*0.10, '#AD9A85');      // 肘掛け 左
-    rr(x+w*0.89, y+h*0.30, w*0.11, h*0.58, h*0.10, '#AD9A85');      // 肘掛け 右
-    c.fillStyle='rgba(0,0,0,.10)';                                  // 座面の切れ目
-    c.fillRect(x+w*0.49, y+h*0.48, w*0.02, h*0.36);
-  }}
-
-  function bbox(poly){{
-    var x0=1,y0=1,x1=0,y1=0;
-    poly.forEach(function(p){{ x0=Math.min(x0,p[0]); y0=Math.min(y0,p[1]);
-                              x1=Math.max(x1,p[0]); y1=Math.max(y1,p[1]); }});
-    return {{x:Math.floor(x0*W), y:Math.floor(y0*H),
-             w:Math.ceil((x1-x0)*W), h:Math.ceil((y1-y0)*H)}};
-  }}
-  /* ポリゴンでクリップして素の部屋を写し取る＝これがそのままマスクになる（縁のAAも無料）。 */
-  function makeLayer(poly){{
-    var c=document.createElement('canvas'); c.width=W; c.height=H;
-    var x=c.getContext('2d',{{willReadFrequently:true}});
-    x.save(); x.beginPath();
-    poly.forEach(function(p,i){{ var px=p[0]*W, py=p[1]*H; if(i) x.lineTo(px,py); else x.moveTo(px,py); }});
-    x.closePath(); x.clip(); x.drawImage(base,0,0); x.restore();
-    var bb=bbox(poly);
-    var src=x.getImageData(bb.x,bb.y,bb.w,bb.h), sd=src.data, sum=0, n=0;  // 合計輝度と画素数
-    for(var i=0;i<sd.length;i+=4){{
-      if(!sd[i+3]) continue;
-      var r=sd[i],g=sd[i+1],bl=sd[i+2];
-      var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
-      sum+=(mx+mn)/510; n++;
-    }}
-    return {{cv:c, ctx:x, bb:bb, src:src, sumL:sum, n:n}};
-  }}
-  function hex2hs(hex){{
-    var r=parseInt(hex.substr(1,2),16)/255, g=parseInt(hex.substr(3,2),16)/255, b=parseInt(hex.substr(5,2),16)/255;
-    var mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn, h=0, l=(mx+mn)/2;
-    var s=d===0?0:d/(1-Math.abs(2*l-1));
-    if(d!==0){{ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0)h+=360; }}
-    return [h,s,l];
-  }}
-  function hsl2rgb(h,s,l){{
-    var c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2, r=0,g=0,b=0;
-    if(h<60){{r=c;g=x;}} else if(h<120){{r=x;g=c;}} else if(h<180){{g=c;b=x;}}
-    else if(h<240){{g=x;b=c;}} else if(h<300){{r=x;b=c;}} else {{r=c;b=x;}}
-    return [(r+m)*255,(g+m)*255,(b+m)*255];
-  }}
-  /* 色相・彩度は目標色に置き換え、明度は「面全体を目標色の明るさへ寄せる」オフセットだけ
-     かける。ピクセルごとの明暗差（木目・陰影・光のむら）はそのまま残るので、ベタ塗りに
-     ならずに「その部屋の壁が別の色だったら」に見える。オフセットを入れないと、
-     ウォルナットのような暗い色を選んでも床が暗くならず不自然になる。 */
-  /* 壁が左・正面・右のように複数面あるとき、明度オフセットを面ごとに出すと
-     各面が同じ明るさへ正規化され、**面ごとの光の違い（正面は明るく側面は暗い）が
-     潰れて書き割りになる**。そのためオフセットはグループ全体の平均輝度から1つだけ
-     求め、全面に同じ値を適用する。面どうしの相対的な明暗差はそのまま残る。 */
-  function tint(L,hex,strength,meanL){{
-    var s=L.src, d=L.ctx.createImageData(s.width,s.height), sd=s.data, dd=d.data;
-    var t=hex2hs(hex), th=t[0], ts=t[1];
-    var dl=(t[2]-meanL)*0.92;                     // グループ共通の明度オフセット
-    for(var i=0;i<sd.length;i+=4){{
-      var a=sd[i+3];
-      if(!a){{ dd[i+3]=0; continue; }}
-      var r=sd[i], g=sd[i+1], b=sd[i+2];
-      var mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b);
-      var nl=(mx+mn)/510+dl; nl=nl<0.03?0.03:(nl>0.97?0.97:nl);
-      var rgb=hsl2rgb(th,ts,nl);
-      dd[i]  = r+(rgb[0]-r)*strength;
-      dd[i+1]= g+(rgb[1]-g)*strength;
-      dd[i+2]= b+(rgb[2]-b)*strength;
-      dd[i+3]= a;
-    }}
-    L.ctx.putImageData(d, L.bb.x, L.bb.y);
-  }}
-
-  /* 面のグループ（壁=複数面 / 床=1面）。平均輝度はグループ単位で持つ。 */
-  function makeGroup(polys){{
-    var ls=polys.map(makeLayer), sum=0, n=0;
-    ls.forEach(function(L){{ sum+=L.sumL; n+=L.n; }});
-    return {{layers:ls, meanL:n?sum/n:0.5}};
-  }}
-  function render(){{
-    ctx.clearRect(0,0,W,H);
-    ctx.drawImage(base,0,0);
-    if(!state.before){{
-      ['wall','floor'].forEach(function(k){{
-        if(!state[k]) return;
-        groups[k].layers.forEach(function(L){{ ctx.drawImage(L.cv,0,0); }});
-      }});
-    }}
-    drawFg(ctx);
-    if(state.furni && !state.before) drawFurni(ctx);
-  }}
-  function setColor(kind,hex){{
-    state[kind]=hex;
-    if(hex){{
-      var G=groups[kind], st=(kind==='wall'?0.86:0.80);
-      G.layers.forEach(function(L){{ tint(L,hex,st,G.meanL); }});
-    }}
-    render();
-  }}
-
-  function boot(){{
-    groups.wall=makeGroup(CFG.walls); groups.floor=makeGroup([CFG.floor]);
-    render();
-    ev('try_view',{{has_photo:!!CFG.img, planes:CFG.walls.length}});
-  }}
-  function start(){{
-    if(CFG.img){{
-      var im=new Image(); im.decoding='async';
-      im.onload=function(){{
-        var sc=Math.max(W/im.width, H/im.height), dw=im.width*sc, dh=im.height*sc;
-        bx.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh); boot();
-      }};
-      im.onerror=function(){{ drawPlaceholder(bx); boot(); }};
-      im.src=CFG.img;
-    }} else {{ drawPlaceholder(bx); boot(); }}
-    if(CFG.furni){{ var f=new Image(); f.onload=function(){{ furniImg=f; if(state.furni) render(); }}; f.src=CFG.furni; }}
-  }}
-
-  Array.prototype.forEach.call(document.querySelectorAll('.sw'),function(b){{
+  Array.prototype.forEach.call(d.querySelectorAll('.sw'),function(b){{
     b.addEventListener('click',function(){{
       var kind=b.dataset.kind;
-      Array.prototype.forEach.call(document.querySelectorAll('.sw[data-kind="'+kind+'"]'),function(o){{
+      Array.prototype.forEach.call(d.querySelectorAll('.sw[data-kind="'+kind+'"]'),function(o){{
         o.classList.toggle('on',o===b); o.setAttribute('aria-checked',o===b?'true':'false');
       }});
-      if(state.before) setBefore(false);
-      setColor(kind,b.dataset.color);
-      ev('try_color_change',{{surface:kind,color:b.dataset.color||'original'}});
+      if(RS.state.before) setBefore(false);
+      RS.setColor(kind,b.dataset.color);
+      bd.classList.toggle('on', !!(RS.state.wall||RS.state.floor));
+      RS.ev('try_color_change',{{surface:kind,color:b.dataset.color||'original'}});
     }});
   }});
-  var bd=document.getElementById('badge');
-  function setBefore(v){{
-    state.before=v;
-    var t=document.getElementById('togBefore');
-    t.setAttribute('aria-pressed',v?'true':'false');
-    bd.textContent=v?'BEFORE':'AFTER'; bd.classList.toggle('on', v || !!(state.wall||state.floor));
-    render();
-  }}
-  document.getElementById('togBefore').addEventListener('click',function(){{
-    setBefore(!state.before); ev('try_before_after',{{on:state.before}});
+  d.getElementById('togBefore').addEventListener('click',function(){{
+    setBefore(!RS.state.before); RS.ev('try_before_after',{{on:RS.state.before}});
   }});
-  document.getElementById('togFurni').addEventListener('click',function(){{
-    state.furni=!state.furni;
-    this.setAttribute('aria-pressed',state.furni?'true':'false');
-    this.textContent=state.furni?'家具を外す':'家具を置く';
-    render(); ev('try_furniture',{{on:state.furni}});
+  d.getElementById('togFurni').addEventListener('click',function(){{
+    RS.setFurni(!RS.state.furni);
+    this.setAttribute('aria-pressed',RS.state.furni?'true':'false');
+    this.textContent=RS.state.furni?'家具を外す':'家具を置く';
+    RS.ev('try_furniture',{{on:RS.state.furni}});
   }});
-  document.getElementById('ctaMain').addEventListener('click',function(){{ ev('try_cta_click',{{to:'app'}}); }});
-  Array.prototype.forEach.call(document.querySelectorAll('.prod'),function(a){{
+  d.getElementById('ctaMain').addEventListener('click',function(){{ RS.ev('try_cta_click',{{to:'app'}}); }});
+  Array.prototype.forEach.call(d.querySelectorAll('.prod'),function(a){{
     a.addEventListener('click',function(){{
-      ev('select_item',{{link_url:a.href,shop:a.dataset.track||''}});
+      RS.ev('select_item',{{link_url:a.href,shop:a.dataset.track||''}});
       try{{ var q=new URLSearchParams({{id:'',type:'try',url:a.href,shop:a.dataset.track||'',src:'try'}});
             if(navigator.sendBeacon) navigator.sendBeacon('/track?'+q.toString()); }}catch(e){{}}
     }});
   }});
   /* スマホには「PCで開くとフル機能」の案内とURLコピーを出す（本体はPC前提のため）。 */
   if(matchMedia('(max-width:820px)').matches){{
-    var box=document.getElementById('pcbox'); box.hidden=false;
-    document.getElementById('btnCopy').addEventListener('click',function(){{
+    d.getElementById('pcbox').hidden=false;
+    d.getElementById('btnCopy').addEventListener('click',function(){{
       var u=location.origin+'/', btn=this;
       var ok=function(){{ btn.textContent='コピーしました';
         setTimeout(function(){{ btn.textContent='このページのURLをコピー'; }},1800); }};
       var ng=function(){{ prompt('URLをコピーしてください',u); }};
-      if(navigator.clipboard&&navigator.clipboard.writeText){{
-        navigator.clipboard.writeText(u).then(ok,ng);
-      }} else {{ ng(); }}
-      ev('try_copy_url');
+      if(navigator.clipboard&&navigator.clipboard.writeText){{ navigator.clipboard.writeText(u).then(ok,ng); }}
+      else {{ ng(); }}
+      RS.ev('try_copy_url');
     }});
   }}
-  start();
+}})();
+</script>
+</body></html>"""
+
+
+# =============================================================================
+# /demo — 自動デモモード（docs/BUZZ_FOUNDATION_INSTRUCTIONS.md §2）
+#
+# 運営が「画面録画を開始してURLを開くだけ」でショート動画の素材が撮れる状態にする。
+# 手動操作の撮影をなくすのが目的なので、開いた瞬間から勝手に「変身」が再生される。
+#
+# 描画は /try と同じ ROOM_ENGINE_JS を使う。ここが持つのはタイムラインだけ。
+#
+# タイムラインは**実時間（performance.now）基準**で駆動する。BUZZ_FOUNDATION_PLAN の
+# 当初の申し送りでは「フレーム基準」としていたが、これは誤りだったので変更した。
+# フレーム数で刻むと、コマ落ちしたぶんだけ実尺が伸びて 15秒/30秒 が狂う。録画素材と
+# しては**尺が毎回きっかり同じ**であることが最優先なので、実時間で刻んで各フェーズの
+# 開始位置を総尺の比率で決めている（コマ落ちしても尺は変わらない）。
+# =============================================================================
+
+# 再生するテイスト。?preset= で選ぶ。値は (壁, 床) の16進。
+DEMO_PRESETS = {
+    "natural": [("#EFE9DF", "#DCC29B"), ("#D6CEC2", "#C6A67E"), ("#C7D3C6", "#8A6A4E")],
+    "grey":    [("#D6CEC2", "#B5AFA6"), ("#C4CED7", "#8A6A4E"), ("#6E6A64", "#B5AFA6")],
+    "green":   [("#C7D3C6", "#DCC29B"), ("#C7D3C6", "#8A6A4E"), ("#6E6A64", "#8A6A4E")],
+}
+DEMO_DEFAULT_PRESET = "natural"
+
+
+def demo_html(assets_dir=None, length=15, ratio="16x9", clean=False, preset=None):
+    """Render /demo — the auto-playing recording source. noindex, not in sitemap."""
+    esc = _html.escape
+    length = 30 if str(length) == "30" else 15
+    vertical = (str(ratio) == "9x16")
+    preset = preset if preset in DEMO_PRESETS else DEMO_DEFAULT_PRESET
+    ga4 = ga4_head_snippet()
+    has_room = bool(assets_dir) and _lp_asset_path(assets_dir, TRY_ROOM["img"]) is not None
+    has_furni = bool(assets_dir) and _lp_asset_path(assets_dir, "try-furni-1") is not None
+    cfg = json.dumps({
+        "img": f"/lp-assets/{TRY_ROOM['img']}" if has_room else "",
+        "furni": "/lp-assets/try-furni-1" if has_furni else "",
+        "walls": TRY_ROOM["walls"], "floor": TRY_ROOM["floor"], "frect": TRY_ROOM["furni"],
+    }, ensure_ascii=False)
+    steps = json.dumps(DEMO_PRESETS[preset], ensure_ascii=False)
+    return f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>自動デモ｜{esc(SITE_NAME)}</title>
+<meta name="robots" content="noindex, nofollow">{ga4}
+<style>
+  :root{{--bg:#FBFAF8;--ink:#2A2824;--muted:#7C776E}}
+  *{{box-sizing:border-box}}
+  html,body{{margin:0;height:100%;background:{'#141210' if vertical else 'var(--bg)'}}}
+  body{{color:var(--ink);display:grid;place-items:center;overflow:hidden;
+    font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif}}
+  /* 縦型は 9:16 のレターボックス。ショート動画がこの比率なので、録画の外枠をここで作る。 */
+  .frame{{position:relative;background:var(--bg);overflow:hidden;
+    {'aspect-ratio:9/16;height:100vh;max-width:100vw' if vertical else 'aspect-ratio:16/9;width:100vw;max-height:100vh'}}}
+  .inner{{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    gap:{'22px' if vertical else '0'};padding:{'0 0 5vh' if vertical else '0'}}}
+  .stage{{position:relative;width:100%;{'aspect-ratio:3/2;flex:0 0 auto' if vertical else 'flex:1 1 auto;min-height:0'}}}
+  canvas{{width:100%;height:100%;display:block;object-fit:cover}}
+  /* 16:9 はキャプションを画面下部のオーバーレイにする。フロー配置のままだと
+     ステージが高さを取り切ってキャプションが枠外へ押し出されるため。 */
+  .cap{{text-align:center;padding:0 6%;{'''position:absolute;left:0;right:0;bottom:7vh;
+    color:#fff;text-shadow:0 1px 14px rgba(0,0,0,.55)''' if not vertical else ''}}}
+  .cap h1{{font-size:{'clamp(20px,4.6vw,34px)' if vertical else 'clamp(18px,2.2vw,30px)'};
+    font-weight:800;margin:0 0 6px;letter-spacing:.01em;line-height:1.5}}
+  .cap p{{margin:0;color:{'var(--muted)' if vertical else 'rgba(255,255,255,.86)'};
+    font-size:{'clamp(12px,2.6vw,17px)' if vertical else '15px'}}}
+  .brand{{position:absolute;left:0;right:0;bottom:{'3.2vh' if vertical else '2.6vh'};text-align:center;
+    font-size:{'clamp(11px,2.4vw,15px)' if vertical else '12.5px'};font-weight:700;letter-spacing:.08em;
+    color:{'var(--muted)' if vertical else 'rgba(255,255,255,.72)'};z-index:2}}
+  .scrim{{position:absolute;left:0;right:0;bottom:0;height:32%;pointer-events:none;
+    background:linear-gradient(180deg,rgba(20,18,16,0),rgba(20,18,16,.55));
+    display:{'none' if vertical else 'block'}}}
+  .badge{{position:absolute;left:14px;top:14px;background:rgba(42,40,36,.72);color:#fff;
+    font-size:11px;letter-spacing:.14em;padding:5px 11px;border-radius:99px;z-index:2}}
+  /* ?clean=1: 録画に映り込む文字や枠をすべて外し、部屋だけにする */
+  body.clean .cap,body.clean .brand,body.clean .badge,body.clean .scrim{{display:none}}
+  body.clean .inner{{padding:0;gap:0}}
+  body.clean .stage{{{'height:100%;aspect-ratio:auto' if vertical else ''}}}
+</style></head><body{' class="clean"' if clean else ''}>
+<div class="frame"><div class="inner">
+  <div class="stage">
+    <canvas id="cv" width="1200" height="800"></canvas>
+    <span class="scrim" aria-hidden="true"></span>
+    <span class="badge" id="badge">BEFORE</span>
+  </div>
+  <div class="cap">
+    <h1>壁と床の色を変えるだけで、<br>部屋はここまで変わる</h1>
+    <p>部屋の写真の上で試せます</p>
+  </div>
+</div><div class="brand">ROOM STUDIO</div></div>
+<script>{ROOM_ENGINE_JS}</script>
+<script>
+(function(){{
+  var cfg={cfg}, steps={steps}, LEN={length}*1000;
+  var bd=document.getElementById('badge');
+  /* フェーズは総尺に対する比率で持つ。15秒でも30秒でも同じ構成のまま伸縮する。 */
+  var PH=[
+    /* ループ先頭では色も必ず元に戻す。戻さないと2周目以降の AFTER が、
+       前の周回の最終色から始まってしまい「変わっていく」感じが出ない。 */
+    {{at:0.00, run:function(){{ RS.setColor('wall',''); RS.setColor('floor','');
+      RS.setBefore(true); RS.setFurni(false); bd.textContent='BEFORE'; }}}},
+    {{at:0.17, run:function(){{ RS.setBefore(false); RS.setFurni(true);  bd.textContent='AFTER'; }}}},
+    {{at:0.27, run:function(){{ RS.setColor('wall', steps[0][0]); }}}},
+    {{at:0.40, run:function(){{ RS.setColor('floor',steps[0][1]); }}}},
+    {{at:0.55, run:function(){{ RS.setColor('wall', steps[1][0]); RS.setColor('floor',steps[1][1]); }}}},
+    {{at:0.72, run:function(){{ RS.setColor('wall', steps[2][0]); RS.setColor('floor',steps[2][1]); }}}},
+    {{at:0.88, run:function(){{ RS.setBefore(true);  bd.textContent='BEFORE'; }}}},
+    {{at:0.94, run:function(){{ RS.setBefore(false); bd.textContent='AFTER'; }}}}
+  ];
+  var t0=null, done=-1;
+  function frame(now){{
+    if(t0===null) t0=now;
+    var p=((now-t0)%LEN)/LEN;                 // 0..1 をループ
+    var i=-1;
+    for(var k=0;k<PH.length;k++){{ if(p>=PH[k].at) i=k; }}
+    if(i!==done){{
+      if(i<done){{ done=-1; }}               // ループ先頭に戻った
+      for(var j=done+1;j<=i;j++) PH[j].run(); // 取りこぼしたフェーズも順に適用
+      done=i;
+    }}
+    requestAnimationFrame(frame);
+  }}
+  RS.init(cfg, document.getElementById('cv'), function(){{
+    /* demo は「意図して開いた録画用ページ」なので、省モーション設定でも再生する
+       （指示書 §2 の但し書き）。ただし自動再生する旨は URL とタイトルで自明。 */
+    requestAnimationFrame(frame);
+  }});
 }})();
 </script>
 </body></html>"""
@@ -1460,7 +1613,10 @@ def robots_txt():
     the public site allows all and advertises the sitemap."""
     if ACCESS_TOKEN:
         return "User-agent: *\nDisallow: /\n"
-    return f"User-agent: *\nAllow: /\nSitemap: {SITE_BASE_URL}/sitemap.xml\n"
+    # /demo は運営が録画に使う自動再生ページ。認証は掛けないがクロールはさせない
+    # （sitemap にも載せず、ページ側にも noindex を付けてある。三重に塞ぐ）。
+    return (f"User-agent: *\nAllow: /\nDisallow: /demo\n"
+            f"Sitemap: {SITE_BASE_URL}/sitemap.xml\n")
 
 
 def sitemap_xml(lastmod=None):
