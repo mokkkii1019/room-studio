@@ -131,6 +131,10 @@ def sitemap():
 def try_page():
     # /try — スマホ30秒ミニ体験（BUZZ_FOUNDATION_INSTRUCTIONS §1）。
     # アプリ本体は読み込まない独立ページ。サンプル画像は lp-assets/ から取る。
+    # 既定では非公開（_site.TRY_DEMO_ENABLED の由来コメントを参照）。実装は残してある
+    # ので、環境変数 ENABLE_TRY_DEMO=1 を足せばこの行より下がそのまま動く。
+    if not _site.TRY_DEMO_ENABLED:
+        raise HTTPException(status_code=404)
     return HTMLResponse(_site.try_html(os.path.join(ROOT, "lp-assets")),
                         headers={"Cache-Control": "public, max-age=3600"})
 
@@ -138,6 +142,10 @@ def try_page():
 @app.get("/demo", response_class=HTMLResponse)
 def demo_page(len: str = "15", ratio: str = "16x9", clean: str = "", preset: str = ""):
     # /demo — 自動デモ（録画用）。noindex + robots Disallow + sitemap非掲載。
+    # /try と同じスイッチで止めている（録画元が /try と同じ素材・同じ描画エンジンで、
+    # 公開に耐えないと判断された対象そのものなので、片方だけ残す意味がない）。
+    if not _site.TRY_DEMO_ENABLED:
+        raise HTTPException(status_code=404)
     page = _site.demo_html(os.path.join(ROOT, "lp-assets"), length=len,
                            ratio=ratio, clean=bool(clean), preset=preset or None)
     # no-store: 録画のたびに最新が出るように。X-Robots-Tag はページの noindex と二重掛け。
