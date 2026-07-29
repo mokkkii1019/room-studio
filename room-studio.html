@@ -2802,8 +2802,10 @@ function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); 
      'off' … 配置しやすさを一切計算しない。従来どおりで追加コストは0
      'log' … 計算してコンソールに出すだけ。**並び順は変えない**
      'on'  … 配置しやすさスコア順に並べ替える
-   サーバー側の注入は api/_site.py の inject_collect_ranking()。 */
-const COLLECT_RANKING='log';
+   サーバー側の注入は api/_site.py の inject_collect_ranking()。
+   既定を 'on' にしたのは第2段階（2026-07-30）。根拠は docs/COLLECT_RANKING_REPORT.md —
+   本番が実際に配る210枚で、無地背景の商品写真が上位5件に入る数が 7→11 に増える。 */
+const COLLECT_RANKING='on';
 /* ---- 候補画像の採点 ----------------------------------------------------------
    楽天が返す候補は大半が販促物で、単体商品写真は少数派。実測（212枚を目視ラベル付け）:
 
