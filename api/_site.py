@@ -786,6 +786,10 @@ def landing_html(slug, assets_dir=None):
   @media (max-width:820px){{
     .grid2{{grid-template-columns:1fr;gap:14px}}
     .faq{{grid-template-columns:1fr;gap:8px}}
+    /* 狭い幅では帯の高さを固定せず 16:9 のまま出す。高さを固定すると cover で
+       左右が大きく切られ、部屋の全体が見えなくなる（before/after は「同じ部屋が
+       どう変わったか」を見せるものなので、切り取るより小さく全体を出す方がよい）。 */
+    .js .sec-ba.is-live .cmp:not(.cmp-static){{height:auto;aspect-ratio:16/9}}
   }}
   @media (max-width:760px){{.dock{{display:block}}}}
   @media (max-width:680px){{.brand .tag{{display:none}}}}
