@@ -88,6 +88,17 @@
   .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
   .btn.primary:hover{background:var(--accent-ink)}
   .btn.dark{background:var(--btn-dark); border-color:var(--btn-dark); color:var(--bg); font-weight:700}
+  /* 共有・書き出しのメニュー */
+  .share-wrap{position:relative; display:inline-block}
+  .share-pop{position:absolute; right:0; top:calc(100% + 6px); z-index:30; width:268px; padding:6px;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); display:none}
+  .share-pop.open{display:block}
+  .share-pop button{display:block; width:100%; text-align:left; border:0; background:transparent;
+    color:var(--ink); font:inherit; font-size:12.5px; padding:9px 10px; border-radius:var(--r-sm); cursor:pointer}
+  .share-pop button:hover{background:var(--panel-2)}
+  .share-pop button small{display:block; color:var(--muted); font-size:11px; font-weight:400; margin-top:2px}
+  .share-pop hr{border:0; border-top:1px solid var(--line); margin:5px 2px}
+  .share-note{font-size:11px; line-height:1.6; color:var(--muted); padding:6px 10px 8px}
   .btn.dark:hover{background:#3a3733}
   .btn.icon{padding:0; width:32px; height:32px; justify-content:center; gap:0}
   .btn.icon svg{width:16px;height:16px}
@@ -487,10 +498,24 @@
     </button>
     <button class="btn ghost-warn" id="btnReset">リセット</button>
     <input type="file" id="fileProj" accept="application/json,.json" hidden>
-    <button class="btn dark" id="btnShare" title="編集後の画像をPNGで書き出す">
+    <div class="share-wrap">
+    <button class="btn dark" id="btnShare" title="画像を書き出す" aria-haspopup="true" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v13M8 7l4-4 4 4"/></svg>
       共有・書き出し
     </button>
+    <div class="share-pop" id="sharePop" role="menu">
+      <button type="button" data-share="png" role="menuitem">編集後の画像（PNG）
+        <small>いま見えているものをそのまま</small></button>
+      <hr>
+      <button type="button" data-share="ba" role="menuitem">Before / After 横並び
+        <small>16:9・X や ブログ向け</small></button>
+      <button type="button" data-share="ba23" role="menuitem">Before / After 縦長
+        <small>2:3・Pinterest 向け</small></button>
+      <button type="button" data-share="after169" role="menuitem">After のみ
+        <small>16:9・X やサムネイル向け</small></button>
+      <div class="share-note" id="shareNote" hidden></div>
+    </div>
+    </div>
   </div>
 </header>
 
@@ -2220,6 +2245,124 @@ function doRedo(){ if(!State.redo.length) return; State.undo.push(captureState()
 function shareExport(){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } render(); saveCanvasPNG(stage, 'room-studio'); }
 
 /* =========================================================================
+   共有画像の書き出し（BUZZ_FOUNDATION_INSTRUCTIONS §3）
+
+   before/after を1枚に合成してローカルにダウンロードする。合成はすべて
+   クライアント側の Canvas で行い、サーバーには送らない・保存しない・公開しない。
+
+   ★ 楽天から収集した家具は合成に含めない（運営判断・2026-07-29）
+     共有画像はユーザーがSNSへ投稿するために書き出すもの＝不特定多数と共有可能な
+     場所へ置かれる。楽天ウェブサービス利用規約では、取得した商品画像について
+     「目的外利用しない／再配布しない／不特定多数と共有可能な場所へ保管しない」と
+     定められており（rakuten-application-info.md、docs/LP_IMAGE_GUIDE.md §🔴）、
+     商品画像を合成した画像の投稿はこのいずれにも抵触する。
+     書き出しを止めるのではなく「家具を除外して出す」方針を採ったのは、壁・床の
+     色変更の before/after だけでも拡散素材として十分機能するため（色の変化こそが
+     視覚的に映える要素で、家具の有無は拡散力にほぼ影響しない）。
+     除外が起きたときは shareNote と toast でユーザーに明示する。
+     自分でアップロードした家具（source==='upload'）は権利がクリアなので含める。
+   ========================================================================= */
+const SHARE_WM = 'roomstudio.jp';
+function rakutenFurniLayers(){
+  return State.layers.filter(l => l.type === 'furniture' && l.visible && l.source === 'rakuten');
+}
+/* 現在の合成を書き出し用キャンバスに描く。excludeRakuten で楽天由来の家具だけ外す。 */
+function renderForExport(excludeRakuten){
+  const c = document.createElement('canvas'); c.width = State.W; c.height = State.H;
+  const x = c.getContext('2d');
+  x.drawImage(litRoomBase(), 0, 0);
+  for(const l of State.layers){
+    if(!l.visible) continue;
+    if(l.type === 'surface'){ if(l.dirty) rebuildSurface(l); if(l.cache) x.drawImage(l.cache, 0, 0); continue; }
+    if(excludeRakuten && l.source === 'rakuten') continue;
+    if(l.dirty || !l.proc) rebuildFurniture(l);
+    x.save(); x.translate(l.x, l.y); x.rotate(l.rot * Math.PI / 180);
+    x.scale((l.flip ? -1 : 1) * l.scale, l.scale); x.globalAlpha = l.opacity;
+    if(isPlainFurniture(l)){ x.drawImage(l.proc, -l.natW/2, -l.natH/2); }
+    else { if(l._warpKey !== warpKeyOf(l) || !l._warpCanvas) buildWarpCanvas(l);
+           if(l._warpCanvas) x.drawImage(l._warpCanvas, l._warpOff[0], l._warpOff[1]); }
+    x.restore(); x.globalAlpha = 1;
+  }
+  return c;
+}
+/* 枠内に収める（アスペクト比を保ったまま contain）。返り値は実際に描いた矩形。 */
+function drawContain(x, img, bx, by, bw, bh){
+  const sc = Math.min(bw / img.width, bh / img.height);
+  const w = img.width * sc, h = img.height * sc;
+  const dx = bx + (bw - w) / 2, dy = by + (bh - h) / 2;
+  x.drawImage(img, dx, dy, w, h);
+  return {x: dx, y: dy, w: w, h: h};
+}
+function drawTag(x, text, rx, ry, s){
+  x.font = '600 ' + Math.round(13 * s) + 'px system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif';
+  const pad = 9 * s, w = x.measureText(text).width + pad * 2, h = 26 * s;
+  x.fillStyle = 'rgba(42,40,36,.72)';
+  if(x.roundRect){ x.beginPath(); x.roundRect(rx, ry, w, h, 999); x.fill(); } else { x.fillRect(rx, ry, w, h); }
+  x.fillStyle = '#FBFAF8'; x.textBaseline = 'middle';
+  x.fillText(text, rx + pad, ry + h / 2 + 0.5 * s);
+}
+function drawWatermark(x, W, H, s){
+  x.font = '700 ' + Math.round(15 * s) + 'px system-ui,-apple-system,sans-serif';
+  x.fillStyle = 'rgba(42,40,36,.42)'; x.textAlign = 'right'; x.textBaseline = 'alphabetic';
+  x.fillText(SHARE_WM, W - 30 * s, H - 26 * s);
+  x.textAlign = 'left';
+}
+/* kind: 'ba43' 横並び4:3 / 'ba23' 縦長2:3(before上・after下) / 'after169' after単体16:9 */
+function buildShareImage(kind){
+  const hasRak = rakutenFurniLayers().length > 0;
+  const after = renderForExport(true);                 // 楽天家具は常に除外
+  const before = State.compare.before || litRoomBase();
+  /* 横並びを 4:3 にすると、横長の部屋写真2枚は合わせて約3:1の塊になるため
+     上下に大きな死に余白が出る。16:9 にすると画が主役のまま収まる。
+     縦長(2:3)は before を上・after を下に積む（Pinterest のピンの形）。 */
+  const SIZES = {ba:[1920,1080], ba23:[1200,1800], after169:[1920,1080]};
+  const [W, H] = SIZES[kind] || SIZES.ba;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  const s = W / 1700;                                   // 基準幅に対する拡大率
+  x.fillStyle = '#FBFAF8'; x.fillRect(0, 0, W, H);
+  if(kind === 'after169'){
+    // after だけを画面いっぱいに（cover）。X やサムネイルは余白より画が主役。
+    const sc = Math.max(W / after.width, H / after.height);
+    const w = after.width * sc, h = after.height * sc;
+    x.drawImage(after, (W - w) / 2, (H - h) / 2, w, h);
+    drawWatermark(x, W, H, s * 1.15);
+    return c;
+  }
+  const pad = Math.round(46 * s);
+  const wmH = Math.round(52 * s);
+  let r1, r2;
+  if(kind === 'ba23'){
+    const bh = (H - pad * 3 - wmH) / 2;
+    r1 = drawContain(x, before, pad, pad, W - pad * 2, bh);
+    r2 = drawContain(x, after, pad, pad * 2 + bh, W - pad * 2, bh);
+  } else {
+    const bw = (W - pad * 3) / 2, bh = H - pad * 2 - wmH;
+    r1 = drawContain(x, before, pad, pad, bw, bh);
+    r2 = drawContain(x, after, pad * 2 + bw, pad, bw, bh);
+  }
+  drawTag(x, 'Before', r1.x + 12 * s, r1.y + 12 * s, s);
+  drawTag(x, 'After',  r2.x + 12 * s, r2.y + 12 * s, s);
+  drawWatermark(x, W, H, s);
+  return c;
+}
+async function shareComposite(kind){
+  if(!State.W){ toast('先に部屋を読み込んでください'); return; }
+  render();
+  const excluded = rakutenFurniLayers().length;
+  const c = buildShareImage(kind);
+  const ok = await saveCanvasPNG(c, 'room-studio-' + kind);
+  if(ok !== false && excluded) toast('共有画像には家具は含まれません（' + excluded + '点を除外）');
+}
+/* 楽天家具があるときだけ、書き出す前に理由を出しておく */
+function refreshShareNote(){
+  const n = $('shareNote'); if(!n) return;
+  const k = rakutenFurniLayers().length;
+  n.hidden = !k;
+  if(k) n.textContent = '共有画像には家具は含まれません（収集した家具' + k + '点は、配布できないため除外されます）。壁と床の変化はそのまま書き出されます。';
+}
+
+/* =========================================================================
    RENDER
    ========================================================================= */
 function render(){
@@ -3641,7 +3784,19 @@ on($('btnOpen'),'click',()=>$('fileRoom').click());
 on($('fileRoom'),'change',e=>{ const f=e.target.files[0]; if(f) loadImageFile(f,c=>setupRoomFromCanvas(c)); e.target.value=''; });
 on($('btnUndo'),'click',doUndo);
 on($('btnRedo'),'click',doRedo);
-on($('btnShare'),'click',shareExport);
+on($('btnShare'),'click',(e)=>{
+  e.stopPropagation();
+  const pop=$('sharePop'), open=!pop.classList.contains('open');
+  pop.classList.toggle('open',open); $('btnShare').setAttribute('aria-expanded',open?'true':'false');
+  if(open) refreshShareNote();
+});
+on(document,'click',()=>{ const p=$('sharePop'); if(p&&p.classList.contains('open')){ p.classList.remove('open'); $('btnShare').setAttribute('aria-expanded','false'); } });
+on($('sharePop'),'click',(e)=>{
+  e.stopPropagation();
+  const b=e.target.closest('button[data-share]'); if(!b) return;
+  $('sharePop').classList.remove('open'); $('btnShare').setAttribute('aria-expanded','false');
+  if(b.dataset.share==='png') shareExport(); else shareComposite(b.dataset.share);
+});
 // 折りたたみ（§8）: 詳細パネル / レイヤー列を隠してキャンバスを広げる
 function setCollapsed(cls, v){ document.body.classList.toggle(cls, v); if(State.W) applyZoom(); }
 on($('panelCollapse'),'click',()=>setCollapsed('panel-collapsed',true));
