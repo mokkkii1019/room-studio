@@ -609,8 +609,17 @@ def landing_html(slug, assets_dir=None):
     --line:rgba(0,0,0,.10);--hair:rgba(0,0,0,.07);--accent:#3B6FE0;--r:4px}}
   *{{box-sizing:border-box}}
   html{{-webkit-text-size-adjust:100%}}
+  /* フォールバックに system-ui を使わないこと（CLS対策・2026-07-29）。
+     Windows の system-ui は Yu Gothic UI に解決され、日本語を 1文字 0.8387em で組む。
+     一方 Zen Kaku Gothic New も他の和文フォントも 1.0em なので、webfont が届いた瞬間に
+     日本語が約16%広がって行数が増え、ヒーロー（下端揃え）が 346px→437px に伸びて
+     上へずれる。これがデスクトップ CLS 0.116 のほぼ全量だった（実測値は下記の順で
+     0.8387 / 1.0 em: Yu Gothic UI / Yu Gothic・Meiryo・Hiragino・Noto Sans JP）。
+     和文が 1.0em のフォントだけを並べると、読込前後で行数が変わらず shift が消える。
+     h1・lead の line-height は数値指定なので、行高はフォントの上下メトリクスに依らない。 */
   body{{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.9;
-    font-family:"Zen Kaku Gothic New",system-ui,-apple-system,sans-serif;
+    font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",
+      "Noto Sans JP",sans-serif;
     -webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1}}
   img{{max-width:100%;display:block}}
   a{{color:inherit}}
