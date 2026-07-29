@@ -256,6 +256,16 @@ def try_page():
                         headers={"Cache-Control": "public, max-age=3600"})
 
 
+@app.get("/demo", response_class=HTMLResponse)
+def demo_page(len: str = "15", ratio: str = "16x9", clean: str = "", preset: str = ""):
+    """自動デモ（録画用）。noindex + robots Disallow + sitemap非掲載。"""
+    page = _site.demo_html(os.path.join(APP_DIR, "lp-assets"), length=len,
+                           ratio=ratio, clean=bool(clean), preset=preset or None)
+    # no-store: 録画のたびに最新が出るように。X-Robots-Tag はページの noindex と二重掛け。
+    return HTMLResponse(page, headers={"Cache-Control": "no-store",
+                                       "X-Robots-Tag": "noindex, nofollow"})
+
+
 @app.get("/lp/{slug}", response_class=HTMLResponse)
 def landing(slug: str):
     """検索意図別ランディングページ（サーバーレンダリング・GA4対応）。"""
