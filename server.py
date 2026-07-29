@@ -228,10 +228,18 @@ def bgcut(url: str, v: str = "1"):
 
 
 @app.get("/track")
-def track(id: str = "", type: str = "", url: str = "", src: str = "", shop: str = ""):
+def track(id: str = "", type: str = "", url: str = "", src: str = "", shop: str = "",
+          item_category: str = "", count: str = "", rank: str = "", score: str = "",
+          ranked: str = "", source: str = "", item_id: str = ""):
     """購入/アフィリンクのクリック計測（自己クリックはクライアント側で除外）。
-    shop（メーカー/店舗）はメーカー別のクリック分析に使う。"""
-    _site.log_track({"id": id, "type": type, "url": url, "src": src, "shop": shop})
+    shop（メーカー/店舗）はメーカー別のクリック分析に使う。
+
+    指示016で collect_done / collect_shop / place_item も同じ口に乗せた。狙いは
+    「どの店舗の画像が実際に配置され、どの店舗の画像は置かれずに終わったか」で、
+    分母が collect_shop、分子が place_item。個人情報は受け取らない。"""
+    _site.log_track({"id": id or item_id, "type": type, "url": url, "src": src, "shop": shop,
+                     "cat": item_category, "count": count, "rank": rank, "score": score,
+                     "ranked": ranked, "source": source})
     return Response(status_code=204)
 
 

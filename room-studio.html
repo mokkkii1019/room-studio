@@ -2650,8 +2650,18 @@ function addToFurniLib(canvas, name, meta){ meta=meta||{};
     source:meta.source||'upload',                 // 'upload' | 'rakuten' | 'ikea'（provenance）
     itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'',
     imgUrl:meta.imgUrl||'',                       // 収集品の元画像URL（サーバ切り抜き /bgcut 用。アップロード品は空）
+    rank:(meta.rank==null?-1:meta.rank),          // 収集時の並び順（指示016の計測用。保存はしない）
+    placeScore:(meta.placeScore==null?null:meta.placeScore),
     cutCanvas:meta.cutCanvas||null };             // サーバ/AI切り抜き結果（srcCanvas＝オリジナルは温存）
   State.furniLib.push(it); cutQueueAdd(it); if(!meta.defer) renderFurniLib(); return it; }
+/* 収集は並列に読み込むので、完了順＝表示順になってしまう（＝並び順が実質ランダム）。
+   今回の収集ぶん（base 以降）だけを rank で並べ直す。最大でも枚数スライダーの値なので軽い。 */
+function sortCollectedTail(base){
+  const tail=State.furniLib.slice(base);
+  if(tail.length<2 || tail.some(it=>it.rank<0)) return;
+  tail.sort((a,b)=>a.rank-b.rank);
+  State.furniLib.length=base; for(const it of tail) State.furniLib.push(it);
+}
 const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',chest:'サイドボード/リビングボード',shelf:'シェルフ',desk:'デスク',lampshade:'ランプシェード',table_lamp:'テーブルランプ',floor_lamp:'フロアランプ',carpet:'カーペット/ラグ',curtain:'カーテン',plant:'観葉植物',art:'アート',mirror:'鏡',cushion:'ブランケット/クッション',clock:'時計',storage_box:'収納ボックス',trash_can:'ゴミ箱',tv:'テレビ',refrigerator:'冷蔵庫',washing_machine:'洗濯機',air_conditioner:'エアコン',microwave:'電子レンジ',rice_cooker:'炊飯器',air_purifier:'空気清浄機',fan:'扇風機',humidifier:'加湿器',vacuum:'掃除機',upload:'自分の画像から追加'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
@@ -2681,6 +2691,7 @@ async function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読
   }
   addFurnitureLayer(copyCanvas(it.srcCanvas), it.name, px, py, it);
   const f=selectedFurniture(); if(f){ f.category=it.category; renderLayers(); }
+  if(!it._placedOnce){ it._placedOnce=true; trackPlace(it); } // 同じ品の重複配置は数えない
   toast(note||'部屋に配置しました。ドラッグで移動できます'); }
 const COARSE_POINTER = (()=>{ try{ return matchMedia('(pointer:coarse)').matches; }catch(e){ return false; } })();
 /* クリック計測（購入/アフィリンク）。自己クリックは URL の ?notrack=1 で除外（localStorage保存）。
@@ -2702,6 +2713,38 @@ function trackClick(id, type, url, shop){
     if(window.fetch){ fetch(u,{method:'GET',keepalive:true,mode:'no-cors'}).catch(()=>{}); } else { new Image().src=u; }
   }catch(e){}
   try{ if(GA4_ID && window.gtag) window.gtag('event','select_item',{item_id:id||'', link_type:type||'', link_url:url||'', shop:shop||''}); }catch(e){}
+}
+/* ---- 収集画像の「使われ方」の計測（指示016 3項）--------------------------------
+   狙いは将来のメーカー交渉の材料 —「どの店舗の画像が実際に部屋へ置かれ、どの店舗の画像は
+   置かれずに終わったか」。個人情報は一切扱わず、扱うのは店舗名・カテゴリ・順位だけ。
+   スコアはサーバーに溜めない（楽天画像は都度取得・非保存の原則）。分母（収集された数）と
+   分子（配置された数）を別イベントで出し、集計はGA4側で行う。 */
+function trackEvent(name, params){
+  if(trackingOptedOut()) return;
+  try{ const q=new URLSearchParams(Object.assign({type:name, src:'web'}, params)); // /track は id/type/url/shop/src を受ける
+    const u=(SERVER.url||'')+'/track?'+q.toString();
+    if(window.fetch){ fetch(u,{method:'GET',keepalive:true,mode:'no-cors'}).catch(()=>{}); } else { new Image().src=u; }
+  }catch(e){}
+  try{ if(GA4_ID && window.gtag) window.gtag('event', name, params); }catch(e){}
+}
+/* 収集完了時: 店舗ごとの「配られた枚数」＝配置率の分母。店舗数だけイベントが出る（≦枚数）。 */
+function trackCollect(category, items){
+  if(!items || !items.length) return;
+  const byShop=new Map();
+  for(const it of items){ const s=(it.shop||'(unknown)').slice(0,60); byShop.set(s,(byShop.get(s)||0)+1); }
+  trackEvent('collect_done', {item_category:category||'', count:String(items.length),
+    ranked: (COLLECT_RANKING==='on')?'1':'0'});
+  let n=0;
+  for(const [shop,cnt] of byShop){ if(++n>30) break; // 念のため上限
+    trackEvent('collect_shop', {item_category:category||'', shop, count:String(cnt)}); }
+}
+/* 配置時: 分子。rank はライブラリ上の並び順（0が先頭）で、上位ほど使われているかが分かる。 */
+function trackPlace(it){
+  if(!it || it.source==='upload') return;
+  trackEvent('place_item', {item_id:it.itemCode||String(it.id||''), item_category:it.category||'',
+    shop:(it.shop||'').slice(0,60), source:it.source||'',
+    rank:String(it.rank==null?-1:it.rank),
+    score:(it.placeScore==null?'':it.placeScore.toFixed(2))});
 }
 function makeFurniEl(it){
   const el=document.createElement('div'); el.className='furni-item';
@@ -2754,6 +2797,18 @@ function dropPosToCanvas(e){ const rect=overlay.getBoundingClientRect(); const s
 function imageFilesFrom(dt){ return [...(dt&&dt.files?dt.files:[])].filter(f=>f.type && f.type.startsWith('image/')); }
 function loadImageURL(url, cb, onerr){ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); cb(c); }catch(e){ onerr&&onerr(e); } }; im.onerror=()=>onerr&&onerr(); im.src=url; }
 function downscaleCanvas(src, maxSide){ const m=Math.max(src.width,src.height); if(m<=maxSide) return src; const s=maxSide/m, c=document.createElement('canvas'); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); const x=c.getContext('2d'); x.imageSmoothingEnabled=true; x.drawImage(src,0,0,c.width,c.height); return c; }
+/* 収集結果の並び順（指示016・運営が戻せるフラグ）:
+     'off' … 配置しやすさを一切計算しない。従来どおりで追加コストは0
+     'log' … 計算してコンソールに出すだけ。**並び順は変えない**（＝現在の本番の既定）
+     'on'  … 配置しやすさスコア順に並べ替える
+   **既定は 'log'。** 指示018 の判断で、まず実データのスコア分布を観察してから 'on' に
+   するか決める。並び替え自体の実測（本番が配る210枚で、無地背景の商品写真が上位5件に
+   入る数が 7→11）と、上位10件の文字/合成物が2枚増える副作用は
+   docs/COLLECT_RANKING_REPORT.md。分布の確認手順も同書にある。
+   'on' への切り替えは Vercel の環境変数 COLLECT_RANKING でもできる（未設定ならここの
+   既定値。/try・/demo の ENABLE_TRY_DEMO と同じ運用）。注入は api/_site.py の
+   inject_collect_ranking()。 */
+const COLLECT_RANKING='log';
 /* ---- 候補画像の採点 ----------------------------------------------------------
    楽天が返す候補は大半が販促物で、単体商品写真は少数派。実測（212枚を目視ラベル付け）:
 
@@ -2852,9 +2907,59 @@ function candVividScore(d){ let n=0;
   for(let p=0;p<d.length;p+=4){ const mx=Math.max(d[p],d[p+1],d[p+2]), mn=Math.min(d[p],d[p+1],d[p+2]);
     if(mx>0 && (mx-mn)/mx>0.55 && mx/255>0.45) n++; }
   return n/(CAND_S*CAND_S); }
+/* ---- 配置しやすさの素性（指示016） -------------------------------------------
+   選別スコア（candSelScore）とは目的が違う。あちらは「候補3枚のどれを採るか／どの商品を
+   採るか」を決める選別用で、eval-sets で較正済み。こちらは**採った結果の並び順**だけを
+   決める。除外には一切使わないので、選別側では危険な「無地背景を評価する」項をここでは
+   使える（選別で使うとカラーバリエーション表が必ず勝つ。docs/COLLECT_QUALITY_RESUME.md）。
+
+   3つとも candPixels の同じ 256x256 バッファから計算する。実測 AUC（配置しやすい画像 vs
+   それ以外・210枚の目視ラベル）:
+
+   | 素性       | 意味                                   | AUC |
+   |-----------|----------------------------------------|-----|
+   | ringPure  | 外周8%帯が帯自身の代表色と一致する割合    | 0.913 |
+   | fgBorder  | 画枠2pxのうち背景色と違う画素の割合       | 0.891 |
+   | ringEdge  | 外周帯のエッジ密度                       | 0.838 |
+
+   ringPure が高い＝無地の背景紙、fgBorder が高い＝被写体が画枠で切れている／そもそも
+   背景が取れない（＝部屋の中）、ringEdge が高い＝縁に床・壁・他の家具の線が走っている。
+   代表色はヒストグラム中央値で取る（Python の np.median は偶数個で2値の平均を返すため
+   一致しない。tools/collect-audit/parity.js が両者の一致を検証している）。 */
+const PLACE_RING=0.08, PLACE_NEAR=24, PLACE_FAR=32;
+function candPlaceFeat(d){
+  const s=CAND_S, b=Math.max(2, Math.round(s*PLACE_RING));
+  const h=[new Int32Array(256), new Int32Array(256), new Int32Array(256)];
+  let ringN=0;
+  for(let y=0;y<s;y++){ const row=(y<b||y>=s-b);
+    for(let x=0;x<s;x++){
+      if(!row && x>=b && x<s-b){ x=s-b-1; continue; }   // 帯の内側は飛ばす
+      const p=(y*s+x)*4; h[0][d[p]]++; h[1][d[p+1]]++; h[2][d[p+2]]++; ringN++;
+    } }
+  const need=(ringN+1)>>1, bg=[0,0,0];
+  for(let c=0;c<3;c++){ let cum=0,v=0; for(;v<255;v++){ cum+=h[c][v]; if(cum>=need) break; } bg[c]=v; }
+  /* エッジは RGB の**和**（整数）で測り、比較も2乗のまま行う。平均を Float32 に落とすと
+     Python 側の丸めと 1ULP ずれ、しきい値ちょうどの画素で数が変わって照合が落ちるため
+     （実際に落ちた）。和なのでしきい値も3倍（24→72）、その2乗が 5184。 */
+  const gs=new Int32Array(s*s);
+  for(let i=0,p=0;i<gs.length;i++,p+=4) gs[i]=d[p]+d[p+1]+d[p+2];
+  let pure=0, redge=0, frame=0, frameFg=0;
+  for(let y=0;y<s;y++)for(let x=0;x<s;x++){
+    const i=y*s+x, p=i*4;
+    const dist=Math.max(Math.abs(d[p]-bg[0]), Math.abs(d[p+1]-bg[1]), Math.abs(d[p+2]-bg[2]));
+    if(y<b||y>=s-b||x<b||x>=s-b){
+      if(dist<PLACE_NEAR) pure++;
+      const gx=x===0?0:Math.abs(gs[i]-gs[i-1]), gy=y===0?0:Math.abs(gs[i]-gs[i-s]);
+      if(gx*gx+gy*gy>5184) redge++;
+    }
+    if(y<2||y>=s-2||x<2||x>=s-2){ frame++; if(dist>PLACE_FAR) frameFg++; }
+  }
+  return { ringPure:pure/ringN, ringEdge:redge/ringN, fgBorder:frameFg/frame };
+}
+function candClamp01(v){ return v<0?0:(v>1?1:v); }
 /* 高いほど切り抜き素材として使える。すべて減点のみ（上のコメント参照）。 */
-function scoreCandidate(cv){
-  const d=candPixels(cv), t=candTextScore(d), sm=candSeamScore(d);
+function candSelScore(d, t){
+  t=t||candTextScore(d); const sm=candSeamScore(d);
   return -Math.min(1.6, t.glyphs/60)
          -Math.min(1.0, t.textPx*6)
          -0.8*Math.min(2, candGutterScore(d))
@@ -2862,6 +2967,26 @@ function scoreCandidate(cv){
          -1.0*Math.min(2, sm.seams)
          -(sm.seamMax>=0.80 ? 0.8 : 0);
 }
+/* 高いほど「そのまま部屋に置ける」。選別スコアを土台に、背景と文字でさらに減点する。
+   重みは210枚の目視ラベルに対する多点スタート探索＋カテゴリ1つ抜き検証で決めた
+   （docs/COLLECT_RANKING_REPORT.md）。文字は選別スコアにもあるが傾きが緩く、
+   実データの text_px は 0〜0.09 に集中するのでこの範囲で立てた項を足している。 */
+function candPlaceScore(d, sel, t){
+  const f=candPlaceFeat(d); t=t||candTextScore(d); // 文字検出は連結成分を数えるので使い回す（再実行で +6ms/枚）
+  return sel
+    -1.2*candClamp01((0.75-f.ringPure)/0.45)
+    -0.3*candClamp01((f.fgBorder-0.10)/0.35)
+    -0.6*candClamp01(f.ringEdge/0.10)
+    -0.3*candClamp01(t.glyphs/45)
+    -2.0*candClamp01(t.textPx/0.09);
+}
+/* 1枚から両方のスコアを出す（ピクセル読み出しは1回だけ）。COLLECT_RANKING='off' の
+   ときは配置しやすさを計算しない＝収集時の追加コストがゼロになる。 */
+function candScores(cv){
+  const d=candPixels(cv), t=candTextScore(d), sel=candSelScore(d, t);
+  return { sel, place: (COLLECT_RANKING==='off') ? sel : candPlaceScore(d, sel, t) };
+}
+function scoreCandidate(cv){ return candSelScore(candPixels(cv)); }
 /* ---- 収集の絞り込み ----------------------------------------------------------
    楽天が1商品につき返す画像は最大3枚で、そのうち使える写真がある商品は3〜4割しかない
    （実測。連番でURLを推測する手は91%が404だったので廃止済み）。つまり選別を賢くしても
@@ -2901,14 +3026,19 @@ function candThumbUrl(u){ try{
     abs.searchParams.set('url', raw.replace(/_ex=\d+x\d+/, '_ex='+CAND_FETCH_PX+'x'+CAND_FETCH_PX));
     return abs.toString();
   }catch(e){ return u; } }
-/* サムネイルだけ読んで {url（原寸のまま）, score} を返す。原寸は勝った1枚しか読まない。 */
+/* サムネイルだけ読んで {url（原寸のまま）, score, place} を返す。原寸は勝った1枚しか読まない。
+   **どの候補を採るかは従来どおり選別スコア（score）だけで決める。** 配置しやすさで選び直す
+   案は実測して**捨てた**: レビュー点数カード・寸法図・イラストのブランドカードが「無地背景の
+   単体被写体」に見えるため必ず勝ってしまう（実例と数値は docs/COLLECT_RANKING_REPORT.md）。
+   place は勝った1枚についてだけ、並び順のために持ち回る。 */
 function pickBestCandidateThumb(urls){ return new Promise(async resolve=>{
   const cvs=await Promise.all(urls.map(u=>new Promise(r=>loadImageURL(candThumbUrl(u), c=>r({canvas:c, url:u}), ()=>r(null)))));
   const valid=cvs.filter(Boolean);
   if(!valid.length){ resolve(null); return; }
-  let best=valid[0], bestScore=-Infinity;
-  for(const v of valid){ const sc=scoreCandidate(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
-  resolve({ url:best.url, score:bestScore });
+  let best=valid[0], bestScore=-Infinity, bestPlace=-Infinity;
+  for(const v of valid){ const sc=candScores(v.canvas);
+    if(sc.sel>bestScore){ bestScore=sc.sel; bestPlace=sc.place; best=v; } }
+  resolve({ url:best.url, score:bestScore, place:bestPlace });
 }); }
 /* 複数候補から最も単体・正面らしい1枚を {canvas, url} で返す（原寸を読む版）。404はスキップ。
    url は勝った候補のロード元（/imgproxy?url=… 形式）— /bgcut 用の元URL復元に使う。 */
@@ -2920,6 +3050,17 @@ function pickBestCandidate(urls){ return new Promise(async resolve=>{
   for(const v of valid){ const sc=scoreCandidate(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
   resolve(best);
 }); }
+/* 第1段階（COLLECT_RANKING='log'）用。実画像と配置しやすさスコアの対応を目で確かめるための
+   出力。並び替えは行わない。'on' のときも順位の妥当性を追えるように出す。'off' では無音。 */
+function logPlaceRanking(type, keep){
+  if(COLLECT_RANKING==='off' || !keep || !keep.length) return;
+  const rows=keep.map((k,i)=>({ '順':i, '選別':+k.score.toFixed(2), '配置しやすさ':+k.place.toFixed(2),
+    '店舗':k.it.shop||'', '商品':(k.it.title||'').slice(0,28), 'url':rawUrlFromProxy(k.url) }));
+  const by=keep.map(k=>k.place).slice().sort((a,b)=>b-a);
+  console.log(`[collect-ranking] ${type} n=${keep.length} mode=${COLLECT_RANKING} `
+    +`place best=${by[0].toFixed(2)} med=${by[by.length>>1].toFixed(2)} worst=${by[by.length-1].toFixed(2)}`);
+  (console.table||console.log).call(console, rows);
+}
 /* /imgproxy?url=<enc> 形式（相対/絶対どちらも）から元画像URLを取り出す */
 function rawUrlFromProxy(u){ try{ return new URL(u, location.origin).searchParams.get('url')||''; }catch(e){ return ''; } }
 function pool(items, n, fn){ return new Promise(resolve=>{ let i=0, active=0, done=0; const total=items.length; if(!total) return resolve();
@@ -3173,21 +3314,29 @@ async function doCollect(){
     await pool(items, 6, it=> new Promise(async res=>{
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
       const pick=urls.length? await pickBestCandidateThumb(urls) : null;
-      if(pick) scored.push({it, url:pick.url, score:pick.score});
+      if(pick) scored.push({it, url:pick.url, score:pick.score, place:pick.place});
       seen++; setCollectStatus(`画像を選別しています… ${seen}/${items.length}`); res();
     }));
-    // 2) スコア上位だけ原寸で読み込む。取得数 > 要求数のぶんがここで捨てられる
+    // 2) 選別スコア上位だけ原寸で読み込む。取得数 > 要求数のぶんがここで捨てられる
+    //    **どの30件を配るかは従来どおり選別スコアで決める。** 配置しやすさは並び順にしか
+    //    使わない＝この判定を外しても取りこぼしは起きない（指示016「除外はしない」）。
     scored.sort((a,b)=>b.score-a.score);
     const keep=scored.slice(0, count);
+    if(COLLECT_RANKING==='on') keep.sort((a,b)=>b.place-a.place); // 配置しやすい順に並べ替え
+    logPlaceRanking(type, keep);
     let done=0, ok=0; const added=[];
+    keep.forEach((k,i)=>{ k.rank=i; });
+    const libBase=State.furniLib.length; // 今回の収集ぶんはここから後ろ
     await pool(keep, 5, k=> new Promise(async res=>{
       const it=k.it;
       const cv=await new Promise(r=>loadImageURL(k.url, c=>r(c), ()=>r(null)));
-      if(cv){ const li=addToFurniLib(downscaleCanvas(cv,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true}); added.push(li); ok++; }
-      done++; setCollectStatus(`画像を読み込んでいます… ${done}/${keep.length}（成功 ${ok}）`); if(done%6===0) renderFurniLib(); res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
+      if(cv){ const li=addToFurniLib(downscaleCanvas(cv,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true, rank:k.rank, placeScore:k.place}); added.push(li); ok++; }
+      done++; setCollectStatus(`画像を読み込んでいます… ${done}/${keep.length}（成功 ${ok}）`);
+      if(done%6===0){ sortCollectedTail(libBase); renderFurniLib(); } res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
     }));
-    renderFurniLib(); // 収集完了時に一括描画
+    sortCollectedTail(libBase); renderFurniLib(); // 収集完了時に一括描画
     setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
+    trackCollect(type, added);
     toast(ok+' 枚を収集しました');
   }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
   finally{ $('collectBtn').disabled=false; }

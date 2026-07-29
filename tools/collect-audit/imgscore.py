@@ -119,6 +119,9 @@ def score(a):
     Nothing rewards a plain bright background: colour-variation tables have the
     whitest, most uniform borders in the whole corpus, and the previous scorer — which
     did reward exactly that — ranked them top of the list.
+
+    This is the *selection* score: which candidate of an item to take, and which items
+    survive the over-fetch. place_score() below is a different question — see there.
     """
     tpx, tn = text_score(a)
     seams, seam_max = seam_score(a)
@@ -128,6 +131,75 @@ def score(a):
             - min(0.8, vivid_score(a) * 12.0)
             - 1.0 * min(2, seams)
             - (0.8 if seam_max >= 0.80 else 0.0))
+
+
+# ---- placeability (指示016) --------------------------------------------------
+RING, NEAR, FAR = 0.08, 24.0, 32.0
+
+
+def _ring_mask(n):
+    b = max(2, int(round(n * RING)))
+    m = np.zeros((n, n), bool)
+    m[:b, :] = m[-b:, :] = m[:, :b] = m[:, -b:] = True
+    return m
+
+
+def _hist_median(v):
+    """Lower median through a 256-bin histogram. np.median() averages the two central
+    values on an even count and would then disagree with the browser; this cannot."""
+    cum = np.cumsum(np.bincount(v.astype(np.uint8), minlength=256))
+    return float(min(255, int(np.searchsorted(cum, (len(v) + 1) // 2))))
+
+
+def place_feats(a):
+    """(ring_pure, ring_edge, fg_border) — how close the frame is to 'product on a
+    plain sweep'. Measured AUC against 210 hand-labelled delivered images:
+    ring_pure 0.913, fg_border 0.891, ring_edge 0.838. Mirrored in room-studio.html
+    as candPlaceFeat(); parity.js diffs the two.
+    """
+    n = a.shape[0]
+    rm = _ring_mask(n)
+    bg = np.array([_hist_median(a[..., c][rm]) for c in range(3)], np.float64)
+    dist = np.abs(a.astype(np.float64) - bg).max(axis=2)
+    fr = np.zeros((n, n), bool)
+    fr[:2, :] = fr[-2:, :] = fr[:, :2] = fr[:, -2:] = True
+    # Edges are measured on the RGB *sum* in integers and compared squared. Averaging
+    # into float32 disagrees with the browser by 1 ULP, which flips pixels sitting exactly
+    # on the threshold and breaks parity (it did). Sum => threshold 24*3=72, squared 5184.
+    gs = a.astype(np.int32).sum(axis=2)
+    dx = np.abs(np.diff(gs, axis=1, prepend=gs[:, :1]))
+    dy = np.abs(np.diff(gs, axis=0, prepend=gs[:1, :]))
+    return (float((dist[rm] < NEAR).mean()),
+            float(((dx * dx + dy * dy)[rm] > 5184).mean()),
+            float((dist[fr] > FAR).mean()))
+
+
+def _c01(v):
+    return 0.0 if v < 0 else (1.0 if v > 1 else v)
+
+
+def place_score(a, sel=None):
+    """Higher = easier to drop straight into a room. Built on top of score() so the
+    collage/banner deductions carry over, then penalised for a busy background and for
+    overlay text.
+
+    This is used for ORDERING ONLY, never to drop or to choose between an item's
+    candidates: rewarding a plain background is safe when nothing is excluded, and
+    unsafe otherwise — picking candidates with it promotes review-score cards, spec
+    diagrams and illustrated brand cards, all of which look like 'one object on white'.
+    Weights come from a multi-start search over 210 hand labels with
+    leave-one-category-out validation (docs/COLLECT_RANKING_REPORT.md).
+    """
+    if sel is None:
+        sel = score(a)
+    pure, edge, border = place_feats(a)
+    tpx, tn = text_score(a)
+    return (sel
+            - 1.2 * _c01((0.75 - pure) / 0.45)
+            - 0.3 * _c01((border - 0.10) / 0.35)
+            - 0.6 * _c01(edge / 0.10)
+            - 0.3 * _c01(tn / 45.0)
+            - 2.0 * _c01(tpx / 0.09))
 
 
 def score_legacy(a64):
