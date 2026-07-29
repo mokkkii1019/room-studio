@@ -32,7 +32,7 @@ import shutil
 import sys
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageFilter
 except ImportError:  # pragma: no cover
     sys.exit("Pillow が必要です:  pip install pillow")
 
@@ -58,6 +58,9 @@ def main():
     ap.add_argument("--crop-top", type=int, default=None, help="上から削るpx（元画像基準）")
     ap.add_argument("--crop-bottom", type=int, default=None, help="下から削るpx（元画像基準）")
     ap.add_argument("--no-archive", action="store_true", help="docs/src/ への退避をしない")
+    ap.add_argument("--also-2x", action="store_true",
+                    help="高DPR用に <スロット名>-2x.webp（1.5倍）も書き出す。"
+                         "before/after のように全幅で大きく出す画像に付ける")
     a = ap.parse_args()
 
     if a.slot not in SLOTS:
@@ -105,21 +108,13 @@ def main():
         print("  ! 元が %dpx 幅しかないため %dpx へ拡大します（%.2f倍・眠くなります）"
               % (im.size[0], W, W / im.size[0]))
 
-    out = im.resize((W, H), Image.LANCZOS)
-    dst = os.path.join(ROOT, "lp-assets", a.slot + ".webp")
-    chosen = None
-    # 上限ぎりぎりまで品質を上げても写真では見分けがつかず、ページが重くなるだけ。
-    # 90 から始めて、収まらなければ落とす。
-    for q in (90, 86, 80, 74, 68):
-        out.save(dst, "WEBP", quality=q, method=6)
-        if os.path.getsize(dst) / 1024 <= MAXKB:
-            chosen = q
-            break
-    if chosen is None:
-        print("  ! 上限 %dKB に収まりませんでした（quality 68 で %.0f KB）" %
-              (MAXKB, os.path.getsize(dst) / 1024))
-    print("出力   : lp-assets/%s.webp  %dx%d  quality=%s  %.0f KB（上限 %dKB）" %
-          (a.slot, W, H, chosen or 68, os.path.getsize(dst) / 1024, MAXKB))
+    _write(im, a.slot, W, H, MAXKB, (90, 86, 80, 74, 68))
+    if a.also_2x:
+        # 高DPR（Retina）用の 1.5倍。全幅バンドで出す before/after は、DPR2 の
+        # デスクトップだと 1600px 素材が 1.8〜2.4倍に引き伸ばされて粗が出る。
+        # 画素数が増えるぶん圧縮アラは目立たないので、品質は 86 から始めて
+        # 同じ上限KBに収める（＝1x とほぼ同じ重さで倍の密度になる）。
+        _write(im, a.slot + "-2x", W * 3 // 2, H * 3 // 2, MAXKB, (86, 82, 78, 72, 66))
 
     if not a.no_archive:
         os.makedirs(os.path.join(ROOT, "docs", "src"), exist_ok=True)
@@ -133,6 +128,29 @@ def main():
             print("退避   : docs/src/%s" % os.path.basename(arch))
 
     print("\n次: git add lp-assets/ docs/src/ && git commit && git push（mainで本番反映）")
+
+
+def _write(im, slot, W, H, MAXKB, ladder):
+    """<slot>.webp を W×H で書き出す。拡大になる場合だけ軽くシャープを掛ける。"""
+    out = im.resize((W, H), Image.LANCZOS)
+    if im.size[0] < W:
+        # 拡大は必ず眠くなる。等倍以下に縮小するときは掛けない（輪郭が硬くなるだけ）。
+        # radius 1.0 / 70% はハローが出ない範囲で最も効く値を、窓枠と葉の実寸で見て決めた。
+        out = out.filter(ImageFilter.UnsharpMask(radius=1.0, percent=70, threshold=3))
+    dst = os.path.join(ROOT, "lp-assets", slot + ".webp")
+    chosen = None
+    # 上限ぎりぎりまで品質を上げても写真では見分けがつかず、ページが重くなるだけ。
+    for q in ladder:
+        out.save(dst, "WEBP", quality=q, method=6)
+        if os.path.getsize(dst) / 1024 <= MAXKB:
+            chosen = q
+            break
+    if chosen is None:
+        print("  ! 上限 %dKB に収まりませんでした（quality %d で %.0f KB）" %
+              (MAXKB, ladder[-1], os.path.getsize(dst) / 1024))
+    print("出力   : lp-assets/%s.webp  %dx%d  quality=%s  %.0f KB（上限 %dKB）%s" %
+          (slot, W, H, chosen or ladder[-1], os.path.getsize(dst) / 1024, MAXKB,
+           "  ※拡大のためシャープ適用" if im.size[0] < W else ""))
 
 
 if __name__ == "__main__":
