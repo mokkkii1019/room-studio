@@ -73,6 +73,20 @@ _DEFAULT_BASE = "https://room-studio-fawn.vercel.app"
 SITE_BASE_URL = (os.environ.get("SITE_BASE_URL", "").strip().rstrip("/") or _DEFAULT_BASE)
 
 
+# ---- /try・/demo の公開スイッチ ----------------------------------------------
+# 運営判断（2026-07-30）で **既定は非公開**。数値要件（軽量・転送量・CLS）は満たして
+# いたが、体験の魅力が公開水準に達していないため止めた。/try は SNS 流入の着地点で、
+# ここで失望させると流入がマイナスに働く、という判断。
+#
+# コードは消していない（再設計して復活させる可能性があるため）。戻すときは Vercel の
+# 環境変数に ENABLE_TRY_DEMO=1 を足すだけでよい。このフラグ1つで
+#   ・/try /demo のルート（404 を返すか、ページを返すか）
+#   ・sitemap.xml に /try を載せるか
+#   ・robots.txt で /try を Disallow するか
+# がまとめて切り替わる。片方だけ直して取りこぼす事故を防ぐため、必ずここを見ること。
+TRY_DEMO_ENABLED = os.environ.get("ENABLE_TRY_DEMO", "").strip() == "1"
+
+
 # ---- analytics (GA4) ---------------------------------------------------------
 # Set env GA4_ID (e.g. G-XXXXXXXXXX) to enable analytics: the id is stamped into
 # the served HTML, where the app then loads gtag.js. Unset = nothing is sent.
@@ -1694,7 +1708,10 @@ def robots_txt():
         return "User-agent: *\nDisallow: /\n"
     # /demo は運営が録画に使う自動再生ページ。認証は掛けないがクロールはさせない
     # （sitemap にも載せず、ページ側にも noindex を付けてある。三重に塞ぐ）。
-    return (f"User-agent: *\nAllow: /\nDisallow: /demo\n"
+    # /try は非公開のあいだ同じ扱いにする。404 だけでもいずれ index からは消えるが、
+    # 明示しておけば再クロールを待たずにクロール自体が止まる。
+    deny = "Disallow: /demo\n" if TRY_DEMO_ENABLED else "Disallow: /demo\nDisallow: /try\n"
+    return (f"User-agent: *\nAllow: /\n{deny}"
             f"Sitemap: {SITE_BASE_URL}/sitemap.xml\n")
 
 
@@ -1703,9 +1720,11 @@ def sitemap_xml(lastmod=None):
     `lastmod` is a YYYY-MM-DD string (caller passes the app's file mtime); falls
     back to today if omitted."""
     lm = lastmod or time.strftime("%Y-%m-%d")
-    # /try は SNS からの着地ページなので通常どおり公開・掲載する
-    # （運営専用の /demo は §2 で noindex + 非掲載にする）。
-    paths = ["/", "/try", "/about", "/privacy", "/tokushoho"] + [f"/lp/{s}" for s in landing_slugs()]
+    # /try は SNS からの着地ページなので、公開しているあいだは載せる。非公開のあいだは
+    # 載せない（404 を sitemap で申告するとサーチコンソールにエラーが積まれるため）。
+    # 運営専用の /demo は公開状態にかかわらず常に非掲載。
+    paths = ["/"] + (["/try"] if TRY_DEMO_ENABLED else []) + \
+            ["/about", "/privacy", "/tokushoho"] + [f"/lp/{s}" for s in landing_slugs()]
     esc = _html.escape
     urls = "\n".join(
         f"  <url><loc>{esc(SITE_BASE_URL + p)}</loc><lastmod>{esc(lm)}</lastmod></url>"
