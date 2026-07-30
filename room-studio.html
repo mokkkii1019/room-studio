@@ -312,6 +312,10 @@
   .engine.ok{color:var(--accent-ink); border-color:var(--accent); background:var(--accent-weak)}
   /* 取得できなかった等、待っても直らないことを伝える状態（指示022） */
   .engine.err{color:#8f3a2e; border-color:#d9a79e; background:#f7eae7}
+  /* 収集中は文言の行数が変わる（「探しています…3.4秒（この間も…）」→「完了: 30枚…」）。
+     高さが変わると**その下のライブラリ全体が上下に動く**ので、収集中だけ高さを予約する
+     （実測で 58px のズレが出ていた・指示026 の検証）。 */
+  .engine.reserve{min-height:4.6em}
 
   /* layers */
   .layers{padding:12px 14px; background:transparent; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden}
@@ -2867,6 +2871,10 @@ function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(
 function delFromLib(id){ const i=State.furniLib.findIndex(x=>x.id===id); if(i>=0){ State.furniLib.splice(i,1); renderFurniLib(); } }
 async function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読み込んでください'); return; } const it=State.furniLib.find(x=>x.id===id); if(!it) return;
   let note='';
+  /* 収集中に見えている暫定サムネ（300px）をそのまま配置すると、あとで原寸に差し替わっても
+     配置済みレイヤーは低解像度のまま残る。原寸の読み込みが走っているなら待ってから配置する
+     （指示026 の2項）。 */
+  if(it._fullPromise){ busy(true,'画像を読み込んでいます…'); try{ await it._fullPromise; }catch(e){} finally{ busy(false); } }
   if(AUTO_CUT && !it.cutCanvas && it.imgUrl && SERVER.bgcut && it._cutState!=='failed'){
     // 収集品で切り抜き未完了 → 優先実行して待つ（キュー待ちを追い越す）。タイムアウトは元画像で配置
     busy(true,'背景を切り抜いています…');
@@ -3229,8 +3237,15 @@ function pickBestCandidateThumb(urls){ return new Promise(async resolve=>{
   if(!valid.length){ resolve(null); return; }
   let best=valid[0], bestScore=-Infinity, bestPlace=-Infinity;
   for(const v of valid){ const sc=candScores(v.canvas);
-    if(sc.sel>bestScore){ bestScore=sc.sel; bestPlace=sc.place; best=v; } }
-  resolve({ url:best.url, score:bestScore, place:bestPlace });
+    if(sc.sel>bestScore){ bestScore=sc.sel; bestPlace=sc.place; best=v; }
+    /* 1枚の採点が実測13ms、候補3枚で40msが1タスクに固まる。並列6本ぶんが同じタスクに
+       重なると数百msのブロックになるので、1枚ごとにイベントループへ返す。
+       実時間はほぼ変わらず、入力の取りこぼしが減る（指示026 の検証で実測）。 */
+    await new Promise(r=>setTimeout(r,0));
+  }
+  /* canvas も返す（指示026 の1項）。採点のために300pxで読んだこの画像を、従来は捨てて
+     あとから原寸を取り直すまで何も表示していなかった。これをそのまま先に見せる。 */
+  resolve({ url:best.url, score:bestScore, place:bestPlace, canvas:best.canvas });
 }); }
 /* 複数候補から最も単体・正面らしい1枚を {canvas, url} で返す（原寸を読む版）。404はスキップ。
    url は勝った候補のロード元（/imgproxy?url=… 形式）— /bgcut 用の元URL復元に使う。 */
@@ -3338,11 +3353,19 @@ async function requestCutNow(it, timeoutMs){
   return it.cutCanvas||null;
 }
 /* 該当カードだけ in-place 差し替え（ライブラリ全体の再描画を避ける）。無ければ次の renderFurniLib で反映 */
+/* 収集中はカードの追加が連続するので、全体再描画は間引く（120ms に1回・末尾は必ず実行）。
+   1回7ms でも30回ぶんが採点と同じタスクに重なると入力を落とすため（指示026）。 */
+let _libRenderTimer=null;
+function renderFurniLibSoon(){ if(_libRenderTimer) return;
+  _libRenderTimer=setTimeout(()=>{ _libRenderTimer=null; renderFurniLib(); }, 120); }
 function refreshLibCard(it){ const host=$('furniLib'); if(!host) return;
   const el=host.querySelector('[data-lib-id="'+it.id+'"]'); if(el && State.furniLib.includes(it)) el.replaceWith(makeFurniEl(it)); }
 
 /* ---- collect furniture images from the web (store products via server.py) ---- */
-function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':(kind==='err'?' err':'')); }
+function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return;
+  const reserve=msg && el.classList.contains('reserve'); // 収集中の高さ予約を className の代入で消さない
+  el.style.display=msg?'block':'none'; el.textContent=msg;
+  el.className='engine'+(kind==='ok'?' ok':(kind==='err'?' err':''))+(reserve?' reserve':''); }
 /* 各ジャンルの「主なメーカー」＝実在ブランド名（楽天は店舗単位で家電メーカー直営店が少ないため、
    店舗指定ではなく“ブランド名”で楽天全体を検索する。code はそのまま検索キーワードに使う）。
    販売店（ビックカメラ等）は含めない。検索窓に任意のメーカー名を入力して追加もできる。 */
@@ -3478,6 +3501,40 @@ async function resolveShopCode(brand, type){
   }catch(e){ /* 解決できなければキーワードに戻すだけ。収集自体は止めない */ }
   _shopCodeCache[key]=code; return code;
 }
+/* ---- 収集の待ち時間を「待てる待ち時間」にするための道具（指示026）-------------
+   実時間は縮めない（並列度も取得数も変えない）。**何が起きているかを見せる**ことだけをやる。
+   調査は docs/COLLECT_UX_INVESTIGATION.md: 29.7秒のうち25.5秒（86%）は画面に何も出ず、
+   最初の7.5秒は「検索中…」だけで無言だった。 */
+const _collect={ cancel:false, ac:null, running:false };
+function collectCancelled(){ return _collect.cancel; }
+function startCollectCancel(){
+  _collect.cancel=false; _collect.ac=(typeof AbortController!=='undefined')?new AbortController():null;
+  _collect.running=true;
+  /* 収集ボタンをそのまま「中止する」に変える。ボタンを増やすと、その高さ（実測42px）ぶん
+     ライブラリ全体が上下に動いてしまうため（指示026 の検証で発見）。 */
+  const b=$('collectBtn'); if(b){ b.classList.remove('primary'); const l=b.querySelector('.lbl'); if(l) l.textContent='中止する'; }
+  const st=$('collectStatus'); if(st) st.classList.add('reserve');   // 高さを予約してライブラリを動かさない
+}
+function endCollectCancel(){
+  _collect.running=false; _collect.ac=null;
+  const b=$('collectBtn'); if(b){ b.classList.add('primary'); const l=b.querySelector('.lbl'); if(l) l.textContent='家具を収集'; }
+  /* 高さの予約はここでは外さない。完了メッセージは元の文言より短く、ここで外すと
+     箱が縮んで**その下のライブラリ全体が58px跳ね上がる**（実測）。予約は状態表示を
+     空にするときに外す（setCollectStatus 内）。 */
+}
+function cancelCollect(){
+  if(!_collect.running) return;
+  _collect.cancel=true;
+  if(_collect.ac){ try{ _collect.ac.abort(); }catch(e){} }   // 検索フェーズの fetch を即座に止める
+  setCollectStatus('中止しています…');
+}
+/* 経過秒を出し続ける（SAM の「画像を解析中… 3.4秒」と同じ手法）。返り値を呼ぶと止まる。 */
+function collectElapsed(makeText){
+  const t0=performance.now();
+  const upd=()=>setCollectStatus(makeText(((performance.now()-t0)/1000).toFixed(1)));
+  upd(); const id=setInterval(upd, 100);
+  return ()=>clearInterval(id);
+}
 async function doCollect(){
   if(!SERVER.available) await probeServer();
   if(!SERVER.available){ setCollectStatus('収集サーバーに接続できません（ネット接続を確認してください）', 'err'); toast('収集サーバーに接続できません'); return; }
@@ -3502,17 +3559,21 @@ async function doCollect(){
   if(brands.length) mode='brands';
   else if(!official) mode=(crawlerSource==='makers'||crawlerSource==='rakuten'||crawlerSource==='artofblack')?'rakuten':'crawler';
   const source = (mode==='crawler') ? crawlerSource : 'rakuten'; // addToFurniLib のフォールバック用
-  $('collectBtn').disabled=true; setCollectStatus('検索中…');
+  startCollectCancel();
+  const fetchOpts=()=>({cache:'no-store', signal:_collect.ac?_collect.ac.signal:undefined});
+  let stopElapsed=collectElapsed(s=>`楽天から商品を探しています… ${s}秒（この間もほかの操作ができます）`);
   try{
     let items=[];
     if(mode==='brands'){
       const per=overfetchCount(Math.max(1, Math.floor(count/brands.length))); let lastErr='';
-      for(let i=0;i<brands.length;i++){ setCollectStatus(`メーカー ${i+1}/${brands.length}：${brands[i].name} を収集中…（各${per}枚）`);
+      for(let i=0;i<brands.length;i++){
+        if(collectCancelled()) break;
+        stopElapsed(); stopElapsed=collectElapsed(s=>`メーカー ${i+1}/${brands.length}：${brands[i].name} を探しています… ${s}秒`);
         try{
           let got=[];
           const code=await resolveShopCode(brands[i].name, type); // 名前が一致した店だけ返る
           if(code){
-            const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), shop:code, source:'rakuten', provider:'official'}), {cache:'no-store'});
+            const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(per), shop:code, source:'rakuten', provider:'official'}), fetchOpts());
             if(r.ok){ got=(await r.json()).items||[]; }
             else { try{ lastErr=(await r.json()).detail||''; }catch(e){} }
           }
@@ -3521,7 +3582,7 @@ async function doCollect(){
              当たり、ソファが0件になる。0件ならキーワード検索のほうがまだ拾える。 */
           if(!got.length){
             const kw=(brands[i].name+' '+taste).trim();
-            const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), {cache:'no-store'});
+            const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste:kw, count:String(per), source:'rakuten', provider:'official'}), fetchOpts());
             if(!r.ok){ try{ lastErr=(await r.json()).detail||''; }catch(e){} continue; }
             got=(await r.json()).items||[];
           }
@@ -3530,25 +3591,66 @@ async function doCollect(){
       }
       if(!items.length){ setCollectStatus(lastErr||'画像が見つかりませんでした（メーカー/種類を変えてみてください）','err'); $('collectBtn').disabled=false; return; }
     } else if(mode==='rakuten'){
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:'rakuten', provider:'official'}), {cache:'no-store'});
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:'rakuten', provider:'official'}), fetchOpts());
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source='rakuten'; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やキーワードを変えてみてください'); $('collectBtn').disabled=false; return; }
     } else {
-      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:crawlerSource, provider:'crawler'}), {cache:'no-store'});
+      const r=await fetch(SERVER.url+'/collect?'+new URLSearchParams({type, taste, count:String(overfetchCount(count)), source:crawlerSource, provider:'crawler'}), fetchOpts());
       if(!r.ok){ let d=''; try{ d=(await r.json()).detail||''; }catch(e){} throw new Error(d||('HTTP '+r.status)); }
       const j=await r.json(); items=j.items||[]; items.forEach(it=>{ it.source=crawlerSource; });
       if(!items.length){ setCollectStatus('画像が見つかりませんでした。種類やキーワードを変えてみてください'); $('collectBtn').disabled=false; return; }
     }
+    stopElapsed();
     setMode('furniture'); State.libFilter=type; // 収集したカテゴリだけを表示
-    // 1) 全件をサムネイルだけで採点する（原寸はまだ読まない）
-    let seen=0; const scored=[];
+    const libBase=State.furniLib.length; // 今回の収集ぶんはここから後ろ
+    /* 1) 全件をサムネイルだけで採点する（原寸はまだ読まない）。
+       **採点で読んだ300pxサムネを、その場でライブラリに出す**（指示026 の1項）。
+       常に「いまのところ上位 count 件」だけを表示し、より良い候補が来たら**位置はそのままで
+       中身だけ差し替える**（カードが動き回らないように）。配る30枚の中身と並びは従来と同じで、
+       変わったのは「いつ見えるか」だけ。 */
+    let seen=0; const scored=[], shown=[];
+    const showProvisional=(rec)=>{
+      if(shown.length<count){
+        rec.li=addToFurniLib(rec.thumb, rec.it.title, {link:rec.it.link, price:rec.it.price, shop:rec.it.shop,
+          category:type, source:rec.it.source||source, itemCode:rec.it.id||'', productUrl:rec.it.link||'',
+          affiliateUrl:(rec.it.source==='rakuten'?rec.it.link:'')||'', imgUrl:rawUrlFromProxy(rec.url),
+          defer:true, rank:-1, placeScore:rec.place});
+        rec.li._provisional=true; shown.push(rec); renderFurniLibSoon();
+        return;
+      }
+      let worst=shown[0];
+      for(const s of shown) if(s.score<worst.score) worst=s;
+      if(rec.score<=worst.score) return;                 // いま表示中の30枚より悪いなら出さない
+      const li=worst.li;                                  // **同じカードを使い回す＝位置が動かない**
+      li.name=(rec.it.title||li.name).slice(0,60); li.srcCanvas=rec.thumb; li._thumb=null;
+      li.link=rec.it.link||''; li.price=rec.it.price||0; li.shop=rec.it.shop||'';
+      li.itemCode=rec.it.id||''; li.productUrl=rec.it.link||'';
+      li.affiliateUrl=(rec.it.source==='rakuten'?rec.it.link:'')||''; li.imgUrl=rawUrlFromProxy(rec.url);
+      li.placeScore=rec.place; li.cutCanvas=null; li._cutState=null;
+      rec.li=li; shown[shown.indexOf(worst)]=rec; worst.li=null;
+      refreshLibCard(li);
+    };
     await pool(items, 6, it=> new Promise(async res=>{
+      if(collectCancelled()) return res();
       const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
       const pick=urls.length? await pickBestCandidateThumb(urls) : null;
-      if(pick) scored.push({it, url:pick.url, score:pick.score, place:pick.place});
-      seen++; setCollectStatus(`画像を選別しています… ${seen}/${items.length}`); res();
+      if(pick && !collectCancelled()){
+        const rec={it, url:pick.url, score:pick.score, place:pick.place, thumb:pick.canvas, li:null};
+        scored.push(rec); showProvisional(rec);
+      }
+      seen++;
+      /* 分母はユーザーが指定した枚数にする（指示026 の3項）。従来の「1/72」は内部の多め取得の
+         数で、ユーザーには意味が分からなかった。候補の確認状況は括弧内の補足に落とす。 */
+      setCollectStatus(`画像を集めています… ${shown.length}/${count} 枚（候補 ${seen}/${items.length} 件を確認中）`);
+      res();
     }));
+    if(collectCancelled()){
+      sortCollectedTail(libBase); renderFurniLib();
+      setCollectStatus(`中止しました（${shown.length} 枚をライブラリに追加しました）`,'err');
+      toast(shown.length? shown.length+' 枚まで追加して中止しました' : '収集を中止しました');
+      return;
+    }
     // 2) 選別スコア上位だけ原寸で読み込む。取得数 > 要求数のぶんがここで捨てられる
     //    **どの30件を配るかは従来どおり選別スコアで決める。** 配置しやすさは並び順にしか
     //    使わない＝この判定を外しても取りこぼしは起きない（指示016「除外はしない」）。
@@ -3561,20 +3663,44 @@ async function doCollect(){
     logPlaceRanking(type, keep);
     let done=0, ok=0; const added=[];
     keep.forEach((k,i)=>{ k.rank=i; });
-    const libBase=State.furniLib.length; // 今回の収集ぶんはここから後ろ
+    /* 表示中の集合と keep は同じはず（どちらも選別スコア上位 count 件）。同点などで
+       ずれた場合に備えて、足りないぶんはここで作り、余ったぶんは外す（保険）。 */
+    for(const k of keep){ if(!k.li){ const s=shown.find(x=>x.it===k.it); if(s&&s.li) k.li=s.li; } }
+    for(const k of keep){ if(!k.li && k.thumb){ k.li=addToFurniLib(k.thumb, k.it.title, {link:k.it.link, price:k.it.price,
+      shop:k.it.shop, category:type, source:k.it.source||source, itemCode:k.it.id||'', productUrl:k.it.link||'',
+      affiliateUrl:(k.it.source==='rakuten'?k.it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true,
+      rank:k.rank, placeScore:k.place}); k.li._provisional=true; } }
+    const keepLis=new Set(keep.map(k=>k.li).filter(Boolean));
+    for(const s of shown){ if(s.li && !keepLis.has(s.li)){ const i=State.furniLib.indexOf(s.li); if(i>=0) State.furniLib.splice(i,1); } }
+    keep.forEach(k=>{ if(k.li) k.li.rank=k.rank; });
+    sortCollectedTail(libBase); renderFurniLib();   // 並びをここで確定（以後カードは動かない）
+    // 2) 上位だけ原寸で読み直し、**同じカードの中身だけ**サムネから差し替える（位置は動かさない）
     await pool(keep, 5, k=> new Promise(async res=>{
+      if(collectCancelled()) return res();
       const it=k.it;
-      const cv=await new Promise(r=>loadImageURL(k.url, c=>r(c), ()=>r(null)));
-      if(cv){ const li=addToFurniLib(downscaleCanvas(cv,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true, rank:k.rank, placeScore:k.place}); added.push(li); ok++; }
-      done++; setCollectStatus(`画像を読み込んでいます… ${done}/${keep.length}（成功 ${ok}）`);
-      if(done%6===0){ sortCollectedTail(libBase); renderFurniLib(); } res(); // 収集中はライブラリ再描画を間引く（毎回再描画＝O(N^2)を回避）
+      const p=new Promise(r=>loadImageURL(k.url, c=>r(c), ()=>r(null)));
+      if(k.li) k.li._fullPromise=p;                 // 差し替え前に配置されたら、これを待ってから配置する
+      const cv=await p;
+      if(cv && k.li){ k.li.srcCanvas=downscaleCanvas(cv,1000); k.li._thumb=null; k.li._provisional=false;
+        k.li._fullPromise=null; refreshLibCard(k.li); added.push(k.li); ok++; }
+      else if(cv){ const li=addToFurniLib(downscaleCanvas(cv,1000), it.title, {link:it.link, price:it.price, shop:it.shop, category:type, source:it.source||source, itemCode:it.id||'', productUrl:it.link||'', affiliateUrl:(it.source==='rakuten'?it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true, rank:k.rank, placeScore:k.place}); added.push(li); ok++; }
+      else if(k.li){ k.li._fullPromise=null; k.li._provisional=false; ok++; } // 原寸が取れなくてもサムネのまま使える（消さない）
+      done++; setCollectStatus(`画像を鮮明にしています… ${done}/${keep.length} 枚（${shown.length} 枚は表示済み）`);
+      res();
     }));
-    sortCollectedTail(libBase); renderFurniLib(); // 収集完了時に一括描画
-    setCollectStatus(`完了: ${ok} 枚をライブラリに追加しました`, 'ok');
+    renderFurniLib();
+    if(collectCancelled()){
+      setCollectStatus(`中止しました（${State.furniLib.length-libBase} 枚をライブラリに追加しました）`,'err');
+      toast('収集を中止しました'); return;
+    }
+    setCollectStatus(`完了: ${State.furniLib.length-libBase} 枚をライブラリに追加しました`, 'ok');
     trackCollect(type, added);
-    toast(ok+' 枚を収集しました');
-  }catch(err){ console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
-  finally{ $('collectBtn').disabled=false; }
+    toast((State.furniLib.length-libBase)+' 枚を収集しました');
+  }catch(err){
+    if(err && err.name==='AbortError'){ setCollectStatus('収集を中止しました','err'); toast('収集を中止しました'); }
+    else { console.error('collect failed:',err); setCollectStatus(err.message||'収集に失敗しました（サーバー/ネットワークを確認）', 'err'); }
+  }
+  finally{ stopElapsed(); endCollectCancel(); $('collectBtn').disabled=false; }
 }
 
 /* ===== 壁紙・床の収集 → シームレス素材化 → 表面へ適用 ===== */
@@ -4350,7 +4476,8 @@ on($('matPerspReset'),'click',()=>{ const a=activeSurface(); if(!a||!a.perspecti
 on($('addFurniture'),'click',()=>$('fileFurniture').click());
 on($('fileFurniture'),'change',e=>{ const files=[...e.target.files]; if(files.length){ setMode('furniture'); files.forEach(f=> loadImageFile(f, c=> addToFurniLib(c, f.name.replace(/\.[^.]+$/,'')))); toast(files.length+'件をライブラリに追加しました'); } e.target.value=''; });
 on($('collectCount'),'input',e=>{ $('collectCountV').textContent=e.target.value; });
-on($('collectBtn'),'click',doCollect);
+/* 収集中は同じボタンが「中止する」になる（指示026 の4項）。二重起動は _collect.running で防ぐ。 */
+on($('collectBtn'),'click',()=>{ if(_collect.running) cancelCollect(); else doCollect(); });
 on($('collectSource'),'change',applyCollectMode); // ソース変更時はモード再適用（メーカー箱の表示もジャンル依存）
 on($('collectGenre'),'change',()=>{ renderCategoryOptions(); applyCollectMode(); }); // ジャンル変更→カテゴリ再構築＋メーカー切替
 on($('collectType'),'change',applyCollectMode);   // カテゴリ変更→モード再適用
