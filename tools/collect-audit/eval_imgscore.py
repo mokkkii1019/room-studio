@@ -108,7 +108,8 @@ def run_set(name, cache):
 def parity(cache):
     """Diff room-studio.html's scoring against this module on identical buffers."""
     import numpy as np
-    from imgscore import gutter_score, place_feats, seam_score, text_score, vivid_score
+    from imgscore import (gutter_score, place_feats, place_score, score, seam_score,
+                          text_score, vivid_score)
 
     recs = json.load(open(os.path.join(HERE, "eval-sets", "dev.json"), encoding="utf-8"))[:24]
     pdir = os.path.join(cache, "_parity")
@@ -121,10 +122,14 @@ def parity(cache):
         tpx, tn = text_score(a)
         seams, seam_max = seam_score(a)
         pure, edge, border = place_feats(a)
+        sel = score(a)
         exp.append({"file": rec["file"] + ".raw", "text_px": float(tpx), "glyphs": int(tn),
                     "gutter": int(gutter_score(a)), "vivid": float(vivid_score(a)),
                     "seams": int(seams), "seam_max": float(seam_max),
-                    "ring_pure": pure, "ring_edge": edge, "fg_border": border})
+                    "ring_pure": pure, "ring_edge": edge, "fg_border": border,
+                    # The two scores end to end, so a weight that is changed in only one of
+                    # the two files is caught rather than silently diverging.
+                    "sel": float(sel), "place": float(place_score(a, sel))})
     json.dump(exp, open(os.path.join(pdir, "expected.json"), "w"), indent=1)
     html = os.path.join(HERE, "..", "..", "room-studio.html")
     r = subprocess.run(["node", os.path.join(HERE, "parity.js"), html, pdir])

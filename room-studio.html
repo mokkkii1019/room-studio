@@ -3050,6 +3050,46 @@ function pickBestCandidate(urls){ return new Promise(async resolve=>{
   for(const v of valid){ const sc=scoreCandidate(v.canvas); if(sc>bestScore){ bestScore=sc; best=v; } }
   resolve(best);
 }); }
+/* ---- 同一店舗の重複を抑制する（指示018 の3項・指示019 で承認）----------------
+   実測（本番が配る shelf の30枚）: 上位10件のうち **7枚が同一店舗のほぼ同じバナー**
+   （「ルミナス スチールラック」のレール接写の色・サイズ違い）で埋まっていた。1画面が
+   1店舗の同じ絵で埋まると、ユーザーの選択肢が実質的に無くなる。
+
+   **除外はしない。順番を送るだけ**なので、配られる30枚の中身は1枚も変わらない
+   （指示016 の「除外はしない」と矛盾しない）。1店舗が COLLECT_SHOP_MAX 件を超えたら、
+   超えた分を次の巡へ回す。同じ巡の中の順序は元のスコア順のまま（安定）。
+
+   COLLECT_SHOP_MAX=2 にした根拠（210枚の目視ラベルでの実測。本番と同じ選別スコア順）:
+
+   | per | 配置@3 | 深刻@3 | 配置@10 | 深刻@10 | 文字@10 | 同一店舗の最大数 |
+   |---|---|---|---|---|---|---|
+   | 0（抑制なし） | 5 | 6 | 11 | 29 | 20 | 2,2,2,3,**7**,3,2 |
+   | 1件まで      | 5 | 6 | **9** | **30** | 19 | すべて 1 |
+   | **2件まで**   | 5 | 6 | 11 | 29 | **19** | **すべて 2** |
+   | 3件まで      | 5 | 6 | 11 | 29 | 19 | 2,2,2,3,3,3,2 |
+
+   1件までにすると、店舗を割るために**スコアの低い画像を上に引き上げてしまう**ので
+   配置@10 が 11→9 に落ちる。2件までは品質指標が1つも落ちない最も強い設定。
+   指示は「2件目以降を下位に送る」だったが実測で逆効果だったので3件目以降を送る形に
+   した（指示019 で承認）。**止めるときは 0 にする。**
+
+   ⚠ この変更は上位3枚の指標（配置@3・深刻@3）を動かさない。効くのは3〜9番目で、
+   shelf の「同じレール接写7枚」が2枚になり、空いた5枠が別商品5点に入れ替わる。
+   ラベル指標ではなく**同一店舗の最大数**と目視で判断した（docs/COLLECT_RANKING_REPORT.md §11）。
+
+   🔴 これは COLLECT_RANKING='log' でも本番の並びを変える（並び替えとは独立に効く）。 */
+const COLLECT_SHOP_MAX=2;
+function diversifyByShop(rows, per){
+  if(!per || rows.length<3) return rows;
+  const seen=new Map(), passes=[];
+  for(const r of rows){                       // rows はスコア順で来る
+    const k=(r.it&&r.it.shop)||'', n=seen.get(k)||0, p=Math.floor(n/per);
+    seen.set(k, n+1);
+    while(passes.length<=p) passes.push([]);
+    passes[p].push(r);
+  }
+  return [].concat(...passes);
+}
 /* 第1段階（COLLECT_RANKING='log'）用。実画像と配置しやすさスコアの対応を目で確かめるための
    出力。並び替えは行わない。'on' のときも順位の妥当性を追えるように出す。'off' では無音。 */
 function logPlaceRanking(type, keep){
@@ -3321,8 +3361,11 @@ async function doCollect(){
     //    **どの30件を配るかは従来どおり選別スコアで決める。** 配置しやすさは並び順にしか
     //    使わない＝この判定を外しても取りこぼしは起きない（指示016「除外はしない」）。
     scored.sort((a,b)=>b.score-a.score);
-    const keep=scored.slice(0, count);
+    let keep=scored.slice(0, count);
     if(COLLECT_RANKING==='on') keep.sort((a,b)=>b.place-a.place); // 配置しやすい順に並べ替え
+    /* 同一店舗の重複抑制は並び替えの有無と無関係に効く（'log'/'off' でも同じ30枚のまま
+       順番だけ入れ替わる）。中身は変えないので取りこぼしは起きない。 */
+    keep=diversifyByShop(keep, COLLECT_SHOP_MAX);
     logPlaceRanking(type, keep);
     let done=0, ok=0; const added=[];
     keep.forEach((k,i)=>{ k.rank=i; });
