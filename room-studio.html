@@ -310,6 +310,8 @@
   .empty-note{font-size:12px; color:var(--muted); text-align:center; padding:16px 8px; border:1px dashed var(--line); border-radius:9px}
   .engine{font-size:11px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:12px; color:var(--muted); background:var(--panel-2); font-weight:500}
   .engine.ok{color:var(--accent-ink); border-color:var(--accent); background:var(--accent-weak)}
+  /* 取得できなかった等、待っても直らないことを伝える状態（指示022） */
+  .engine.err{color:#8f3a2e; border-color:#d9a79e; background:#f7eae7}
 
   /* layers */
   .layers{padding:12px 14px; background:transparent; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden}
@@ -3156,7 +3158,7 @@ function refreshLibCard(it){ const host=$('furniLib'); if(!host) return;
   const el=host.querySelector('[data-lib-id="'+it.id+'"]'); if(el && State.furniLib.includes(it)) el.replaceWith(makeFurniEl(it)); }
 
 /* ---- collect furniture images from the web (store products via server.py) ---- */
-function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display='block'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); }
+function setCollectStatus(msg, kind){ const el=$('collectStatus'); if(!el) return; el.style.display=msg?'block':'none'; el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':(kind==='err'?' err':'')); }
 /* 各ジャンルの「主なメーカー」＝実在ブランド名（楽天は店舗単位で家電メーカー直営店が少ないため、
    店舗指定ではなく“ブランド名”で楽天全体を検索する。code はそのまま検索キーワードに使う）。
    販売店（ビックカメラ等）は含めない。検索窓に任意のメーカー名を入力して追加もできる。 */
@@ -3698,6 +3700,10 @@ function loadDataURL(url){ return new Promise((res,rej)=>{ const im=new Image();
 
 /* シリアライズの純粋関数。opts.forCloud=true のとき、楽天/IKEA由来の家具は
    画像を含めず参照のみ（source/itemCode/productUrl/配置情報）にする（楽天規約順守）。 */
+/* 店舗から取ってきた画像か（＝取り直せる画像か）。ユーザーがアップロードした画像は
+   取り直せないので、この判定に入れない。保存時の「画像を持つ/持たない」の分岐に使う。 */
+function isShopSource(src){ return src==='rakuten' || src==='ikea' || src==='rughaus'
+  || src==='kanademono' || src==='bauhaus' || src==='hay' || src==='flymee'; }
 function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud;
   if(_origPngKey!==State.roomOriginal){ const origCv=document.createElement('canvas'); origCv.width=State.W; origCv.height=State.H; origCv.getContext('2d').putImageData(State.roomOriginal,0,0); _origPng=origCv.toDataURL('image/png'); _origPngKey=State.roomOriginal; }
   return {
@@ -3710,7 +3716,9 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
         strength:l.strength, lightShift:l.lightShift, keepTexture:l.keepTexture, material:l.material, matStrength:l.matStrength,
         matScale:l.matScale, matKeepShade:l.matKeepShade, perspective:l.perspective, quad:l.quad, visible:l.visible };
       const src=l.source||'upload';
-      const stripImg = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus' || src==='hay' || src==='flymee'); // クラウドには商品画像を保存しない
+      /* 配置済み家具は**作品そのもの**なので、ローカル保存では画像を持つ（指示022・案A-1）。
+         画像を落とすのはクラウド保存のときだけ。 */
+      const stripImg = forCloud && isShopSource(src);
       const f={ type:'furniture', id:l.id, name:l.name,
         x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
         bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
@@ -3727,11 +3735,20 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
     libNextId: State.libNextId,
     furniLib: opts.forFile ? [] : State.furniLib.map(it=>{
       const src=it.source||'upload';
-      const strip = forCloud && (src==='rakuten' || src==='ikea' || src==='rughaus' || src==='kanademono' || src==='bauhaus' || src==='hay' || src==='flymee'); // クラウドには商品画像を保存しない
+      /* 指示022（案A-1）: **収集した商品画像は端末に保存しない。** 参照（imgUrl / itemCode）
+         だけ持ち、開いたときに rehydrateProject() で都度取り直す。
+         理由は2つあり、どちらも同じ結論になる:
+         ・規約 —「楽天画像は都度取得・非保存」を原則にしてきたのに、収集画像だけが
+           IndexedDB に base64 で恒久保存され、収集のたびに増え続けていた（0.7MB/枚）。
+         ・性能 — 自動保存が 118MB（収集130枚時）、収集直後の保存で UI が1.7秒固まっていた。
+         **配置済み家具（layers）は作品の構成要素なので従来どおり画像を保持する**（A-2 は
+         「オフラインで作品が開けない/販売終了で作品が壊れる」ため指示022 で見送り）。
+         ユーザー自身がアップロードした画像は取り直せないので、当然そのまま保存する。 */
+      const strip = isShopSource(src);
       const o={ id:it.id, name:it.name, category:it.category||'upload', source:src,
         link:it.link||'', price:it.price||0, shop:it.shop||'', itemCode:it.itemCode||'', productUrl:it.productUrl||'', affiliateUrl:it.affiliateUrl||'',
         imgUrl:it.imgUrl||'' };
-      if(!strip){ o.src=pngCached(it.srcCanvas); if(it.cutCanvas) o.cut=pngCached(it.cutCanvas); } // 切り抜きも保存（クラウド=参照のみ時は除外）
+      if(!strip){ o.src=pngCached(it.srcCanvas); if(it.cutCanvas) o.cut=pngCached(it.cutCanvas); }
       return o;
     })
   };
@@ -3803,42 +3820,76 @@ async function loadProject(obj, opts){
    実画像に差し替える。ローカル保存(full)には現れず、クラウド参照作品を開いたときだけ働く。 */
 async function rehydrateProject(){
   const targets=[];
-  State.layers.forEach(l=>{ if(l.type==='furniture'&&l.needsRehydrate&&l.itemCode) targets.push({kind:'layer',obj:l}); });
-  State.furniLib.forEach(it=>{ if(it.needsRehydrate&&it.itemCode) targets.push({kind:'lib',obj:it}); });
+  State.layers.forEach(l=>{ if(l.type==='furniture'&&l.needsRehydrate&&(l.itemCode||l.imgUrl)) targets.push({kind:'layer',obj:l}); });
+  State.furniLib.forEach(it=>{ if(it.needsRehydrate&&(it.itemCode||it.imgUrl)) targets.push({kind:'lib',obj:it}); });
   if(!targets.length) return;
   if(!SERVER.available) await probeServer();
-  if(!SERVER.available){ toast('参照のみの家具を再取得できませんでした（収集サーバーに接続不可）'); return; }
-  let ok=0, fail=0;
+  if(!SERVER.available){ markRehydrateFailed(targets.map(t=>t.obj)); renderFurniLib(); renderLayers();
+    /* オフラインは「壊れた」ではなく「いま取れないだけ」。復旧手段（再読み込み）まで書く。 */
+    setCollectStatus(`商品画像を取得できませんでした（オフライン／サーバーに接続できません）。`
+      +`接続後にページを再読み込みすると取り直します。商品名とリンクは残っています`,'err');
+    toast('オフラインのため商品画像を取得できませんでした（商品名とリンクは残っています）'); return; }
+  let ok=0, fail=0, done=0;
+  const total=targets.length;
+  /* 案A-1 で参照のみになったぶん、ここを通る件数が「収集した枚数」まで増えた。
+     終わるまで無言だと「?再取得待ち」が並んだまま固まったように見えるので、進捗を出す。 */
+  setCollectStatus(`商品画像を再取得しています… 0/${total}`);
   await pool(targets, 4, t=> new Promise(async res=>{
-    let done=false;
+    let got=false;
     try{
-      const r=await fetch(SERVER.url+'/item?'+new URLSearchParams({code:t.obj.itemCode, source:t.obj.source||'rakuten'}), {cache:'no-store'});
-      if(r.ok){ const it=await r.json();
-        const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
-        const best=urls.length? await pickBestCandidate(urls) : null;
-        if(best){ t.obj.srcCanvas=downscaleCanvas(best.canvas,1000); t.obj.needsRehydrate=false;
-          if(t.kind==='layer'){ t.obj.dirty=true; t.obj.natW=t.obj.srcCanvas.width; t.obj.natH=t.obj.srcCanvas.height; rebuildFurniture(t.obj); }
-          else { // ライブラリ側は元URLを更新し、切り抜きも作り直す（クラウド参照経路では cut は保存されない）
-            t.obj.imgUrl=rawUrlFromProxy(best.url); t.obj.cutCanvas=null; t.obj._cutState=null; t.obj._thumb=null; cutQueueAdd(t.obj); }
-          ok++; done=true; } }
-    }catch(e){ /* 再取得失敗はプレースホルダのまま */ }
-    if(!done) fail++;
+      /* まず保存してある元画像URLで取り直す（1リクエストで済み、収集時と同じ画像が戻る）。
+         URLが無い/失効している場合だけ商品コードから候補を引き直す。 */
+      if(t.obj.imgUrl){
+        const cv=await new Promise(r=>loadImageURL(SERVER.url+'/imgproxy?url='+encodeURIComponent(t.obj.imgUrl), c=>r(c), ()=>r(null)));
+        if(cv){ applyRehydrated(t, downscaleCanvas(cv,1000), t.obj.imgUrl); got=true; }
+      }
+      if(!got && t.obj.itemCode){
+        const r=await fetch(SERVER.url+'/item?'+new URLSearchParams({code:t.obj.itemCode, source:t.obj.source||'rakuten'}), {cache:'no-store'});
+        if(r.ok){ const it=await r.json();
+          const urls=(it.cands&&it.cands.length? it.cands : [it.proxy]).filter(Boolean).map(u=>SERVER.url+u);
+          const best=urls.length? await pickBestCandidate(urls) : null;
+          if(best){ applyRehydrated(t, downscaleCanvas(best.canvas,1000), rawUrlFromProxy(best.url)); got=true; } }
+      }
+    }catch(e){ /* 取得失敗は下でプレースホルダを「取得できません」に差し替える */ }
+    if(got) ok++; else { fail++; markRehydrateFailed([t.obj]); }
+    done++; setCollectStatus(`商品画像を再取得しています… ${done}/${total}`);
     res();
   }));
-  if(ok){ renderFurniLib(); renderLayers(); render(); }
-  // 取得不可はプレースホルダ（「再取得待ち」）のまま残し、差し替え案内をトーストで通知
-  if(ok&&fail) toast(`${ok}件を再取得、${fail}件は取得できませんでした（プレースホルダのまま・提供元/ネットを確認）`);
-  else if(ok) toast(ok+'件の商品画像を再取得しました');
-  else if(fail) toast(`${fail}件の商品画像を再取得できませんでした（プレースホルダのまま）`);
+  renderFurniLib(); renderLayers(); if(ok) render();
+  /* 失敗ぶんは「?再取得待ち」のままにしない。待てば直ると誤解させないため「取得できません」に変える。
+     商品名・価格・リンクは残っているので、ユーザーは商品ページには行ける。 */
+  if(ok&&fail){ setCollectStatus(`${ok}件を再取得、${fail}件は取得できませんでした（商品名とリンクは残っています）`,'err');
+    toast(`${ok}件を再取得、${fail}件は取得できませんでした`); }
+  else if(ok){ setCollectStatus(`${ok}件の商品画像を再取得しました`,'ok'); setTimeout(()=>setCollectStatus(''),4000); }
+  else if(fail){ setCollectStatus(`${fail}件の商品画像を取得できませんでした（販売終了/ネットワークの可能性。商品名とリンクは残っています）`,'err');
+    toast(`${fail}件の商品画像を取得できませんでした`); }
+}
+/* 再取得できた1件を反映する。ライブラリ側は切り抜きを作り直す（参照経路では cut は保存されない）。 */
+function applyRehydrated(t, canvas, imgUrl){
+  t.obj.srcCanvas=canvas; t.obj.needsRehydrate=false; t.obj._rehydrateFailed=false;
+  if(t.kind==='layer'){ t.obj.dirty=true; t.obj.natW=canvas.width; t.obj.natH=canvas.height; rebuildFurniture(t.obj); }
+  else { t.obj.imgUrl=imgUrl||t.obj.imgUrl; t.obj.cutCanvas=null; t.obj._cutState=null; t.obj._thumb=null; cutQueueAdd(t.obj); }
+}
+/* 取得できなかった件を「待てば直る」ように見せない。 */
+function markRehydrateFailed(objs){
+  for(const o of objs){ if(!o.needsRehydrate) continue;
+    o._rehydrateFailed=true; o._thumb=null;
+    o.srcCanvas=placeholderCanvas('取得できません');
+    if(o.type==='furniture'){ o.dirty=true; o.natW=o.srcCanvas.width; o.natH=o.srcCanvas.height; try{ rebuildFurniture(o); }catch(e){} } }
 }
 
 /* =========================================================================
    MY PROJECTS — local favorites in IndexedDB (offline; full save incl. images)
    ========================================================================= */
-function placeholderCanvas(){ const c=document.createElement('canvas'); c.width=c.height=200; const x=c.getContext('2d');
-  x.fillStyle='#e7e2d8'; x.fillRect(0,0,200,200); x.strokeStyle='#b9b2a4'; x.lineWidth=4; x.strokeRect(6,6,188,188);
-  x.fillStyle='#9a9384'; x.textAlign='center'; x.textBaseline='middle'; x.font='bold 88px sans-serif'; x.fillText('?',100,92);
-  x.font='14px "Zen Kaku Gothic New",sans-serif'; x.fillText('再取得待ち',100,150); return c; }
+/* label を省くと「再取得待ち」（これから取りに行く）。取得に失敗した件は
+   「取得できません」を渡して、待てば直るように見せない（指示022 の3項）。 */
+function placeholderCanvas(label){ const c=document.createElement('canvas'); c.width=c.height=200; const x=c.getContext('2d');
+  const failed=!!label && label!=='再取得待ち';
+  x.fillStyle=failed?'#f0e2df':'#e7e2d8'; x.fillRect(0,0,200,200);
+  x.strokeStyle=failed?'#c99a92':'#b9b2a4'; x.lineWidth=4; x.strokeRect(6,6,188,188);
+  x.fillStyle=failed?'#a8564a':'#9a9384'; x.textAlign='center'; x.textBaseline='middle';
+  x.font='bold 88px sans-serif'; x.fillText(failed?'!':'?',100,92);
+  x.font='14px "Zen Kaku Gothic New",sans-serif'; x.fillText(label||'再取得待ち',100,150); return c; }
 function stageThumb(maxSide){ const m=Math.max(stage.width,stage.height), s=Math.min(1,maxSide/m);
   const c=document.createElement('canvas'); c.width=Math.round(stage.width*s); c.height=Math.round(stage.height*s);
   c.getContext('2d').drawImage(stage,0,0,c.width,c.height); return c.toDataURL('image/jpeg',0.7); }
