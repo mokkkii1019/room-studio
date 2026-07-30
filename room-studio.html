@@ -1048,6 +1048,7 @@ const State = {
   nextId:1,
   sam:{ ready:false, loading:false, busy:false, model:null, processor:null,
         RawImage:null, Tensor:null, device:'',
+        engine:null,                  // 'worker' | 'main'（一度だけ決める。分岐点はここ1箇所）
         imageInputs:null, embeddings:null, points:[], preview:null },
   compare:{ active:false, split:0.5, before:null }, // before = pristine room canvas
 };
@@ -2094,27 +2095,193 @@ const samPreviewCanvas = document.createElement('canvas');
 
 function setSamStatus(msg, kind){ for(const id of ['samStatus','eraseSamStatus']){ const el=$(id); if(el){ el.textContent=msg; el.className='engine'+(kind==='ok'?' ok':''); } } }
 
+/* =========================================================================
+   SAM をワーカーで動かす（指示023・案D）
+
+   なぜ: 推論はメインスレッドで走っていて、**1回の画像解析で 6,458ms のあいだ UI が完全に
+   固まっていた**（docs/PERF_INVESTIGATION.md §3）。アプリ全体で最悪の停止時間で、保存の
+   1.1秒より長い。ワーカーへ出しても**待ち時間そのものは変わらない**が、待っているあいだ
+   スクロールも他の操作もできるようになる。
+
+   構成:
+   ・ワーカーは Blob の **module worker**（このHTMLは1枚もので配信しているのでファイルを増やさない）。
+   ・transformers.js は CDN から動的 import。フォールバックはメイン側と同じ3つ。
+   ・画像は **ImageBitmap を転送**して渡す（従来の toDataURL('image/png') が要らなくなる）。
+   ・マスクは **Uint8Array を転送**して返す（W×H のコピーを避ける）。
+
+   **モデルは worker とメインのどちらか片方でしか読まない。** 二重ロードはメモリを倍食うため、
+   engine を最初に一度だけ決め（samEngine）、メイン側ローダは engine==='worker' のとき即 return する。
+   ワーカーが落ちた場合は **terminate してメモリを解放してから** メイン経路へ切り替える。
+
+   戻し方: SAM_WORKER=false でワーカーを使わず従来経路になる。 */
+const SAM_WORKER = true;
+const SAM_WORKER_SRC = `
+let mod=null, model=null, processor=null, RawImage=null, Tensor=null;
+let device='wasm', emb=null, ii=null, imgW=0, imgH=0;
+const post=(m,t)=>self.postMessage(m,t||[]);
+async function importFirst(urls){ let err;
+  for(const u of urls){ try{ return await import(u); }catch(e){ err=e; } }
+  throw err||new Error('import failed'); }
+async function load(cdns, modelId){
+  if(model) return {device, cached:true};
+  mod = await importFirst(cdns);
+  const { SamModel, AutoProcessor, RawImage:RI, Tensor:T } = mod;
+  RawImage=RI; Tensor=T;
+  try{ if(self.navigator.gpu && await self.navigator.gpu.requestAdapter()) device='webgpu'; }catch(e){}
+  const progress_callback=(p)=>{ if(p&&p.status==='progress'&&p.progress!=null)
+    post({type:'progress', phase:'model', file:p.file||'', pct:Math.round(p.progress)}); };
+  model = await SamModel.from_pretrained(modelId, { device, progress_callback });
+  processor = await AutoProcessor.from_pretrained(modelId, { progress_callback });
+  return {device, cached:false};
+}
+async function embed(bitmap, w, h){
+  imgW=w; imgH=h;
+  const oc=new OffscreenCanvas(w,h), ox=oc.getContext('2d');
+  ox.drawImage(bitmap,0,0); if(bitmap.close) bitmap.close();
+  const id=ox.getImageData(0,0,w,h);
+  const image=new RawImage(id.data, w, h, 4);
+  ii=await processor(image);
+  emb=await model.get_image_embeddings(ii);
+  return true;
+}
+function toMask(maskTensor, iouScores){
+  const plane=imgH*imgW, data=maskTensor.data, iou=iouScores.data, nm=iou.length;
+  let best=0,bv=-Infinity; for(let k=0;k<nm;k++){ const v=Number(iou[k]); if(v>bv){bv=v;best=k;} }
+  const out=new Uint8Array(plane);
+  if(data.length===nm*plane){ const off=best*plane; for(let i=0;i<plane;i++) out[i]=data[off+i]?255:0; }
+  else { for(let i=0;i<plane;i++) out[i]=data[nm*i+best]?255:0; }
+  return out;
+}
+async function decode(points){
+  const reshaped=ii.reshaped_input_sizes[0];
+  const coords=[], labels=[];
+  for(const p of points){ coords.push((p.x/imgW)*reshaped[1], (p.y/imgH)*reshaped[0]); labels.push(BigInt(p.label)); }
+  const input_points=new Tensor('float32', coords, [1,1,points.length,2]);
+  const input_labels=new Tensor('int64', labels, [1,1,points.length]);
+  const out=await model({ ...emb, input_points, input_labels });
+  const masks=await processor.post_process_masks(out.pred_masks, ii.original_sizes, ii.reshaped_input_sizes);
+  return toMask(masks[0], out.iou_scores);
+}
+self.onmessage=async (e)=>{
+  const d=e.data||{}, id=d.id;
+  try{
+    if(d.type==='ping'){ post({id, ok:true, offscreen: typeof OffscreenCanvas!=='undefined'}); return; }
+    if(d.type==='load'){ post({id, ok:true, ...(await load(d.cdns, d.model))}); return; }
+    if(d.type==='embed'){ await embed(d.bitmap, d.w, d.h); post({id, ok:true}); return; }
+    if(d.type==='decode'){ const m=await decode(d.points); post({id, ok:true, mask:m}, [m.buffer]); return; }
+    if(d.type==='reset'){ emb=null; ii=null; post({id, ok:true}); return; }
+    post({id, ok:false, error:'unknown '+d.type});
+  }catch(err){ post({id, ok:false, error:String((err&&err.stack)||err)}); }
+};
+post({type:'hello'});
+`;
+const _samW={ worker:null, url:null, seq:0, pending:new Map(), booted:false };
+/* module worker / OffscreenCanvas / createImageBitmap が揃っていない環境（古い iOS Safari 等）は
+   ここで false になり、従来のメイン経路に落ちる。 */
+function samWorkerCapable(){ return SAM_WORKER && typeof Worker!=='undefined'
+  && typeof OffscreenCanvas!=='undefined' && typeof createImageBitmap==='function'; }
+function samWorkerKill(reason){
+  if(_samW.worker){ try{ _samW.worker.terminate(); }catch(e){} }   // モデルごとメモリを解放してから切り替える
+  if(_samW.url){ try{ URL.revokeObjectURL(_samW.url); }catch(e){} }
+  for(const [,p] of _samW.pending) p.rej(new Error(reason||'worker terminated'));
+  _samW.pending.clear(); _samW.worker=null; _samW.url=null; _samW.booted=false;
+}
+/* ワーカーを起こして hello を待つ。module worker 非対応だとここで失敗するので、
+   「対応しているか」の実質的な判定にもなっている。 */
+function samWorkerBoot(){ return new Promise(res=>{
+  if(_samW.booted) return res(true);
+  try{
+    _samW.url=URL.createObjectURL(new Blob([SAM_WORKER_SRC],{type:'text/javascript'}));
+    const w=new Worker(_samW.url,{type:'module'});
+    const to=setTimeout(()=>{ samWorkerKill('boot timeout'); res(false); }, 5000);
+    w.onmessage=(e)=>{
+      const d=e.data||{};
+      if(d.type==='hello'){ clearTimeout(to); _samW.worker=w; _samW.booted=true; res(true); return; }
+      if(d.type==='progress'){ samOnProgress(d); return; }
+      const p=_samW.pending.get(d.id); if(!p) return;
+      _samW.pending.delete(d.id);
+      d.ok? p.res(d) : p.rej(new Error(d.error||'worker error'));
+    };
+    w.onerror=(err)=>{ clearTimeout(to); console.warn('[sam] worker failed to start:', err&&err.message); samWorkerKill('onerror'); res(false); };
+  }catch(e){ console.warn('[sam] worker unavailable:', e); samWorkerKill('exception'); res(false); }
+}); }
+function samCall(type, payload, transfer){ return new Promise((res,rej)=>{
+  if(!_samW.worker) return rej(new Error('no worker'));
+  const id=++_samW.seq; _samW.pending.set(id,{res,rej});
+  _samW.worker.postMessage(Object.assign({id,type}, payload||{}), transfer||[]);
+}); }
+function samOnProgress(d){ if(d.phase==='model' && d.pct!=null) setSamStatus('AIモデルを読み込み中… '+d.pct+'%（初回のみ）'); }
+/* engine の決定はここ1箇所。以後 State.sam.engine を見るだけでどちらの経路か分かる。 */
+async function samEngine(){
+  if(State.sam.engine) return State.sam.engine;
+  let eng='main';
+  if(samWorkerCapable() && await samWorkerBoot()) eng='worker';
+  State.sam.engine=eng;
+  console.log('[sam] engine='+eng+(eng==='main'
+    ? ' (module worker/OffscreenCanvas 非対応か SAM_WORKER=false のため従来経路)' : ''));
+  return eng;
+}
+/* ワーカー経路で事故ったらメイン経路へ切り替える。**必ず terminate してから**
+   （ワーカー側のモデルを残したままメインでも読むと、メモリを二重に食う）。 */
+function samFallbackToMain(err){
+  console.warn('[sam] worker path failed, falling back to main thread:', err&&err.message||err);
+  samWorkerKill('fallback');
+  State.sam.engine='main'; State.sam.ready=false; State.sam.loading=false;
+  State.sam.embeddings=null; State.sam.imageInputs=null;
+  console.log('[sam] engine=main (fallback)');
+}
+
 async function ensureSamLoaded(){
   if(State.sam.ready) return true;
   if(State.sam.loading) return false;
+  const eng=await samEngine();
   State.sam.loading=true; setSamStatus('AIモデルを読み込み中…（初回のみ・数十秒かかる場合があります）');
   try{
-    const mod = await importWithFallback(SAM_CDNS);
-    const { SamModel, AutoProcessor, RawImage, Tensor } = mod;
-    let device='wasm';
-    try{ if(navigator.gpu && await navigator.gpu.requestAdapter()) device='webgpu'; }catch(e){}
-    const model = await SamModel.from_pretrained(SAM_MODEL, { device });
-    const processor = await AutoProcessor.from_pretrained(SAM_MODEL);
-    Object.assign(State.sam,{ model, processor, RawImage, Tensor, device, ready:true, loading:false });
-    setSamStatus('準備完了（'+(device==='webgpu'?'WebGPU':'CPU')+'）— 物体をクリックして選択','ok');
-    return true;
-  }catch(err){ console.error('SAM load failed:',err); State.sam.loading=false;
+    if(eng==='worker'){
+      const r=await samCall('load',{cdns:SAM_CDNS, model:SAM_MODEL});
+      Object.assign(State.sam,{ device:r.device, ready:true, loading:false });
+      console.log('[sam] loaded in worker: device='+r.device);
+      setSamStatus('準備完了（'+(r.device==='webgpu'?'WebGPU':'CPU')+'・別スレッド）— 物体をクリックして選択','ok');
+      return true;
+    }
+    return await samLoadMain();
+  }catch(err){
+    if(State.sam.engine==='worker'){ samFallbackToMain(err); try{ return await samLoadMain(); }catch(e2){ err=e2; } }
+    console.error('SAM load failed:',err); State.sam.loading=false;
     setSamStatus('AIモデルを読み込めませんでした（ネット接続を確認）。ブラシ/自動選択は使えます');
-    toast('SAMモデルを読み込めませんでした'); return false; }
+    toast('SAMモデルを読み込めませんでした'); return false;
+  }
+}
+/* 従来経路（メインスレッドで推論）。**engine==='worker' のときは絶対に走らせない** */
+async function samLoadMain(){
+  if(State.sam.engine==='worker'){ console.warn('[sam] samLoadMain called while worker engine active — ignored'); return false; }
+  const mod = await importWithFallback(SAM_CDNS);
+  const { SamModel, AutoProcessor, RawImage, Tensor } = mod;
+  let device='wasm';
+  try{ if(navigator.gpu && await navigator.gpu.requestAdapter()) device='webgpu'; }catch(e){}
+  const model = await SamModel.from_pretrained(SAM_MODEL, { device });
+  const processor = await AutoProcessor.from_pretrained(SAM_MODEL);
+  Object.assign(State.sam,{ model, processor, RawImage, Tensor, device, ready:true, loading:false });
+  console.log('[sam] loaded on main thread: device='+device);
+  setSamStatus('準備完了（'+(device==='webgpu'?'WebGPU':'CPU')+'）— 物体をクリックして選択','ok');
+  return true;
 }
 
 async function ensureSamEmbeddings(){
   if(State.sam.embeddings) return true;
+  if(State.sam.engine==='worker'){
+    /* 6.5秒かかる処理をワーカーに投げる。メインは空くので、**経過秒を出し続けて
+       「固まっていない」ことを見せる**（進捗そのものは ORT から取れない）。 */
+    const t0=performance.now();
+    const tick=setInterval(()=>setSamStatus('画像を解析中… '+((performance.now()-t0)/1000).toFixed(1)+'秒（この間もほかの操作ができます）'), 100);
+    try{
+      const bmp=await createImageBitmap(State.roomCanvas);        // 転送で渡す（toDataURL が要らなくなった）
+      await samCall('embed',{bitmap:bmp, w:State.W, h:State.H},[bmp]);
+      State.sam.embeddings=true; State.sam.imageInputs=true;      // 実体はワーカー側。ここでは「解析済み」の印
+      setSamStatus('物体をクリックして選択','ok');
+      return true;
+    } finally { clearInterval(tick); }
+  }
   setSamStatus('画像を解析中…');
   const image = await State.sam.RawImage.read(State.roomCanvas.toDataURL('image/png'));
   const imageInputs = await State.sam.processor(image);
@@ -2138,6 +2305,11 @@ function samTensorToMask(maskTensor, iouScores){
 async function samDecode(){
   const pts=State.sam.points;
   if(!pts.length){ State.sam.preview=null; rebuildSamPreview(); renderOverlay(); return; }
+  if(State.sam.engine==='worker'){
+    const r=await samCall('decode',{points:pts.map(p=>({x:p.x,y:p.y,label:p.label}))});
+    State.sam.preview=new Uint8ClampedArray(r.mask.buffer||r.mask);  // 転送されたバッファをそのまま使う（コピーしない）
+    rebuildSamPreview(); renderOverlay(); return;
+  }
   const ii=State.sam.imageInputs, T=State.sam.Tensor;
   const reshaped=ii.reshaped_input_sizes[0]; // [h, w]
   const coords=[]; const labels=[];
@@ -2153,14 +2325,24 @@ async function samDecode(){
 async function handleSamClick(p, label){
   if(State.sam.busy) return;
   if(State.mode==='surface' && !activeSurface()){ toast('表面を選択してください'); return; }
-  State.sam.busy=true; busy(true, State.sam.ready?'AIで解析中…':'AIモデルを準備中…');
+  const eng=await samEngine();
+  State.sam.busy=true;
+  /* ワーカー経路では**画面を覆う busy オーバーレイを出さない**。メインスレッドは空いていて
+     操作できるのに、オーバーレイでクリックを塞いだら意味がないため。進捗は SAM の状態表示に出す。
+     従来経路はどのみち固まるので、これまでどおりオーバーレイを出す。 */
+  if(eng!=='worker') busy(true, State.sam.ready?'AIで解析中…':'AIモデルを準備中…');
   try{
     if(!(await ensureSamLoaded())){ return; }
     await ensureSamEmbeddings();
     State.sam.points.push({x:p.x, y:p.y, label});
+    setSamStatus('選択範囲を計算中…');
     await samDecode();
-  }catch(err){ console.error(err); toast('解析に失敗しました'); setSamStatus('解析に失敗しました。やり直してください'); }
-  finally{ busy(false); State.sam.busy=false; }
+    setSamStatus('物体をクリックして選択（「選択に追加」で確定）','ok');
+  }catch(err){
+    if(State.sam.engine==='worker'){ samFallbackToMain(err); }
+    console.error(err); toast('解析に失敗しました'); setSamStatus('解析に失敗しました。やり直してください');
+  }
+  finally{ if(eng!=='worker') busy(false); State.sam.busy=false; }
 }
 
 /* merge the pending AI preview into the active mask (surface or erase), silently */
@@ -2176,7 +2358,9 @@ function samCommit(){
   toast(erased?'消す範囲に追加しました':'選択に追加しました');
 }
 function samResetPoints(){ State.sam.points=[]; State.sam.preview=null; rebuildSamPreview(); renderOverlay(); }
-function invalidateSam(){ State.sam.embeddings=null; State.sam.imageInputs=null; State.sam.points=[]; State.sam.preview=null; }
+function invalidateSam(){ State.sam.embeddings=null; State.sam.imageInputs=null; State.sam.points=[]; State.sam.preview=null;
+  /* ワーカー側にも部屋が変わったことを伝える（古い埋め込みを持ち続けさせない） */
+  if(State.sam.engine==='worker' && _samW.worker) samCall('reset').catch(()=>{}); }
 
 function rebuildSamPreview(){ const c=samPreviewCanvas, x=c.getContext('2d'); x.clearRect(0,0,State.W,State.H);
   const pv=State.sam.preview; if(!pv) return;
