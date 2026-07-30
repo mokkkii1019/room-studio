@@ -337,6 +337,11 @@
     background:var(--ink); color:#fff; padding:10px 16px; border-radius:9px; font-size:12.5px; box-shadow:var(--shadow);
     transition:opacity .2s, transform .2s; pointer-events:none; z-index:50; max-width:80vw}
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  /* 自動保存が失敗したときの警告（指示021 の案G）。トーストは2.2秒で消えてしまい、
+     データが失われる話には短すぎるので、直るまで消えない帯を別に出す。 */
+  #autosaveWarn{position:fixed; left:50%; top:10px; transform:translateX(-50%); display:none;
+    background:#b5493a; color:#fff; padding:9px 14px; border-radius:9px; font-size:12.5px;
+    box-shadow:var(--shadow); z-index:60; max-width:min(92vw,720px); line-height:1.5}
 
   /* busy overlay */
   #busy{position:fixed; inset:0; background:rgba(20,22,24,.45); display:none; align-items:center; justify-content:center; z-index:60}
@@ -971,6 +976,7 @@
     <div id="favEmpty" class="empty-note" style="padding:16px">「現在の作品を保存」でJSONファイルとして書き出せます（保存先とファイル名を指定）。保存したファイルは「ファイルから読み込み」で開けます。<br>※以前この端末（ブラウザ）内に保存した作品があればここに一覧表示されます。</div>
   </div>
 </div>
+<div id="autosaveWarn" role="alert"></div>
 <div id="toast"></div>
 <div id="busy"><div class="card"><span class="spin"></span><span id="busyText">処理中…</span></div></div>
 
@@ -3856,15 +3862,43 @@ function idbSessionGet(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ c
 function idbSessionDel(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_SESSION,'readwrite'); tx.objectStore(IDB_SESSION).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
 // ---- autosave / restore (編集中セッション) ----
 let _autosaveTimer=null, _autosaveBusy=false;
-function scheduleAutosave(){ clearTimeout(_autosaveTimer); _autosaveTimer=setTimeout(doAutosave, 2500); }
-async function doAutosave(){
+/* 前回の保存より後に編集があったか（指示021 の案C）。タブを切り替えるたびに無条件で
+   作品まるごとを書いていたのをやめる。実測 317ms・うち UI 停止 143ms が、変更が無ければ 0 になる
+   （docs/PERF_INVESTIGATION.md §2-3）。render() が呼ばれたら編集ありとみなす。 */
+let _autosaveDirty=false;
+/* 自動保存が失敗したことをユーザーに伝えたか（指示021 の案G）。失敗は 2.5 秒ごとに繰り返し
+   起きうるので、トーストは「失敗し始めたとき」に1回だけ出す。 */
+let _autosaveFailed=false;
+function scheduleAutosave(){ _autosaveDirty=true; clearTimeout(_autosaveTimer); _autosaveTimer=setTimeout(doAutosave, 2500); }
+/* opts.force=true で変更が無くても保存する（明示的な保存の直前など）。 */
+async function doAutosave(opts){
+  if(!_autosaveDirty && !(opts&&opts.force)) return;   // 変更が無ければ何もしない（案C）
   if(_autosaveBusy){ scheduleAutosave(); return; }
-  _autosaveBusy=true;
+  _autosaveBusy=true; _autosaveDirty=false;            // 保存中の編集は次回に拾えるよう、先に落とす
   try{
     if(!State.roomCanvas || !State.W){ await idbSessionDel('current'); }
     else{ await idbSessionPut({ id:'current', savedAt:Date.now(), project:buildProjectObject({forCloud:false}) }); }
-  }catch(e){ console.warn('autosave failed', e); }
+    if(_autosaveFailed){ _autosaveFailed=false; const el=$('autosaveWarn'); if(el) el.style.display='none'; toast('自動保存が復旧しました'); }
+  }catch(e){
+    console.warn('autosave failed', e);
+    _autosaveDirty=true;                               // 失敗したぶんは次の機会に再挑戦する
+    notifyAutosaveFailure(e);
+  }
   finally{ _autosaveBusy=false; }
+}
+/* 案G: 黙って失敗させない。「保存できません」で終わらせず、ユーザーが取れる次の行動を出す。
+   自動保存が死んだままだと、リロードで編集内容が丸ごと消える。 */
+function notifyAutosaveFailure(e){
+  if(_autosaveFailed) return;                          // 連続失敗で毎回出さない
+  _autosaveFailed=true;
+  const quota = e && (e.name==='QuotaExceededError' || e.name==='NS_ERROR_DOM_QUOTA_REACHED'
+                      || /quota/i.test(String(e && e.message || e)));
+  const msg = quota
+    ? '自動保存できません（端末の保存容量が不足）。「作品をファイルに保存」で書き出すか、MY作品の不要な作品を削除してください'
+    : '自動保存できません。編集内容が失われないよう「作品をファイルに保存」で書き出してください';
+  toast(msg);
+  const el=$('autosaveWarn');
+  if(el){ el.textContent='⚠ '+msg; el.style.display='block'; }
 }
 async function restoreAutosave(){
   try{ const s=await idbSessionGet('current'); if(s && s.project && s.project.room){ await loadProject(s.project, {restored:true}); return true; } }
@@ -4279,7 +4313,10 @@ ensureFirstSeen();   // record first-use date for the freemium grandfather windo
 // 直前の編集セッションを復元（F5 / Shift+Ctrl+R などで更新しても初期化されない）。無ければ初回チュートリアル。
 (async()=>{ let restored=false; try{ restored=await restoreAutosave(); }catch(e){}
   if(!restored && !localStorage.getItem('roomstudio_tut_done')) setTimeout(tutStart, 500); })();
-// 離脱/非表示の直前にも保存（デバウンス待ちの取りこぼし防止）
+/* 離脱/非表示の直前にも保存（デバウンス待ちの取りこぼし防止）。
+   指示021 の案C: **前回の保存より後に編集があったときだけ**走る（doAutosave 側で判定）。
+   従来はタブを切り替えるたびに無条件で作品まるごとを書いていて、実測 317ms・うち UI 停止
+   143ms（PNGキャッシュが冷たいと約1.7秒）を毎回払っていた。docs/PERF_INVESTIGATION.md §2-3。 */
 on(window,'pagehide',()=>{ try{ doAutosave(); }catch(e){} });
 on(document,'visibilitychange',()=>{ if(document.visibilityState==='hidden'){ try{ doAutosave(); }catch(e){} } });
 </script>
