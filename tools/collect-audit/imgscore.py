@@ -189,6 +189,11 @@ def place_score(a, sel=None):
     diagrams and illustrated brand cards, all of which look like 'one object on white'.
     Weights come from a multi-start search over 210 hand labels with
     leave-one-category-out validation (docs/COLLECT_RANKING_REPORT.md).
+
+    Re-tuning these was tried in 指示018 (text terms up, background terms down) and
+    REJECTED in 指示019: it improved the 70-image @10 totals but made the first three
+    slots worse in sofa / plant / chest. Judge any future change on the first three
+    (docs/COLLECT_RANKING_REPORT.md §12), not on @10 sums.
     """
     if sel is None:
         sel = score(a)
@@ -200,6 +205,25 @@ def place_score(a, sel=None):
             - 0.6 * _c01(edge / 0.10)
             - 0.3 * _c01(tn / 45.0)
             - 2.0 * _c01(tpx / 0.09))
+
+
+def diversify_by_shop(rows, per=2, key="shop"):
+    """Mirror of diversifyByShop() in room-studio.html: send a shop's (per+1)th and later
+    images to a later pass so one shop cannot fill the first screen. Nothing is dropped,
+    and the order inside a pass is unchanged, so this is a pure reordering.
+    """
+    if not per or len(rows) < 3:
+        return list(rows)
+    seen, passes = {}, []
+    for r in rows:
+        k = r.get(key) or ""
+        n = seen.get(k, 0)
+        seen[k] = n + 1
+        p = n // per
+        while len(passes) <= p:
+            passes.append([])
+        passes[p].append(r)
+    return [r for p in passes for r in p]
 
 
 def score_legacy(a64):
