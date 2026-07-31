@@ -3680,6 +3680,18 @@ async function doCollect(){
     /* 同一店舗の重複抑制は並び替えの有無と無関係に効く（'log'/'off' でも同じ30枚のまま
        順番だけ入れ替わる）。中身は変えないので取りこぼしは起きない。 */
     keep=diversifyByShop(keep, COLLECT_SHOP_MAX);
+    /* **ユーザーが部屋に置いたカードは必ず配る枚数の中に含める**（指示028 の1項）。
+       選別スコアが上位に届かなくても、「選んで置いた」という明示の行動のほうを優先する。
+       枠は増やさず、**未配置でいちばんスコアが低いもの1件と入れ替える**ので、
+       ライブラリに増える枚数はスライダーの指定どおりのまま（＝完了メッセージとも食い違わない）。
+       これで shown（画面に出ている集合）と keep（配る集合）は再び一致する。 */
+    for(const p of shown){
+      if(!p.li || !p.li._pinned || keep.includes(p)) continue;
+      let wi=-1;
+      for(let i=0;i<keep.length;i++){ if(keep[i].li && keep[i].li._pinned) continue;
+        if(wi<0 || keep[i].score<keep[wi].score) wi=i; }
+      if(wi>=0) keep[wi]=p; else keep.push(p);   // 全部が配置済みという極端な場合だけ枠が増える
+    }
     logPlaceRanking(type, keep);
     let done=0, ok=0; const added=[];
     keep.forEach((k,i)=>{ k.rank=i; });
