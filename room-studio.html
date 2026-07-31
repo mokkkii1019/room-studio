@@ -2873,7 +2873,18 @@ async function placeFromLib(id, px, py){ if(!State.W){ toast('先に部屋を読
   let note='';
   /* 収集中に見えている暫定サムネ（300px）をそのまま配置すると、あとで原寸に差し替わっても
      配置済みレイヤーは低解像度のまま残る。原寸の読み込みが走っているなら待ってから配置する
-     （指示026 の2項）。 */
+     （指示026 の2項）。
+     選別フェーズ（＝カードが最初に見えはじめる区間）では原寸の読み込みがまだ始まっていないので、
+     _fullPromise が無い。その場合はここで原寸を取りに行く。あわせて、待っている間に
+     showProvisional がこのカードの中身を別商品へ差し替えないよう固定する
+     （固定しないと、落とした商品と違う商品が置かれうる。指示027 の本番確認で発覚）。 */
+  if(it._provisional) it._pinned=true;
+  if(it._provisional && !it._fullPromise && it._fullUrl){
+    it._fullPromise=new Promise(r=>loadImageURL(it._fullUrl, c=>r(c), ()=>r(null))).then(cv=>{
+      if(cv && it._provisional){ it.srcCanvas=downscaleCanvas(cv,1000); it._thumb=null; it._provisional=false;
+        it._fullPromise=null; refreshLibCard(it); }
+      return cv; });
+  }
   if(it._fullPromise){ busy(true,'画像を読み込んでいます…'); try{ await it._fullPromise; }catch(e){} finally{ busy(false); } }
   if(AUTO_CUT && !it.cutCanvas && it.imgUrl && SERVER.bgcut && it._cutState!=='failed'){
     // 収集品で切り抜き未完了 → 優先実行して待つ（キュー待ちを追い越す）。タイムアウトは元画像で配置
@@ -3505,19 +3516,23 @@ async function resolveShopCode(brand, type){
    実時間は縮めない（並列度も取得数も変えない）。**何が起きているかを見せる**ことだけをやる。
    調査は docs/COLLECT_UX_INVESTIGATION.md: 29.7秒のうち25.5秒（86%）は画面に何も出ず、
    最初の7.5秒は「検索中…」だけで無言だった。 */
-const _collect={ cancel:false, ac:null, running:false };
+const _collect={ cancel:false, ac:null, running:false, btnLabel:'' };
 function collectCancelled(){ return _collect.cancel; }
 function startCollectCancel(){
   _collect.cancel=false; _collect.ac=(typeof AbortController!=='undefined')?new AbortController():null;
   _collect.running=true;
   /* 収集ボタンをそのまま「中止する」に変える。ボタンを増やすと、その高さ（実測42px）ぶん
-     ライブラリ全体が上下に動いてしまうため（指示026 の検証で発見）。 */
-  const b=$('collectBtn'); if(b){ b.classList.remove('primary'); const l=b.querySelector('.lbl'); if(l) l.textContent='中止する'; }
+     ライブラリ全体が上下に動いてしまうため（指示026 の検証で発見）。
+     文言は applyCollectMode() がモードごとに変えている（「収集する」/「家具店から収集」）ので、
+     決め打ちで戻さず、いまの文言を控えておいて endCollectCancel() でそれに戻す（指示027 の本番確認で発覚）。 */
+  const b=$('collectBtn'); if(b){ b.classList.remove('primary'); const l=b.querySelector('.lbl');
+    if(l){ _collect.btnLabel=l.textContent; l.textContent='中止する'; } }
   const st=$('collectStatus'); if(st) st.classList.add('reserve');   // 高さを予約してライブラリを動かさない
 }
 function endCollectCancel(){
   _collect.running=false; _collect.ac=null;
-  const b=$('collectBtn'); if(b){ b.classList.add('primary'); const l=b.querySelector('.lbl'); if(l) l.textContent='家具を収集'; }
+  const b=$('collectBtn'); if(b){ b.classList.add('primary'); const l=b.querySelector('.lbl');
+    if(l && _collect.btnLabel) l.textContent=_collect.btnLabel; }
   /* 高さの予約はここでは外さない。完了メッセージは元の文言より短く、ここで外すと
      箱が縮んで**その下のライブラリ全体が58px跳ね上がる**（実測）。予約は状態表示を
      空にするときに外す（setCollectStatus 内）。 */
@@ -3616,13 +3631,18 @@ async function doCollect(){
           category:type, source:rec.it.source||source, itemCode:rec.it.id||'', productUrl:rec.it.link||'',
           affiliateUrl:(rec.it.source==='rakuten'?rec.it.link:'')||'', imgUrl:rawUrlFromProxy(rec.url),
           defer:true, rank:-1, placeScore:rec.place});
-        rec.li._provisional=true; shown.push(rec); renderFurniLibSoon();
+        rec.li._provisional=true; rec.li._fullUrl=rec.url;  // 配置されたら、この原寸を取りに行く
+        shown.push(rec); renderFurniLibSoon();
         return;
       }
-      let worst=shown[0];
-      for(const s of shown) if(s.score<worst.score) worst=s;
+      /* ユーザーが配置したカード（_pinned）は差し替えの対象から外す。落とした商品と
+         違う商品が置かれてしまうため（指示027）。 */
+      let worst=null;
+      for(const s of shown){ if(s.li && s.li._pinned) continue; if(!worst || s.score<worst.score) worst=s; }
+      if(!worst) return;
       if(rec.score<=worst.score) return;                 // いま表示中の30枚より悪いなら出さない
       const li=worst.li;                                  // **同じカードを使い回す＝位置が動かない**
+      li._fullUrl=rec.url;
       li.name=(rec.it.title||li.name).slice(0,60); li.srcCanvas=rec.thumb; li._thumb=null;
       li.link=rec.it.link||''; li.price=rec.it.price||0; li.shop=rec.it.shop||'';
       li.itemCode=rec.it.id||''; li.productUrl=rec.it.link||'';
@@ -3669,7 +3689,7 @@ async function doCollect(){
     for(const k of keep){ if(!k.li && k.thumb){ k.li=addToFurniLib(k.thumb, k.it.title, {link:k.it.link, price:k.it.price,
       shop:k.it.shop, category:type, source:k.it.source||source, itemCode:k.it.id||'', productUrl:k.it.link||'',
       affiliateUrl:(k.it.source==='rakuten'?k.it.link:'')||'', imgUrl:rawUrlFromProxy(k.url), defer:true,
-      rank:k.rank, placeScore:k.place}); k.li._provisional=true; } }
+      rank:k.rank, placeScore:k.place}); k.li._provisional=true; k.li._fullUrl=k.url; } }
     const keepLis=new Set(keep.map(k=>k.li).filter(Boolean));
     for(const s of shown){ if(s.li && !keepLis.has(s.li)){ const i=State.furniLib.indexOf(s.li); if(i>=0) State.furniLib.splice(i,1); } }
     keep.forEach(k=>{ if(k.li) k.li.rank=k.rank; });
