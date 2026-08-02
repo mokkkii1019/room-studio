@@ -275,14 +275,16 @@ def demo_page(len: str = "15", ratio: str = "16x9", clean: str = "", preset: str
 
 
 @app.get("/lp/{slug}", response_class=HTMLResponse)
-def landing(slug: str):
+def landing(slug: str, request: Request):
     """検索意図別ランディングページ（サーバーレンダリング・GA4対応）。"""
     page = _site.landing_html(slug, os.path.join(APP_DIR, "lp-assets"))
     if page is None:
         # 廃止したLPは404ではなく、生き残ったLPへ301（検索評価と流入を引き継ぐ）。
         dest = _site.landing_redirect(slug)
         if dest:
-            return RedirectResponse(dest, status_code=301)
+            # クエリも引き継ぐ（指示031・A3）。落とすと utm_* が消え、退役スラッグ経由の
+            # 流入が GA4 で (direct)/(none) になる＝キャンペーンが復元できない。
+            return RedirectResponse(_site.with_query(dest, request.url.query), status_code=301)
         raise HTTPException(status_code=404, detail="not found")
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 

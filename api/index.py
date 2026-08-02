@@ -161,13 +161,16 @@ def demo_page(len: str = "15", ratio: str = "16x9", clean: str = "", preset: str
 
 
 @app.get("/lp/{slug}", response_class=HTMLResponse)
-def landing(slug: str):
+def landing(slug: str, request: Request):
     page = _site.landing_html(slug, os.path.join(ROOT, "lp-assets"))
     if page is None:
         # A retired LP keeps its search equity by 301-ing to the surviving page.
         dest = _site.landing_redirect(slug)
         if dest:
-            return RedirectResponse(dest, status_code=301)
+            # Carry the query string across (指示031・A3). Dropping it loses any utm_*
+            # on the way, so a visit that arrived through a retired slug would land in
+            # GA4 as (direct)/(none) — the campaign is unrecoverable after the hop.
+            return RedirectResponse(_site.with_query(dest, request.url.query), status_code=301)
         raise HTTPException(status_code=404, detail="not found")
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 

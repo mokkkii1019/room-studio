@@ -101,6 +101,24 @@ COLLECT_RANKING = os.environ.get("COLLECT_RANKING", "").strip().lower()
 # the served HTML, where the app then loads gtag.js. Unset = nothing is sent.
 GA4_ID = os.environ.get("GA4_ID", "").strip()
 
+# 運営自身の除外（?notrack=1 → localStorage rs_notrack）の"方式"の切替（指示031・A2）。
+#
+#   未設定/0 … 除外端末では gtag.js を**一切読まない**（従来どおりの既定）。
+#   1        … 除外端末でも GA4 にだけ `traffic_type:'internal'` を付けて送る。除外は
+#              GA4 の「内部トラフィック」データフィルタ側で行う。
+#
+# 1 にする理由は「除外を維持したまま UTM のテストができるようにする」こと。従来方式では
+# 何も送られないため、UTM がキャンペーンとして認識されるかを運営自身の端末で確認できない
+# （確認するには除外を一時解除するしかなく、手順ミスで本番データが汚れる）。
+#
+# ★★ 依存関係（ここを外すと計測が壊れる）★★
+#   GA4管理画面で「内部トラフィック」の定義（IP指定）＋データフィルタの作成を **先に** 済ませ、
+#   フィルタが有効になっていることを確認してからこの環境変数を 1 にすること。
+#   フィルタ未設定のまま 1 にすると、運営の自己クリックがそのままレポートに入る（＝除外が
+#   完全に無効化される）。片方だけでは意味を持たない、という性質の設定。
+#   手順と検証方法は docs/MEASUREMENT.md §7 にまとめてある。
+GA4_INTERNAL_TRAFFIC = os.environ.get("GA4_INTERNAL_TRAFFIC", "").strip() == "1"
+
 
 def inject_ga4(html):
     """Stamp the GA4 measurement id into the app HTML (no-op when unset)."""
@@ -108,6 +126,14 @@ def inject_ga4(html):
         return html
     safe = _safe_ga4()
     return html.replace("const GA4_ID=''", "const GA4_ID='" + safe + "'", 1)
+
+
+def inject_ga4_internal(html):
+    """Flip the app's GA4_INTERNAL switch on (no-op unless GA4_INTERNAL_TRAFFIC=1).
+    See the GA4_INTERNAL_TRAFFIC comment above for the GA4-side prerequisite."""
+    if not GA4_INTERNAL_TRAFFIC:
+        return html
+    return html.replace("const GA4_INTERNAL=0", "const GA4_INTERNAL=1", 1)
 
 
 def _safe_ga4():
@@ -134,21 +160,41 @@ def inject_collect_ranking(html):
 def render_app_html(html):
     """Serve-time injections for the single-file app: base URL + GA4 + collect ranking.
     Both the Vercel entry (api/index.py) and local server.py call this."""
-    return inject_collect_ranking(inject_ga4(inject_base_url(html)))
+    return inject_collect_ranking(inject_ga4_internal(inject_ga4(inject_base_url(html))))
 
 
 def ga4_head_snippet():
     """A standalone gtag.js loader for server-rendered pages (landing pages).
-    Mirrors the app's behaviour: honours the rs_notrack opt-out; empty when GA4 unset."""
+
+    Mirrors the app's behaviour (room-studio.html, the `const GA4_ID` block) on two
+    counts, and both matter:
+
+    1. It READS **and WRITES** the rs_notrack opt-out. Before 指示031 it only read the
+       flag, so `/lp/<slug>?notrack=1` silently did nothing and that visit was recorded
+       — the opt-out only worked if the operator happened to hit the app first. An
+       order-dependent exclusion is an exclusion that fails exactly when you rely on it.
+       Same origin as the app, so one localStorage flag covers both.
+    2. It honours GA4_INTERNAL_TRAFFIC: when set, an excluded device still sends, tagged
+       `traffic_type:'internal'` (+ debug_mode so DebugView shows it), and GA4's own data
+       filter does the excluding. Read the GA4_INTERNAL_TRAFFIC comment before flipping it.
+
+    Empty when GA4 is unset."""
     if not GA4_ID:
         return ""
     safe = _safe_ga4()
+    internal = "true" if GA4_INTERNAL_TRAFFIC else "false"
     return (
-        "<script>(function(){try{if(localStorage.getItem('rs_notrack')==='1')return;}catch(e){}"
+        "<script>(function(){var o=false;try{"
+        "var p=new URLSearchParams(location.search);"
+        "if(p.get('notrack')==='1')localStorage.setItem('rs_notrack','1');"
+        "if(p.get('notrack')==='0')localStorage.removeItem('rs_notrack');"
+        "o=localStorage.getItem('rs_notrack')==='1';}catch(e){}"
+        "var i=o&&" + internal + ";if(o&&!i)return;"
         "var s=document.createElement('script');s.async=true;"
         "s.src='https://www.googletagmanager.com/gtag/js?id=" + safe + "';document.head.appendChild(s);"
         "window.dataLayer=window.dataLayer||[];window.gtag=function(){dataLayer.push(arguments);};"
-        "gtag('js',new Date());gtag('config','" + safe + "');})();</script>"
+        "gtag('js',new Date());gtag('config','" + safe + "',"
+        "i?{traffic_type:'internal',debug_mode:true}:{});})();</script>"
     )
 
 
@@ -305,6 +351,17 @@ def landing_redirect(slug):
     if not target or target == slug or target not in _LP_BY_SLUG:
         return None
     return "/lp/" + target
+
+
+def with_query(path, query):
+    """Append a raw query string to a path (no-op when the query is empty).
+
+    Used by the retired-LP 301 (指示031・A3): a redirect that drops the query loses any
+    utm_* on the way, so the visit lands in GA4 as (direct)/(none) and the campaign is
+    unrecoverable after the hop. Control characters are stripped so a crafted query can
+    never split the Location header (Starlette quotes the URL too — belt and braces)."""
+    q = "".join(c for c in (query or "") if c >= " " and c != "\x7f")
+    return path + ("?" + q if q else "")
 
 
 def landing_slugs():
