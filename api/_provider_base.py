@@ -117,6 +117,20 @@ TYPE_MATCH = {
 # accessory/parts words to drop regardless of type (not the item itself).
 TYPE_EXCLUDE = ["カバー", "ケース", "リペア", "交換用", "替えカバー", "脚のみ", "脚単品", "パーツ", "ステッカー", "シール"]
 
+# ---- 「指定しない」（カテゴリを選ばずに検索する）--------------------------------
+# フロントの「指定しない」はこの疑似 type キーで来る。品目を1つ選ばせずに探せるようにするため。
+#   any            … ジャンルもカテゴリも指定なし。タイトルでの品目絞り込みをしない
+#   any_<genre>    … ジャンルだけ指定。そのジャンル配下の品目語の**和集合**で絞る
+# GENRE_TYPES の中身は room-studio.html の COLLECT_TAXONOMY と対で維持すること。
+GENRE_TYPES = {
+    "any_furniture": ["chair", "dining_table", "sofa", "bed", "coffee_table", "chest", "shelf", "desk"],
+    "any_appliance": ["tv", "refrigerator", "washing_machine", "air_conditioner", "microwave",
+                      "rice_cooker", "air_purifier", "fan", "humidifier", "vacuum"],
+    "any_daily": ["carpet", "curtain", "table_lamp", "floor_lamp", "lampshade", "plant", "art",
+                  "mirror", "cushion", "clock", "storage_box", "trash_can"],
+}
+ANY_TYPES = ("any",) + tuple(GENRE_TYPES)
+
 # 部分一致による他カテゴリ混入を防ぐ「このカテゴリではない」語（タイトルに含めば除外）。
 # 例: dining_table 検索で「ダイニングチェア」が"ダイニング"にマッチしてしまうのを弾く。
 # 家電/日用品は「台・ボード・スタンド・リモコン・フィルター」等の関連品を弾いて本体だけ残す。
@@ -152,12 +166,23 @@ TYPE_EXCLUDE_BY_TYPE = {
 }
 
 
+def match_words(type_):
+    """このカテゴリで許容するタイトル語。ジャンルだけ指定なら配下カテゴリの和集合、
+    まったく指定なし（'any' / 未知キー）なら None＝品目では絞らない。"""
+    if type_ in GENRE_TYPES:
+        out = []
+        for t in GENRE_TYPES[type_]:
+            out += TYPE_MATCH.get(t, [])
+        return out
+    return TYPE_MATCH.get(type_)
+
+
 def _relevant(title, type_):
     """Does the product title match the requested category (drops mismatches)?"""
     t = (title or "").lower()
     if not t:
         return False
-    inc = TYPE_MATCH.get(type_)
+    inc = match_words(type_)
     inc_l = [k.lower() for k in inc] if inc else []
     # 汎用の除外語。ただしこのカテゴリが正規に含む語（例: storage_box の「収納ケース」に対する
     # グローバル除外語「ケース」）は落とさない（除外語がマッチ語の一部なら除外しない）。

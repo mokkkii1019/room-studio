@@ -41,6 +41,14 @@ INTERIOR_GENRE = "100804"  # interior / bedding / storage (fewer people/scenery 
 # 家電(appliance) は楽天の家電ジャンルIDに縛らず genre=None の全体キーワード検索にして確実に結果を返し、
 # カテゴリ精度は TYPE_MATCH / TYPE_EXCLUDE_BY_TYPE の語で担保する（インテリアジャンル固定だと家電が0件になるため）。
 TYPE_QUERY = {
+    # --- 指定しない any（品目を選ばずに検索する）---
+    # 'any' はキーワード（フリーワード／メーカー）だけで楽天全体を検索する＝ジャンルで枠を作らない。
+    # 何も入力が無いときだけ search() がインテリアジャンルを既定の枠にする（楽天APIは検索条件が
+    # 最低1つ必要なため）。ジャンル単位は代表語＋そのジャンルの品目語の和集合（match_words）で絞る。
+    "any": ("", None),
+    "any_furniture": ("家具", INTERIOR_GENRE),
+    "any_appliance": ("家電", None),
+    "any_daily": ("インテリア", INTERIOR_GENRE),
     # --- 家具 furniture ---
     "chair": ("椅子 チェア", INTERIOR_GENRE),
     "dining_table": ("ダイニングテーブル", INTERIOR_GENRE),
@@ -147,6 +155,13 @@ def _normalize(it, kw=""):
 # Semantics verified against the live API (2026-07-19): a space-separated list is
 # OR-of-exclusions — an item is dropped if it contains ANY of the words.
 TYPE_NG = {
+    # 「指定しない」は語が広いぶんノイズも入る。実測（2026-08-12, 60件×各条件）では
+    # 「家具」「家電」の素の検索結果はふるさと納税の返礼品が大半を占め、家電はさらに景品・
+    # カタログギフトのセット商品が混ざった。品名で弾くと取りこぼすので検索側で外す。
+    "any": "ふるさと納税",
+    "any_furniture": "ふるさと納税",
+    "any_appliance": "ふるさと納税 景品 目録",
+    "any_daily": "ふるさと納税",
     "tv": "フィルム 保護パネル",
     "washing_machine": "毛ごみ 糸くず ゴミ取り 乾燥フィルター",
     "vacuum": "掃除機スタンド クリーナースタンド ツールステーション",
@@ -159,22 +174,30 @@ def search(type_, taste="", count=50, shop="", referer=None):
     _require_keys()
     kw, genre = TYPE_QUERY.get(type_, (type_, None))
     keyword = (taste.strip() + " " + kw).strip()
+    shop_code = (shop or "").strip()
+    # カテゴリ「指定しない」でフリーワードもメーカーも無い＝楽天に渡す検索条件がゼロになる
+    # （keyword/genreId/shopCode のどれか1つは必須）。部屋づくりに関係する範囲＝インテリア
+    # ジャンルを既定の枠にして、「何も選ばなくても押せば集まる」状態を保つ。
+    if not keyword and not shop_code and not genre:
+        genre = INTERIOR_GENRE
     headers = _headers(referer)
     items, seen, page = [], set(), 1
     while len(items) < count and page <= 3:  # 30 items/page; capped for serverless time limits
         if page > 1:
             time.sleep(1.0)  # throttle to <= 1 QPS (Rakuten guideline)
         params = {
-            "applicationId": RAKUTEN_APP_ID, "accessKey": RAKUTEN_ACCESS_KEY, "keyword": keyword,
+            "applicationId": RAKUTEN_APP_ID, "accessKey": RAKUTEN_ACCESS_KEY,
             "hits": 30, "page": page, "imageFlag": 1, "format": "json", "sort": "standard",
         }
+        if keyword:
+            params["keyword"] = keyword
         ng = TYPE_NG.get(type_)
         if ng:
             params["NGKeyword"] = ng
-        if genre and not (shop or "").strip():
+        if genre and not shop_code:
             params["genreId"] = genre
-        if (shop or "").strip():
-            params["shopCode"] = shop.strip()
+        if shop_code:
+            params["shopCode"] = shop_code
         if RAKUTEN_AFFILIATE_ID:
             params["affiliateId"] = RAKUTEN_AFFILIATE_ID
         url = RAKUTEN_ENDPOINT + "?" + urllib.parse.urlencode(params)

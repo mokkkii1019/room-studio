@@ -748,7 +748,7 @@
               <input type="file" id="fileFurniture" accept="image/*" multiple hidden>
             </div>
             <div id="collectSection" class="group-item">
-              <span class="sub-head"><span class="n">・</span><span id="collectSubLbl">家具を収集</span><span class="info" data-tip="種類・テイストで家具を検索してライブラリに取り込みます。各画像に商品ページ（購入リンク）が付きます。検索・表示・購入リンクはログイン不要・無料です。">i</span></span>
+              <span class="sub-head"><span class="n">・</span><span id="collectSubLbl">家具を収集</span><span class="info" data-tip="種類・テイストで家具を検索してライブラリに取り込みます。ジャンルもカテゴリも「指定しない」のままで検索できます（フリーワードやメーカーだけで探せます）。各画像に商品ページ（購入リンク）が付きます。検索・表示・購入リンクはログイン不要・無料です。">i</span></span>
           <select class="field" id="collectSource" title="収集元を選択">
             <option value="makers" selected>楽天 家具メーカー（複数選択・楽天キー必要）</option>
             <option value="ikea">IKEA（キー不要）</option>
@@ -760,6 +760,8 @@
           </select>
           <label class="cf-row"><span class="cf-lbl">ジャンル</span>
             <select class="field" id="collectGenre" style="margin:0">
+              <!-- 既定は「指定しない」。ジャンルは下のカテゴリ一覧を絞り込むだけで、選ばなくても収集できる。 -->
+              <option value="" selected>指定しない（すべて）</option>
               <option value="furniture">家具</option>
               <option value="appliance">家電</option>
               <option value="daily">日用品・インテリア雑貨</option>
@@ -1876,39 +1878,60 @@ async function probeServer(){
    出さず「楽天市場」モール単位で表示し、クレジットを出す。私的版(crawler)は従来のソース選択を表示。 */
 function isOfficialCollect(){ return SERVER.mode!=='private'; }  // 公開/未接続は official 扱い（安全側）
 
-/* 収集カテゴリのジャンル分類（ブレイクダウン表示用）。値キーはバックエンド TYPE_QUERY/TYPE_MATCH と一致。 */
+/* 収集カテゴリのジャンル分類（ブレイクダウン表示用）。値キーはバックエンド TYPE_QUERY/TYPE_MATCH と一致。
+   anyType は「そのジャンルのカテゴリを指定しない」ときに送るキー（バックエンド GENRE_TYPES と対）。 */
 const COLLECT_TAXONOMY=[
-  {id:'furniture', label:'家具', cats:[
+  {id:'furniture', label:'家具', anyType:'any_furniture', cats:[
     ['sofa','ソファ'],['dining_table','ダイニングテーブル'],['coffee_table','ローテーブル/リビングテーブル'],
     ['chair','椅子'],['bed','ベッド'],['desk','デスク'],['chest','サイドボード/リビングボード'],['shelf','シェルフ/棚'],
   ]},
-  {id:'appliance', label:'家電', cats:[
+  {id:'appliance', label:'家電', anyType:'any_appliance', cats:[
     ['tv','テレビ'],['refrigerator','冷蔵庫'],['washing_machine','洗濯機'],['air_conditioner','エアコン'],
     ['microwave','電子レンジ'],['rice_cooker','炊飯器'],['air_purifier','空気清浄機'],['fan','扇風機'],
     ['humidifier','加湿器'],['vacuum','掃除機'],
   ]},
-  {id:'daily', label:'日用品・インテリア雑貨', cats:[
+  {id:'daily', label:'日用品・インテリア雑貨', anyType:'any_daily', cats:[
     ['carpet','カーペット/ラグ'],['curtain','カーテン'],['table_lamp','テーブルランプ'],['floor_lamp','フロアランプ'],
     ['lampshade','ランプシェード'],['plant','観葉植物'],['art','アート/ポスター'],['mirror','鏡'],
     ['cushion','クッション/ブランケット'],['clock','時計'],['storage_box','収納ボックス'],['trash_can','ゴミ箱'],
   ]},
 ];
-function genreOfType(t){ for(const g of COLLECT_TAXONOMY){ if(g.cats.some(c=>c[0]===t)) return g.id; } return 'furniture'; }
+/* カテゴリ値からジャンルを引く。'any'（完全に指定しない）は '' を返す＝ジャンルも未指定。 */
+function genreOfType(t){
+  if(!t || t==='any') return '';
+  const g=COLLECT_TAXONOMY.find(x=>x.anyType===t || x.cats.some(c=>c[0]===t));
+  return g ? g.id : '';
+}
 function collectTypeLabel(t){ for(const g of COLLECT_TAXONOMY){ for(const c of g.cats){ if(c[0]===t) return c[1]; } } return t; }
-/* ジャンル選択に応じてカテゴリ（品目）ドロップダウンを再構築。 */
+/* ジャンル選択に応じてカテゴリ（品目）ドロップダウンを再構築。
+   どちらも既定は「指定しない」。ジャンル未指定のときは全ジャンルの品目をジャンル見出し付きで
+   並べる（ジャンルを先に選ばなくても、目的の品目を直接選べるようにするため）。 */
 function renderCategoryOptions(){
   const gsel=$('collectGenre'), csel=$('collectType'); if(!gsel||!csel) return;
-  const g=COLLECT_TAXONOMY.find(x=>x.id===gsel.value)||COLLECT_TAXONOMY[0];
+  const g=COLLECT_TAXONOMY.find(x=>x.id===gsel.value);
   const prev=csel.value;
+  const add=(host,value,label)=>{ const o=document.createElement('option'); o.value=value; o.textContent=label; host.appendChild(o); };
   csel.innerHTML='';
-  for(const pair of g.cats){ const o=document.createElement('option'); o.value=pair[0]; o.textContent=pair[1]; csel.appendChild(o); }
-  csel.value = g.cats.some(c=>c[0]===prev) ? prev : g.cats[0][0];
+  if(g){
+    add(csel, g.anyType, '指定しない（'+g.label+'すべて）');
+    for(const pair of g.cats) add(csel, pair[0], pair[1]);
+  } else {
+    add(csel, 'any', '指定しない（すべて）');
+    for(const gg of COLLECT_TAXONOMY){
+      const og=document.createElement('optgroup'); og.label=gg.label;
+      add(og, gg.anyType, gg.label+'（すべて）');
+      for(const pair of gg.cats) add(og, pair[0], pair[1]);
+      csel.appendChild(og);
+    }
+  }
+  const has=[...csel.options].some(o=>o.value===prev);
+  csel.value = has ? prev : (g ? g.anyType : 'any');
 }
 
 function applyCollectMode(){
   const official=isOfficialCollect();
   const sel=$('collectSource'), makerBox=$('makerBox'), credit=$('collectCredit'), lbl=$('collectSubLbl');
-  const genre=genreOfType(($('collectType')||{}).value || 'sofa');
+  const genre=genreOfType(($('collectType')||{}).value || 'any');   // '' = ジャンル指定なし
   if(sel) sel.style.display = official ? 'none' : '';       // 公開版はソース選択を隠す（=楽天固定）
   // ジャンルが変わったらショップ選択をリセット（家具/家電/日用品でリストが異なるため）
   if(State.makerGenre!==genre){ State.makers.clear(); State.shopNames={}; State.makerGenre=genre; if($('makerFilter')) $('makerFilter').value=''; }
@@ -1920,7 +1943,8 @@ function applyCollectMode(){
     const q=$('makerFilter') ? $('makerFilter').value.trim() : '';
     if(!q) renderMakers(); updateMakerCount(); renderMakerChips();
     const head=$('makerBoxHead');
-    if(head){ const gl = genre==='appliance' ? '家電' : genre==='daily' ? '日用品' : '家具'; head.textContent = gl + 'の主なメーカー（複数選択・任意）'; }
+    if(head){ const gl = genre==='appliance' ? '家電の' : genre==='daily' ? '日用品の' : genre==='furniture' ? '家具の' : '';
+      head.textContent = gl + '主なメーカー（複数選択・任意）'; }
   }
   if(credit) credit.style.display = official ? 'block' : 'none';
   if(lbl) lbl.textContent = official ? '楽天市場から収集' : 'アイテムを収集';
@@ -2858,7 +2882,7 @@ function sortCollectedTail(base){
   tail.sort((a,b)=>a.rank-b.rank);
   State.furniLib.length=base; for(const it of tail) State.furniLib.push(it);
 }
-const CAT_LABELS={chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',chest:'サイドボード/リビングボード',shelf:'シェルフ',desk:'デスク',lampshade:'ランプシェード',table_lamp:'テーブルランプ',floor_lamp:'フロアランプ',carpet:'カーペット/ラグ',curtain:'カーテン',plant:'観葉植物',art:'アート',mirror:'鏡',cushion:'ブランケット/クッション',clock:'時計',storage_box:'収納ボックス',trash_can:'ゴミ箱',tv:'テレビ',refrigerator:'冷蔵庫',washing_machine:'洗濯機',air_conditioner:'エアコン',microwave:'電子レンジ',rice_cooker:'炊飯器',air_purifier:'空気清浄機',fan:'扇風機',humidifier:'加湿器',vacuum:'掃除機',upload:'自分の画像から追加'};
+const CAT_LABELS={any:'カテゴリ指定なし',any_furniture:'家具',any_appliance:'家電',any_daily:'日用品・雑貨',chair:'椅子',dining_table:'ダイニングテーブル',sofa:'ソファ',bed:'ベッド',coffee_table:'ローテーブル/リビングテーブル',chest:'サイドボード/リビングボード',shelf:'シェルフ',desk:'デスク',lampshade:'ランプシェード',table_lamp:'テーブルランプ',floor_lamp:'フロアランプ',carpet:'カーペット/ラグ',curtain:'カーテン',plant:'観葉植物',art:'アート',mirror:'鏡',cushion:'ブランケット/クッション',clock:'時計',storage_box:'収納ボックス',trash_can:'ゴミ箱',tv:'テレビ',refrigerator:'冷蔵庫',washing_machine:'洗濯機',air_conditioner:'エアコン',microwave:'電子レンジ',rice_cooker:'炊飯器',air_purifier:'空気清浄機',fan:'扇風機',humidifier:'加湿器',vacuum:'掃除機',upload:'自分の画像から追加'};
 function libCats(){ const out=[], seen=new Set(); for(const it of State.furniLib){ const c=it.category||'upload'; if(!seen.has(c)){ seen.add(c); out.push(c); } } return out; }
 function updateLibFilter(){ const sel=$('libFilter'), row=$('libFilterRow'); if(!sel) return; const cats=libCats();
   if(row) row.style.display = State.furniLib.length>0 ? 'flex' : 'none';
@@ -3455,8 +3479,13 @@ const SHOPS_DAILY=[
   {code:'オカ',          name:'オカ（OKA）',    kana:'おか'},
   {code:'DULTON',        name:'DULTON（ダルトン）', kana:'だるとん'},
 ];
-function shopsForGenre(g){ return g==='appliance' ? SHOPS_APPLIANCE : g==='daily' ? SHOPS_DAILY : MAKERS; }
-function currentShops(){ return shopsForGenre(genreOfType(($('collectType')||{}).value || 'sofa')); }
+/* ジャンル指定なし（''）のときは3ジャンルのメーカーを重複なしで通しで出す。
+   「家具だけ」の一覧にしてしまうと、指定なしで探しているのに家電メーカーが選べなくなるため。 */
+function allShops(){ const out=[], seen=new Set();
+  for(const list of [MAKERS, SHOPS_APPLIANCE, SHOPS_DAILY]) for(const m of list){ if(seen.has(m.code)) continue; seen.add(m.code); out.push(m); }
+  return out; }
+function shopsForGenre(g){ return g==='appliance' ? SHOPS_APPLIANCE : g==='daily' ? SHOPS_DAILY : g==='furniture' ? MAKERS : allShops(); }
+function currentShops(){ return shopsForGenre(genreOfType(($('collectType')||{}).value || 'any')); }
 function updateMakerCount(){ const el=$('makerCount'); if(el) el.textContent=State.makers.size+'件選択'; }
 /* メーカー（ブランド名）一覧をチェックボックスで描画。addQuery があれば「任意のメーカーを追加」行も出す。 */
 function renderShopList(shops, addQuery){

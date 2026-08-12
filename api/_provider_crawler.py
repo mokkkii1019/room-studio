@@ -18,7 +18,7 @@ import urllib.parse
 import urllib.request
 
 import _provider_base as base
-from _provider_base import CollectError, _relevant, TYPE_MATCH, TYPE_EXCLUDE, TYPE_EXCLUDE_BY_TYPE
+from _provider_base import CollectError, _relevant, TYPE_EXCLUDE, TYPE_EXCLUDE_BY_TYPE
 
 PROVIDER_NAME = "crawler"
 
@@ -27,6 +27,9 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RoomStudio/1.0 (personal room-pr
 # ---- IKEA storefront search (frontend-style product search JSON, no API key) --
 IKEA_ENDPOINT = "https://sik.search.blue.cdtapps.com/jp/ja/search-result-page"
 IKEA_TYPE_KW = {
+    # 「指定しない」: キーワード検索が必須のストアなので、品目語の代わりに広い語を投げる
+    # （絞り込みは match_words の和集合で行う）。
+    "any": "インテリア", "any_furniture": "家具", "any_appliance": "家電", "any_daily": "インテリア",
     "chair": "チェア", "dining_table": "ダイニングテーブル", "sofa": "ソファ", "bed": "ベッド",
     "coffee_table": "ローテーブル リビングテーブル", "lampshade": "ランプシェード", "table_lamp": "テーブルランプ",
     "carpet": "ラグ カーペット", "plant": "観葉植物", "chest": "サイドボード リビングボード", "art": "アート ポスター",
@@ -89,7 +92,7 @@ def _ikea(type_, taste, count):
 def _shopify(type_, taste, count, base_url, shop_name, source):
     """Shopify storefront: public /products.json (no key). No keyword search, so fetch
     pages and filter by category (TYPE_MATCH) + taste keyword."""
-    inc = TYPE_MATCH.get(type_)
+    inc = base.match_words(type_)   # 「指定しない」は None＝品目で絞らない
     tl = (taste or "").strip().lower()
     items, seen, page = [], set(), 1
     while len(items) < count and page <= 6:
