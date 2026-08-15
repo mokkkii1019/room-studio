@@ -77,6 +77,38 @@
 
 **1〜3が済むまで、この数字を根拠にアプリ側を改修するのは勧めない**（`docs/GA4_ACCESS_REPORT.md` §6 の判断は今も有効）。
 
+> **📌 運営の判断（2026-08-15）: 2〜5 は後回しにして、1（投稿）を最優先する。**
+> これで問題ない。**2〜5 のどれも、後からやって取り返しがつかなくなるものは無い。**
+> G1（キーイベント登録）は遡及しないが、遡及しないのは「CV列に出るかどうか」だけで、
+> **`select_item` のイベント自体は普通に記録される**（実数は Data API からいつでも数えられる）。
+> G4 は 308 を入れた時点で価値が下がった（旧ドメインで gtag が動かなくなったため）。
+> 楽天への商品リンクは全部 `target="_blank"` なので、「楽天から戻ってキャンペーンが
+> 上書きされる」取りこぼしも起きない。
+
+### 3-1. 投稿に使うURL（コピペ用・2026-08-15 時点）
+
+規約は `docs/MEASUREMENT.md` §6-2。**公開中のLPは `moyougae-simulation` の1本だけ**
+（他のスラッグは301でここに集約される）。`utm_campaign` の日付と連番だけ書き換えて使う。
+
+```
+# LP に着地（推奨。記事を読ませてからアプリへ送る）
+https://roomstudio.jp/lp/moyougae-simulation?utm_source=x&utm_medium=social&utm_campaign=x-20260815-a
+https://roomstudio.jp/lp/moyougae-simulation?utm_source=instagram&utm_medium=social&utm_campaign=instagram-20260815-a
+
+# アプリに直接着地（デモ動画から直で触らせたいとき）
+https://roomstudio.jp/?utm_source=x&utm_medium=social&utm_campaign=x-20260815-b
+```
+
+**間違えやすいところだけ再掲:**
+
+- `utm_medium` は**媒体名ではなく必ず `social`**（媒体は `utm_source` が持つ）。ここを間違えると Unassigned に落ちる
+- `utm_campaign` は**投稿1本につき1つ**。使い回さない。着地先（LP/アプリ）を名前に混ぜない
+- **LPのCTA（アプリへの内部リンク）にUTMを付けない。** `?ref=lp-` のままにする（§5-3）
+- 短縮URLやSNS側のリンク加工でクエリが落ちていないか、投稿前に一度自分で踏んで確かめる
+
+投稿したら、**翌日**に `python tools/ga4_report.py --days 3 --jp` でキャンペーン名が出るかを見る
+（当日は暫定値。リアルタイム画面なら数分で出るが、運営端末は除外されているのでDebugViewで見る）。
+
 ---
 
 ## 4. 再開時の最初の一手（コピペ用）
