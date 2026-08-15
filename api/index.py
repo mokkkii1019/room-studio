@@ -7,6 +7,7 @@ PatchMatch on the hosted site). Local dev still uses server.py (LaMa included)."
 import os
 import sys
 import time
+from urllib.parse import urlsplit as _urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
@@ -19,6 +20,48 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project ro
 app = FastAPI()
 
 _GATE_API = ("/collect", "/item", "/imgproxy", "/bgcut", "/inpaint", "/track")
+
+# ---- 旧ドメインを本番へ寄せる（docs/GA4_ACCESS_REPORT.md §10-7）-----------------
+# 独自ドメインへ移行したあとも、Vercel が最初に配った `*.vercel.app` の本番URLは生きて
+# いて、同じ配信物＝同じ GA4 タグを注入したまま 200 を返す。実測で全期間の 8.7% が本番
+# 以外のホストだった。ホスト名は GA4 のレポートでは既定で見えないので、混ざっていること
+# 自体に気づけない（気づいたのは hostName を明示して引き直したから）。
+#
+# ここで寄せるのは **既知の旧ホストだけ**。「roomstudio.jp 以外は全部リダイレクト」に
+# すると、プレビュー配信（`room-studio-<hash>-....vercel.app`）が本番へ飛んで**動作確認
+# そのものができなくなる**。プレビューの計測混入は Vercel 側で環境変数を Production 限定
+# にして止める話で、リダイレクトで解く問題ではない。
+#
+# 308 を使う理由: 301/302 と違い method と body を保持する。旧ドメイン宛ての POST
+# （/collect・/bgcut）が GET に化けて 405 になるのを防ぐ。
+_LEGACY_HOSTS = frozenset(
+    h.strip().lower() for h in os.environ.get("LEGACY_HOSTS", "room-studio-fawn.vercel.app").split(",")
+    if h.strip())
+
+
+def _canonical_host():
+    """SITE_BASE_URL のホスト名（未設定＝旧ドメインのまま、のときは空を返す）。
+
+    空を返す＝リダイレクトしない。SITE_BASE_URL が未設定の環境では `_DEFAULT_BASE` が
+    旧ドメイン自身なので、素直に書くと**自分から自分へ 308 する無限ループ**になる。"""
+    host = _urlsplit(_site.SITE_BASE_URL).netloc.split("@")[-1].lower()
+    return "" if not host or host in _LEGACY_HOSTS else host
+
+
+_CANON_HOST = _canonical_host()
+
+
+@app.middleware("http")
+async def _canonical_host_redirect(request, call_next):
+    # 先頭に置く（Starlette は先に登録したものが外側＝先に走る）。旧ドメインへのアクセスは
+    # アプリ本体を1バイトも配らずに折り返す＝GA4 タグを注入した HTML が出ない。
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    if _CANON_HOST and host in _LEGACY_HOSTS:
+        # path も query もそのまま持っていく。落とすと utm_* が消えて、旧ドメイン経由の
+        # 流入が GA4 で (direct)/(none) になる（退役LPの301と同じ理由・指示031 A3）。
+        return RedirectResponse(str(request.url.replace(scheme="https", netloc=_CANON_HOST)),
+                                status_code=308)
+    return await call_next(request)
 
 
 @app.middleware("http")
