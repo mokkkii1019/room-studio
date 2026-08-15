@@ -914,12 +914,29 @@ python tools/ga4_report.py --days 28 --jp   # ★実ユーザーの数字はこ�
 | `localhost:8000` | `/health` | 200（素通り） |
 | SITE_BASE_URL 未設定 + 旧ホスト | `/health` | **200（ループしない）** |
 
-**本番反映後の確認:**
+**本番反映後の実測（2026-08-15・push から約2分で反映）— 全項目 期待どおり:**
+
+| 確認 | 結果 |
+|---|---|
+| 旧ドメイン トップ | `308` → `Location: https://roomstudio.jp/` |
+| 旧ドメイン LP + `utm_*` 3つ | `308` → `.../lp/moyougae-simulation?utm_source=x&utm_medium=social&utm_campaign=probe-20260815a`（**クエリ完全保持**） |
+| 旧ドメインへ **POST** `/collect` | `308` → `https://roomstudio.jp/collect`（method を保持） |
+| 旧ドメインをリダイレクト追跡 | 最終到達 `https://roomstudio.jp/` ・ `200`（1ホップで完了・ループなし） |
+| 本番 `/` `/lp/...` `/health` | すべて `200`（巻き込み事故なし） |
+| 本番のタグ注入 | `const GA4_INTERNAL=1` / `var i=o&&true`（**変化なし**） |
 
 ```powershell
-curl -sI https://room-studio-fawn.vercel.app/ | Select-String "^HTTP|^location"
-#   期待: HTTP/2 308 / location: https://roomstudio.jp/
-curl -sI "https://room-studio-fawn.vercel.app/lp/moyougae-simulation?utm_source=x" | Select-String "^location"
-#   期待: location: https://roomstudio.jp/lp/moyougae-simulation?utm_source=x
-curl -sI https://roomstudio.jp/ | Select-String "^HTTP"    # 200 のまま（巻き込み事故がないこと）
+curl.exe -sI https://room-studio-fawn.vercel.app/ | Select-String "^HTTP|^location"
+curl.exe -sI "https://room-studio-fawn.vercel.app/lp/moyougae-simulation?utm_source=x" | Select-String "^location"
+curl.exe -sL -o NUL -w "final=%{url_effective}  code=%{http_code}`n" https://room-studio-fawn.vercel.app/
+
+# ★ 本番側（リダイレクトされない方）を確かめるときは -I を使わないこと
+curl.exe -s -o NUL -w "%{http_code}`n" https://roomstudio.jp/     # 期待 200
 ```
+
+> **⚠️ `curl -I`（HEAD）は本番ドメインだと 405 が返る。これは正常で、今回の変更とは無関係。**
+> FastAPI は GET のルートに HEAD を自動で足さない（Starlette 素の `Route` は足すが、
+> `APIRoute` は足さない）ので、`/` も `/health` も HEAD には 405 を返す — 変更前からそう。
+> 旧ドメイン側で `-I` が効くのは、**ルーティングに届く前にミドルウェアが折り返している**から。
+> 本番側の生死確認は `-s -o NUL -w "%{http_code}"`（＝GET）で見ること。
+> HEAD で外形監視を設定すると全部 405 に見えるので、そこだけ注意。
