@@ -2799,10 +2799,30 @@ function drawEyedropLoupe(p){ const col=sampleStageColor(p.x,p.y,2); if(!col) re
 /* preview canvases (so painting feels instant without rebuilding masks each move) */
 const maskPreviewCanvas=document.createElement('canvas'); const erasePreviewCanvas=document.createElement('canvas');
 function resizePreviews(){ for(const c of [maskPreviewCanvas,erasePreviewCanvas,samPreviewCanvas]){ c.width=State.W; c.height=State.H; } }
-function rebuildMaskPreview(){ const a=activeSurface(); const c=maskPreviewCanvas, x=c.getContext('2d'); x.clearRect(0,0,State.W,State.H); if(!a) return;
-  const img=x.createImageData(State.W,State.H), d=img.data; let sx=0,sy=0,n=0;
-  for(let i=0;i<a.mask.length;i++){ if(a.mask[i]>0){ const p=i*4; d[p]=59;d[p+1]=111;d[p+2]=224;d[p+3]=70; sx+=i%State.W; sy+=(i/State.W)|0; n++; } }
-  x.putImageData(img,0,0); a._centroid = n? [sx/n, sy/n] : null; } // 浮遊ピルの表示位置をキャッシュ
+/* 選択範囲のプレビュー。**塗りつぶさず、輪郭だけを描く。**
+   以前は範囲いっぱいを rgba(59,111,224,.27) で塗っていたが、それだと選んだ色や素材が
+   選択を解除するまで水色の下に隠れて確認できない（運営からの指摘）。
+   内側1px＝アクセント色／外側1px＝白 の2色にしてあるので、濃い面でも淡い面でも輪郭が見える。
+   白は範囲の外側に置くので、色を確認したい範囲の中は1pxしか隠さない。 */
+function rebuildMaskPreview(){ const a=activeSurface(); const c=maskPreviewCanvas, x=c.getContext('2d');
+  const W=State.W, H=State.H; x.clearRect(0,0,W,H); if(!a) return;
+  const m=a.mask; let sx=0,sy=0,n=0, mnx=W,mny=H,mxx=-1,mxy=-1;
+  for(let i=0;i<m.length;i++){ if(m[i]>0){ const px=i%W, py=(i/W)|0; sx+=px; sy+=py; n++;
+      if(px<mnx)mnx=px; if(px>mxx)mxx=px; if(py<mny)mny=py; if(py>mxy)mxy=py; } }
+  a._centroid = n? [sx/n, sy/n] : null; // 浮遊ピルの表示位置をキャッシュ
+  if(!n) return;
+  // 輪郭は選択範囲の外接矩形＋1px の中だけ見ればよい（全画素を走査しない）
+  const bx0=Math.max(0,mnx-1), by0=Math.max(0,mny-1), bx1=Math.min(W-1,mxx+1), by1=Math.min(H-1,mxy+1);
+  const bw=bx1-bx0+1, bh=by1-by0+1;
+  const img=x.createImageData(bw,bh), d=img.data;
+  for(let y=by0;y<=by1;y++){ const row=y*W;
+    for(let px=bx0;px<=bx1;px++){ const i=row+px, p=((y-by0)*bw+(px-bx0))*4;
+      const up = y>0     && m[i-W]>0, dn = y<H-1  && m[i+W]>0;
+      const lf = px>0    && m[i-1]>0, rt = px<W-1 && m[i+1]>0;
+      if(m[i]>0){ if(!(up&&dn&&lf&&rt)){ d[p]=59; d[p+1]=111; d[p+2]=224; d[p+3]=240; } } // 内側の縁
+      else if(up||dn||lf||rt){ d[p]=255; d[p+1]=255; d[p+2]=255; d[p+3]=205; }            // 外側の縁
+    } }
+  x.putImageData(img,bx0,by0); }
 function erasePreviewClear(){ erasePreviewCanvas.getContext('2d').clearRect(0,0,State.W,State.H); }
 function stampPreview(canvas, cx, cy, r, color){ const x=canvas.getContext('2d'); x.beginPath(); x.arc(cx,cy,r,0,7); x.fillStyle=color; x.fill(); }
 
