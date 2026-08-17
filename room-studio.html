@@ -268,6 +268,10 @@
   .furni-item{position:relative; min-width:0; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; display:flex; flex-direction:column; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none}
   .furni-item:hover{border-color:var(--accent)}
   .furni-item:active{cursor:grabbing}
+  /* サムネと、サムネに重なるUI（詳細・⤓・✕・＋配置・収集元バッジ・切り抜き中スピナー）を
+     ひとまとめにした箱。ホバーで2倍にするのはこの箱だけ＝名前と価格は動かない。
+     絶対配置の子はここを基準にする（位置の指定はサムネ枠と同じなので数値は変えていない）。 */
+  .furni-item .shot{position:relative; border-radius:7px 7px 0 0; overflow:hidden}
   .furni-item .thumb{display:block; width:100%; max-width:100%; height:58px; pointer-events:none; -webkit-user-drag:none; background:repeating-conic-gradient(#ececec 0% 25%, #fff 0% 50%) 50% / 12px 12px}
   .furni-item .nm{font-size:10px; text-align:center; padding:2px 3px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .furni-item .add{position:absolute; left:0; right:0; top:0; height:58px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; transition:opacity .15s; background:rgba(59,111,224,.55)}
@@ -283,22 +287,27 @@
   .furni-item .buy{position:absolute; top:3px; left:3px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-decoration:none; display:none; z-index:2}
   .furni-item:hover .buy{display:block}
   .furni-item .price{font-size:9px; color:var(--accent-ink); text-align:center; padding:0 2px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  /* ホバーで2倍に拡大 — カードが約90×58pxしかなく「何の家具か」が判別できない、という指摘への対応。
+  /* ホバーでサムネ画像だけ2倍に拡大 — カードが約90×58pxしかなく「何の家具か」が判別できない、
+     という指摘への対応。
+     - 拡大するのは `.shot`（サムネ＋サムネに重なるUI）だけ。**名前と価格は動かない・大きくならない**
      - クリック＝配置 は変えていない。拡大は見るためだけの状態で、操作は増やしていない
      - transform なので周りのカードは動かない（グリッドが揺れない＝押したい物が逃げない）
      - 伸びる向きは JS が transform-origin で決める。右パネルは overflow が効いているので、
        端の列を中央基準で広げると外側が切れて「拡大したのに見えない」が起きる
+     - 縦は下端を固定して上へ伸ばすのが基本。名前と価格が画像の真下に残って読める
      - タッチ端末には掛けない。hover が「タップして残る」挙動になり、配置のタップと混ざる */
   @media (hover:hover) and (pointer:fine){
-    .furni-item{transition:transform .12s ease, box-shadow .12s ease}
-    .furni-item:hover{transform:scale(2); z-index:6; box-shadow:0 12px 28px rgba(0,0,0,.3)}
-    .furni-item.nozoom:hover{transform:none; box-shadow:none}   /* ドラッグ中は等倍に戻す */
-    /* ★2倍にするのは画像だけ。画像に重なるUI（詳細・⤓・✕・＋配置・切り抜き中のスピナー）は
-       カードごと2倍になると画像を覆う面積まで4倍になるので、scale(.5) で打ち消して見た目を
+    .furni-item .shot{transition:transform .12s ease, box-shadow .12s ease}
+    .furni-item:hover{z-index:6; overflow:visible}   /* 拡大した画像がカードの外へ出られるように */
+    .furni-item:hover .shot{transform:scale(2); border-radius:3px; box-shadow:0 12px 28px rgba(0,0,0,.3)}
+    .furni-item.nozoom:hover{overflow:hidden}                            /* ドラッグ中は等倍に戻す */
+    .furni-item.nozoom:hover .shot{transform:none; box-shadow:none}
+    /* ★2倍になるのは画像だけ。画像に重なるUI（詳細・⤓・✕・＋配置・切り抜き中のスピナー）は
+       `.shot` ごと2倍になると画像を覆う面積まで4倍になるので、scale(.5) で打ち消して見た目を
        等倍に保つ。親の scale(2) と合成されて等倍で描かれるため、文字はぼやけない。
        transform-origin は各自が貼り付いている角に置く（中央基準だと打ち消したぶん位置が
        内側へずれて、画像の真ん中に寄っていく）。
-       ドラッグ中（.nozoom）はカードが等倍に戻るので、打ち消しも掛けない＝ :not(.nozoom)。 */
+       ドラッグ中（.nozoom）は等倍に戻るので、打ち消しも掛けない＝ :not(.nozoom)。 */
     .furni-item:hover:not(.nozoom) .buy{transform:scale(.5); transform-origin:top left}
     .furni-item:hover:not(.nozoom) .del{transform:scale(.5); transform-origin:top right}
     .furni-item:hover:not(.nozoom) .save{transform:scale(.5); transform-origin:top right; right:15px} /* ✕ との間隔も等倍に */
@@ -3034,15 +3043,20 @@ function trackPlace(it){
     rank:String(it.rank==null?-1:it.rank),
     score:(it.placeScore==null?'':it.placeScore.toFixed(2))});
 }
-/* ホバー拡大（CSS の .furni-item:hover）が右パネルからはみ出さないように、伸びる向きを決める。
-   はみ出す側を軸に選ぶと、その辺は動かず内側だけに伸びるので、切れて見えなくなることがない。
-   2倍でもカード幅の2倍（約180px）はパネル内側（約285px）に収まるので、横は必ず全部見える。 */
+/* ホバー拡大（CSS の .furni-item:hover .shot）が右パネルからはみ出さないように、伸びる向きを決める。
+   引数は拡大する箱＝`.shot`（サムネ枠）。はみ出す側を軸に選ぶと、その辺は動かず内側だけに伸びるので、
+   切れて見えなくなることがない。2倍でもサムネ幅の2倍（約158px）はパネル内側（約285px）に収まるので、
+   横は必ず全部見える。
+   縦は「下端を固定して上へ伸ばす」を既定にする。そうするとカードの名前と価格が拡大した画像の
+   真下にそのまま残って読める（中央基準だと下へ29px伸びて、名前と価格をちょうど覆い隠す）。
+   上に入らないときだけ上端を固定して下へ伸ばす。 */
 function zoomOrigin(el, k=2){
-  const host=el.closest('.scroll'); if(!host) return 'center center';
+  const host=el.closest('.scroll'); if(!host) return 'center bottom';
   const r=el.getBoundingClientRect(), h=host.getBoundingClientRect();
-  const gx=r.width*(k-1)/2, gy=r.height*(k-1)/2;   // 中央基準のときに各辺へはみ出す量
+  const gx=r.width*(k-1)/2;                        // 中央基準のときに左右へはみ出す量
   const x=(r.left-gx<h.left)?'left':(r.right+gx>h.right)?'right':'center';
-  const y=(r.top-gy<h.top)?'top':(r.bottom+gy>h.bottom)?'bottom':'center';
+  const gy=r.height*(k-1);                         // 下端基準のときに上へはみ出す量
+  const y=(r.top-gy<h.top)?'top':'bottom';
   return x+' '+y;
 }
 function makeFurniEl(it){
@@ -3050,9 +3064,12 @@ function makeFurniEl(it){
   el.dataset.libId=it.id; // 切り抜き完了時の in-place 差し替え（refreshLibCard）用
   el.draggable=!COARSE_POINTER; // タッチ端末ではネイティブのドラッグ無効（タップ誤判定でサムネが伸びる/崩れるのを防止）。配置はタップでOK
   el.title=it.name+(COARSE_POINTER?' — タップで配置':' — クリックで配置 / ステージへドラッグで位置指定');
+  // サムネと、サムネに重なるUI をまとめる箱。ホバーで2倍になるのはこの箱だけなので、
+  // 名前と価格（この箱の外）は動かない・大きくならない。
+  const shot=document.createElement('div'); shot.className='shot'; el.appendChild(shot);
   // 拡大そのものは CSS の :hover。ここでは向きだけを決める（同じイベント内で決めるので、
   // 中央基準で1フレーム描いてから飛ぶ、というちらつきが起きない）。
-  if(!COARSE_POINTER) on(el,'mouseenter',()=>{ el.style.transformOrigin=zoomOrigin(el); });
+  if(!COARSE_POINTER) on(el,'mouseenter',()=>{ shot.style.transformOrigin=zoomOrigin(shot); });
   let cv=it._thumb; // サムネはキャッシュ（再描画を避ける＝ライブラリが大きくても再表示が軽い）
   if(!cv){ const src=it.cutCanvas||it.srcCanvas; // 切り抜き済みがあれば透過版を見せる
     // 表示サイズは CSS 固定（幅100% / 高さ58px）。中身の解像度だけ2倍で持つ。
@@ -3063,21 +3080,21 @@ function makeFurniEl(it){
     cv=document.createElement('canvas'); cv.className='thumb'; cv.width=96*k; cv.height=58*k; const x=cv.getContext('2d');
     const s=Math.min(cv.width/src.width, cv.height/src.height), dw=src.width*s, dh=src.height*s;
     x.drawImage(src,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); it._thumb=cv; }
-  el.appendChild(cv);
+  shot.appendChild(cv);
   if(it._cutState==='pending'||it._cutState==='processing'){ // 切り抜き待ち/処理中の控えめなスピナー
-    const sp=document.createElement('div'); sp.className='cut-spin'; sp.title='背景を切り抜いています…'; el.appendChild(sp); }
-  const add=document.createElement('div'); add.className='add'; add.textContent='＋ 配置'; el.appendChild(add);
+    const sp=document.createElement('div'); sp.className='cut-spin'; sp.title='背景を切り抜いています…'; shot.appendChild(sp); }
+  const add=document.createElement('div'); add.className='add'; add.textContent='＋ 配置'; shot.appendChild(add);
   const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
   if(it.price){ const pr=document.createElement('div'); pr.className='price'; pr.textContent='¥'+Number(it.price).toLocaleString()+(it.shop?'・'+it.shop:''); el.appendChild(pr); el.title=it.name+(it.shop?'\n'+it.shop:'')+'\n¥'+Number(it.price).toLocaleString(); }
-  const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); el.appendChild(del);
-  const sav=document.createElement('button'); sav.className='save'; sav.textContent='⤓'; sav.title='画像をPCに保存（PNG）'; on(sav,'click',ev=>{ ev.stopPropagation(); saveCanvasPNG(it.cutCanvas||it.srcCanvas, it.name); }); el.appendChild(sav);
+  const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='ライブラリから削除'; on(del,'click',ev=>{ ev.stopPropagation(); delFromLib(it.id); }); shot.appendChild(del);
+  const sav=document.createElement('button'); sav.className='save'; sav.textContent='⤓'; sav.title='画像をPCに保存（PNG）'; on(sav,'click',ev=>{ ev.stopPropagation(); saveCanvasPNG(it.cutCanvas||it.srcCanvas, it.name); }); shot.appendChild(sav);
   // provenance badge: 自分のアップロード vs 収集元（モール単位表現）
   const SRC_LABEL={upload:'自分',rakuten:'楽天市場',ikea:'IKEA',rughaus:'RUGHAUS',kanademono:'KANADEMONO',bauhaus:'BAUHAUS',hay:'HAY',flymee:'FLYMEe'};
   const srcTxt = SRC_LABEL[it.source] || (it.source ? '収集' : '');
-  if(srcTxt){ const sb=document.createElement('div'); sb.className='src-badge'+(it.source==='upload'?' up':''); sb.textContent=srcTxt; el.appendChild(sb); }
-  if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(it.itemCode||String(it.id), 'library:'+(it.source||''), it.link, it.shop); }); buy.draggable=false; el.appendChild(buy); }
+  if(srcTxt){ const sb=document.createElement('div'); sb.className='src-badge'+(it.source==='upload'?' up':''); sb.textContent=srcTxt; shot.appendChild(sb); }
+  if(it.link){ const buy=document.createElement('a'); buy.className='buy'; buy.textContent='詳細'; buy.href=it.link; buy.target='_blank'; buy.rel='noopener'; buy.title='詳細ページを開く'; on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(it.itemCode||String(it.id), 'library:'+(it.source||''), it.link, it.shop); }); buy.draggable=false; shot.appendChild(buy); }
   on(el,'click',()=>placeFromLib(it.id));
-  // ドラッグ中は等倍に戻す。2倍のカードを掴んだまま動かすと、ドラッグ画像も掴んだ位置も
+  // ドラッグ中は等倍に戻す。2倍の画像を掴んだまま動かすと、ドラッグ画像も掴んだ位置も
   // 見た目とずれて「どこに落ちるか分からない」になる。
   on(el,'dragstart',ev=>{ el.classList.add('nozoom'); ev.dataTransfer.setData('text/furni-lib', String(it.id)); ev.dataTransfer.effectAllowed='copy'; });
   on(el,'dragend',()=>el.classList.remove('nozoom'));
