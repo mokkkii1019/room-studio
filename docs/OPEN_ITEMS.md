@@ -35,6 +35,8 @@ if(e.key==='Escape' && !typing && State.selectedId!==null){ e.preventDefault(); 
 | **入力欄（`collectTaste`）にフォーカス中の Escape** | **選択は維持**（`selectedId=1`・ハンドルも 7,680px のまま） |
 | JSエラー | 0件 |
 
+**push 後に本番（roomstudio.jp）で同じ検証を回し、上の7項目すべて一致を確認済み。**
+
 ---
 
 ## ✅ 完了（2026-08-17）— 非表示にしたレイヤーの選択が残る
