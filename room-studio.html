@@ -4017,7 +4017,12 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
       on(buy,'click',ev=>{ ev.stopPropagation(); trackClick(l.itemCode||String(l.id), 'layer:'+(l.source||''), buyUrl, l.shop); }); row.appendChild(buy); }
     const kind=document.createElement('span'); kind.className='kind'; kind.textContent= l.type==='surface' ? '表面' : ((l.category && l.category!=='upload' && CAT_LABELS[l.category]) ? CAT_LABELS[l.category] : '家具'); row.appendChild(kind);
     const eye=document.createElement('button'); eye.className='ic eye'+(l.visible?'':' off'); eye.title='表示/非表示'; eye.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
-    on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayers(); render(); });
+    on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible;
+      // 非表示にしたら選択も解く。見えていないレイヤーに選択枠とハンドルだけが残ると、
+      // 何を掴んでいるのか分からないうえ、見えないまま動かせてしまう（運営からの指摘）。
+      // deselectAll() が renderLayers/syncPanels/rebuildMaskPreview/render をまとめて呼ぶ。
+      if(!l.visible && State.selectedId===l.id){ deselectAll(); return; }
+      renderLayers(); render(); });
     const up=document.createElement('button'); up.className='ic'; up.title='前面へ'; up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'; on(up,'click',ev=>{ev.stopPropagation(); moveLayer(l.id,1);});
     const dn=document.createElement('button'); dn.className='ic'; dn.title='背面へ'; dn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12l7 7 7-7"/></svg>'; on(dn,'click',ev=>{ev.stopPropagation(); moveLayer(l.id,-1);});
     const del=document.createElement('button'); del.className='ic del'; del.title='削除'; del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>'; on(del,'click',ev=>{ev.stopPropagation(); deleteLayer(l.id);});
