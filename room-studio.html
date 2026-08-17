@@ -237,12 +237,14 @@
   .erase-scope input[type=range]{accent-color:var(--warn)}
 
   /* color swatches (paint chips) */
-  /* 10列＝1行が1系統（明→暗の10段）。色数を増やしたぶんチップは小さくしてあるので、
-     54色だったころ（6列・36px）よりパレット全体は短い。 */
-  .chips{display:grid; grid-template-columns:repeat(10,1fr); gap:3px}
-  .chip{aspect-ratio:1; border-radius:4px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -5px 7px rgba(0,0,0,.04)}
+  /* 20列＝1行に2系統（左10列がくすみ系・右10列がビビッド系、どちらも明→暗の10段）。
+     色数を倍にしたぶんチップを半分にしてあるので、パレット全体の高さは以前の約半分。 */
+  /* minmax(0,1fr) と padding:0 が要る。ふつうの 1fr だと列の下限が min-content になり、
+     button の既定 padding（左右6px）ぶんでチップが 14px より縮まず、20列で枠から横にはみ出す。 */
+  .chips{display:grid; grid-template-columns:repeat(20,minmax(0,1fr)); gap:1px}
+  .chip{aspect-ratio:1; padding:0; border-radius:3px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -3px 4px rgba(0,0,0,.04)}
   .chip.on{outline:2px solid var(--accent); outline-offset:1px; z-index:1}
-  .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:10px; text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:8px; text-shadow:0 1px 2px rgba(0,0,0,.5)}
   /* transparent ("素通し") swatch — checkerboard + red slash so it clearly reads as "none/see-through" */
   .chip.alpha, .swatch.alpha{ background-color:#fff;
     background-image:linear-gradient(135deg,transparent 46%,#e2574c 46%,#e2574c 54%,transparent 54%),linear-gradient(45deg,#c4c4c4 25%,transparent 25%,transparent 75%,#c4c4c4 75%),linear-gradient(45deg,#c4c4c4 25%,#fff 25%,#fff 75%,#c4c4c4 75%);
@@ -4162,15 +4164,18 @@ function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val;
    Build swatch & material UIs
    ========================================================================= */
 /* 色見本（「塗る — 表面」と「置く — 家具／色を置き換える」で共通）。
-   **1行＝1系統を、明るい端から暗い端へ10段でたどる（16系統＝160色）。** 「木の色をもう少し
-   濃く」のような選び直しが横移動だけで済み、系統を変えたいときは縦に動く。
-   系統ごとに HSL の両端だけ決めて等分している（160色を手打ちすると段の飛びや
+   **1行＝2系統。左半分（10列）がくすみ系、右半分（10列）がビビッド系。**
+   どちらのブロックも明るい端 → 暗い端へ10段でたどるので、「もう少し濃く」は横移動だけで済み、
+   系統を変えたいときは縦に動く。真ん中で暗→明に戻るので、左右の切れ目は見て分かる。
+   くすみ系だけだと彩度の高い色がまったく選べない、という指摘を受けて右半分を足した。
+
+   系統ごとに HSL の両端だけ決めて等分している（320色を手打ちすると段の飛びや
    ほぼ同色の重複が混ざり、かえって選びにくくなる）。
-   彩度は明るい端をやや低くしてある。淡い色をそのままの彩度で明るくすると、
-   インテリアに使えない蛍光っぽい色になるため。 */
+   くすみ系は彩度の明るい端をやや低くしてある（淡い色を同じ彩度で明るくすると、
+   インテリアに使えない蛍光っぽい色になるため）。ビビッド系は逆に彩度を高いまま保つ。 */
 const PALETTE_STEPS=10;
+/* 左半分＝くすみ・ニュートラル系。[系統名, 明るい端 h(度),s,l, 暗い端 h(度),s,l] */
 const PALETTE_FAMILIES=[
-  // [系統名, 明るい端 h(度),s,l, 暗い端 h(度),s,l]
   ['グレー',              0,0.00,1.00,    0,0.00,0.09],
   ['グレージュ',         34,0.06,0.95,   28,0.10,0.17],
   ['アイボリー〜ブラウン', 38,0.18,0.95,   30,0.30,0.14],
@@ -4188,8 +4193,29 @@ const PALETTE_FAMILIES=[
   ['オリーブ〜カーキ',     62,0.22,0.90,   70,0.36,0.17],
   ['イエロー〜マスタード', 48,0.45,0.93,   42,0.62,0.22],
 ];
+/* 右半分＝ビビッド系。色相は端まで固定（動かすと純色感が濁る）。彩度は高いまま、
+   明度だけを 0.90→0.26 で振るので、真ん中あたりが一番鮮やかな純色になる。
+   色相環をぐるっと16色でカバーしてある。 */
+const PALETTE_VIVID=[
+  ['ビビッド レッド',      0,0.85,0.90,    0,0.95,0.26],
+  ['ビビッド オレンジ',   22,0.90,0.90,   22,0.98,0.26],
+  ['ビビッド アンバー',   40,0.92,0.90,   40,1.00,0.26],
+  ['ビビッド イエロー',   55,0.92,0.90,   55,1.00,0.26],
+  ['ビビッド ライム',     80,0.85,0.90,   80,0.95,0.26],
+  ['ビビッド グリーン',  120,0.80,0.90,  120,0.95,0.24],
+  ['ビビッド エメラルド',152,0.82,0.90,  152,0.95,0.24],
+  ['ビビッド ティール',  175,0.85,0.90,  175,0.95,0.24],
+  ['ビビッド シアン',    195,0.88,0.90,  195,0.98,0.26],
+  ['ビビッド スカイ',    212,0.90,0.90,  212,0.95,0.28],
+  ['ビビッド ブルー',    228,0.90,0.90,  228,0.95,0.30],
+  ['ビビッド インディゴ',250,0.85,0.90,  250,0.92,0.30],
+  ['ビビッド バイオレット',270,0.85,0.92, 270,0.92,0.30],
+  ['ビビッド パープル',  292,0.82,0.92,  292,0.92,0.28],
+  ['ビビッド マゼンタ',  318,0.85,0.92,  318,0.95,0.28],
+  ['ビビッド ローズ',    340,0.88,0.92,  340,0.95,0.28],
+];
 const PALETTE=[], PALETTE_TIPS=[]; // TIPS はチップの tooltip（系統名と段数が分かるように）
-for(const [name,h0,s0,l0,h1,s1,l1] of PALETTE_FAMILIES){
+function pushPaletteRamp([name,h0,s0,l0,h1,s1,l1]){
   for(let i=0;i<PALETTE_STEPS;i++){
     const t=i/(PALETTE_STEPS-1), mix=(a,b)=>a+(b-a)*t;
     const [r,g,b]=hsl2rgb((((mix(h0,h1)%360)+360)%360)/360, mix(s0,s1), mix(l0,l1));
@@ -4197,6 +4223,8 @@ for(const [name,h0,s0,l0,h1,s1,l1] of PALETTE_FAMILIES){
     PALETTE.push(hex); PALETTE_TIPS.push(name+'  '+(i+1)+'/'+PALETTE_STEPS+'  '+hex.toUpperCase());
   }
 }
+// 1行＝くすみ10 + ビビッド10 になるように、系統を交互に積む（グリッドは20列）
+for(let i=0;i<PALETTE_FAMILIES.length;i++){ pushPaletteRamp(PALETTE_FAMILIES[i]); pushPaletteRamp(PALETTE_VIVID[i]); }
 function buildChips(hostId, onPick, includeTransparent){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach((hex,i)=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; c.title=PALETTE_TIPS[i]; on(c,'click',()=>onPick(hex)); host.appendChild(c); });
   if(includeTransparent){ const c=document.createElement('button'); c.className='chip alpha'; c.dataset.hex='transparent'; c.title='透明（色を変えず、元の写真のまま）'; on(c,'click',()=>onPick('transparent')); host.appendChild(c); } }
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
