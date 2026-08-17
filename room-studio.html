@@ -2745,7 +2745,10 @@ function polyRemoveLast(){ State.poly.points.pop(); renderOverlay(); }
 function polyClose(){ const a=activeSurface(); if(!a){ toast('表面を選択してください'); return; }
   if(State.poly.points.length<3){ toast('3点以上クリックしてください'); return; }
   pushHistory(); fillPolygonToMask(a.mask, State.poly.points); a.dirty=true; rebuildSurface(a); rebuildMaskPreview();
-  polyReset(); render(); toast('面を選択に追加しました'); }
+  // 面ができたらニュートラル（ツール未選択）に戻す。「面」が選ばれたままだと、確定した直後の
+  // クリックが次の面の1点目になり、色を確認しようとして触っただけで面を作り続けてしまう。
+  // setSurfTool(null) が「打った点の消去（polyReset）」と「面選択ボックスを閉じる」もやる。
+  setSurfTool(null); render(); toast('面を選択に追加しました（続けて作るには「面」をもう一度）'); }
 function drawPolyInProgress(){ const pts=State.poly.points; if(!pts.length) return;
   if(pts.length>=3){ octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y); octx.closePath(); octx.fillStyle='rgba(59,111,224,.18)'; octx.fill(); }
   octx.beginPath(); octx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) octx.lineTo(pts[i].x,pts[i].y);
