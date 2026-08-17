@@ -4094,7 +4094,24 @@ const CTX_META={
   furniture:{t:'置く — 家具',   c:'var(--mode-place)',  h:'追加・配置・切り抜き'},
   erase:    {t:'消す — 不要物', c:'var(--mode-erase)',  h:'端末内で処理'},
 };
-function setMode(m){ State.mode=m;
+/* 左メニュー（detail パネル）のスクロール位置をモードごとに覚える。
+   4つのパネルは1つの .scroll を共有しているので、覚えないと切り替えたときに
+   直前のパネルの位置をそのまま引き継いでしまい、戻ってきた側が「勝手に動いた」ように見える。 */
+const PANEL_SCROLL={};
+function panelScrollEl(){ const p=$('panelFurniture'); return p? p.closest('.scroll') : null; }
+/* 家具のサブツール（スポイト / 手で消す / 残す範囲）の状態を左メニューへ映す。
+   状態の持ち主は State 側。setMode で消さずにここで映し直すので、面を選んでから
+   家具に戻っても付けていたツールがそのまま残る。 */
+function syncFurniTools(){
+  const mark=(id,on)=>{ const e=$(id); if(e) e.classList.toggle('primary',!!on); };
+  const show=(id,on)=>{ const e=$(id); if(e) e.style.display=on?'block':'none'; };
+  mark('fEyedropBtn',State.furniEyedrop); show('fEyedropHint',State.furniEyedrop);
+  mark('fEraseToggle',State.furniErase);  show('fEraseBox',State.furniErase);
+  mark('fKeepRegion',State.furniKeep);    show('fKeepHint',State.furniKeep);
+}
+function setMode(m){
+  { const sc=panelScrollEl(); if(sc && State.mode) PANEL_SCROLL[State.mode]=sc.scrollTop; } // 出ていく側の位置を保存
+  State.mode=m;
   document.querySelectorAll('.rail-btn').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
   $('panelSelect').style.display=m==='select'?'block':'none';
   $('panelSurface').style.display=m==='surface'?'block':'none';
@@ -4102,11 +4119,19 @@ function setMode(m){ State.mode=m;
   $('panelErase').style.display=m==='erase'?'block':'none';
   const meta=CTX_META[m]||CTX_META.select; const dot=$('ctxDot'), ttl=$('ctxTitle'), hint=$('ctxHint');
   if(dot) dot.style.background=meta.c; if(ttl) ttl.textContent=meta.t; if(hint) hint.textContent=meta.h;
-  State.furniEyedrop=false; { const fe=$('fEyedropBtn'); if(fe) fe.classList.remove('primary'); const feh=$('fEyedropHint'); if(feh) feh.style.display='none'; }
-  State.furniErase=false; { const eb=$('fEraseToggle'); if(eb) eb.classList.remove('primary'); const ebx=$('fEraseBox'); if(ebx) ebx.style.display='none'; }
-  State.furniKeep=false; State.keepPoly.points=[]; { const kb=$('fKeepRegion'); if(kb) kb.classList.remove('primary'); const kh=$('fKeepHint'); if(kh) kh.style.display='none'; }
-  if(!State.compare.active) overlay.style.cursor=(m==='surface'&&State.surfTool==='eyedropper')?'crosshair':(m==='select'?'default':'');
+  // 家具のサブツールは**状態を消さず、UIへ映し直すだけ**。以前はここで false に落としていたので、
+  // 面を選んでから家具に戻ると「手で消す」などが勝手に解除され、家具側だけ左メニューが既定に
+  // 戻って見えた（運営からの指摘）。描きかけの多角形だけは捨てる（面の poly / SAM と同じ扱い）。
+  State.keepPoly.points=[]; syncFurniTools();
+  if(!State.compare.active) overlay.style.cursor =
+    (m==='surface'&&State.surfTool==='eyedropper') ? 'crosshair'
+    : (m==='furniture'&&(State.furniEyedrop||State.furniKeep)) ? 'crosshair'
+    : (m==='select' ? 'default' : '');
   samResetPoints(); polyReset();
+  // 戻ってきた側の位置に復帰。**次のフレームで戻すのが要点** — setMode の直後に呼ばれる
+  // syncPanels() が「選択中の家具/表面の詳細」を出し入れして中身の高さを変えるので、
+  // ここで同期的に戻すと、まだ短い状態の高さに合わせて切り詰められてしまう。
+  { const sc=panelScrollEl(); if(sc){ const y=PANEL_SCROLL[m]||0; requestAnimationFrame(()=>{ sc.scrollTop=y; }); } }
 }
 function syncPanels(){ const a=activeSurface(); $('surfaceControls').style.display=a?'block':'none';
   { const ch=$('surfSelChip'); if(ch){ ch.style.display=a?'flex':'none'; if(a) ch.textContent='選択中：'+(a.name||'表面'); } }
