@@ -1610,12 +1610,18 @@ function rebuildFurniture(layer){
   }
   wx.putImageData(img,0,0); // cut + recolor を原寸に書き戻す
   // 切り抜き後の必要最小限の領域だけを proc にする（layer.crop = 元画像に対する割合の切り出し矩形）。
-  // natW/natH・corners・eraseMask もこの crop 空間で一貫させるので、ヒット判定・ワープ・選択枠は無改修で追従する。
+  // natW/natH・corners はこの crop 空間で一貫させるので、ヒット判定・ワープ・選択枠は無改修で追従する。
   const cr=cropRectPx(layer, fw, fh);
   const proc=document.createElement('canvas'); proc.width=cr.w; proc.height=cr.h; const pctx=proc.getContext('2d',{willReadFrequently:true});
   pctx.drawImage(work, cr.x, cr.y, cr.w, cr.h, 0, 0, cr.w, cr.h);
-  // 手動で消した部分（eraseMask）を透明化（crop 後の座標系＝natW×natH で保持・適用）
-  if(layer.eraseMask && layer.eraseMask.length===cr.w*cr.h){ const pd=pctx.getImageData(0,0,cr.w,cr.h), d=pd.data, m=layer.eraseMask; for(let i=0;i<m.length;i++){ if(m[i]) d[i*4+3]=0; } pctx.putImageData(pd,0,0); }
+  // 手動で消した部分（eraseMask）を透明化。**マスクは原寸(fw×fh)で持つ**ので、crop の窓だけを見る。
+  // crop 空間で持つと crop を変えるたびにマスクを作り直すしかなく、「切り詰める→手で消す→余白を
+  // 元に戻す」で消した所が戻ってしまう。原寸で持てば crop をどう動かしても消した記録が残る。
+  { const m=normalizeEraseMask(layer, fw, fh, cr);
+    if(m){ const pd=pctx.getImageData(0,0,cr.w,cr.h), d=pd.data;
+      for(let y=0;y<cr.h;y++){ const so=(cr.y+y)*fw+cr.x, dor=y*cr.w;
+        for(let x=0;x<cr.w;x++) if(m[so+x]) d[(dor+x)*4+3]=0; }
+      pctx.putImageData(pd,0,0); } }
   layer.proc=proc; layer.natW=cr.w; layer.natH=cr.h; layer.dirty=false; layer._warpKey=null; // proc changed → warp cache stale
 }
 /* layer.crop（元画像に対する割合 {x,y,w,h}）を現在の原寸(W×H)ピクセル矩形に変換。未設定なら全体。
@@ -1626,6 +1632,24 @@ function cropRectPx(layer, W, H){
   let x=clamp(Math.round(c.x*W),0,W-1), y=clamp(Math.round(c.y*H),0,H-1);
   let w=clamp(Math.round(c.w*W),1,W-x), h=clamp(Math.round(c.h*H),1,H-y);
   return { x, y, w, h };
+}
+/* 家具の原寸（eraseMask と crop の基準になる大きさ）。AI切り抜き済みならそちらが原寸。 */
+function furniFullSize(layer){ const c=layer.aiCutCanvas||layer.srcCanvas; return { w:c.width, h:c.height }; }
+/* eraseMask は原寸(fw×fh)で持つ。crop 空間で保存された旧データは、初回に原寸へ広げて移行する
+   （旧版で「切り詰めた状態」のまま保存した作品を開いても手動消しが失われないように）。 */
+function normalizeEraseMask(layer, fw, fh, cr){
+  const m=layer.eraseMask; if(!m) return null;
+  if(m.length===fw*fh) return m;
+  if(m.length===cr.w*cr.h){ const nm=new Uint8Array(fw*fh);
+    for(let y=0;y<cr.h;y++){ const so=y*cr.w, dor=(cr.y+y)*fw+cr.x; for(let x=0;x<cr.w;x++) nm[dor+x]=m[so+x]; }
+    layer.eraseMask=nm; return nm; }
+  return null; // どちらの大きさでもない（原寸が変わった等）→ 使わない
+}
+/* 書き込み用に原寸サイズの eraseMask を用意して返す（無ければ作る・旧データなら移行する）。 */
+function ensureEraseMask(layer, fw, fh, cr){
+  const m=normalizeEraseMask(layer, fw, fh, cr);
+  if(m) return m;
+  return (layer.eraseMask=new Uint8Array(fw*fh));
 }
 /* crop 矩形が変わっても家具の見た目（各画素のステージ位置）が動かないよう、レイヤーの中心 x,y と
    corners（局所台形）を付け替える。old/new は原寸ピクセルの矩形。crop 局所は原寸ピクセルと 1:1。 */
@@ -1667,20 +1691,20 @@ function trimFurnitureToContent(layer){
   const fw=(layer.aiCutCanvas||layer.srcCanvas).width, fh=(layer.aiCutCanvas||layer.srcCanvas).height;
   const oldPx=cropRectPx(layer, fw, fh), newPx={ x:oldPx.x+minx, y:oldPx.y+miny, w:bw, h:bh };
   repositionForCropChange(layer, oldPx, newPx);
-  // eraseMask を旧 crop(cw×ch) から新 crop(bw×bh) へ切り出し直す
-  if(layer.eraseMask && layer.eraseMask.length===cw*ch){ const nm=new Uint8Array(bw*bh);
-    for(let y=0;y<bh;y++){ const so=(miny+y)*cw+minx, dor=y*bw; for(let x=0;x<bw;x++) nm[dor+x]=layer.eraseMask[so+x]; } layer.eraseMask=nm; }
+  // eraseMask は原寸で持っているので触らない（crop をどう変えても消した記録はそのまま有効）。
   layer.crop={ x:newPx.x/fw, y:newPx.y/fh, w:newPx.w/fw, h:newPx.h/fh };
   layer.dirty=true; rebuildFurniture(layer);
   return true;
 }
-/* トリムを解除して元の（原寸全体の）領域に戻す。crop 空間の eraseMask は無効になるので破棄。 */
+/* トリムを解除して元の（原寸全体の）領域に戻す。eraseMask は原寸で持っているので**捨てない**
+   （捨てると「切り詰める→手で背景を消す→余白を元に戻す」で消した背景が戻ってしまう）。 */
 function untrimFurniture(layer){
   if(!layer.crop) return;
-  const fw=(layer.aiCutCanvas||layer.srcCanvas).width, fh=(layer.aiCutCanvas||layer.srcCanvas).height;
+  const fs=furniFullSize(layer), fw=fs.w, fh=fs.h;
   const oldPx=cropRectPx(layer, fw, fh), newPx={ x:0, y:0, w:fw, h:fh };
+  normalizeEraseMask(layer, fw, fh, oldPx);  // 旧データ（crop 空間）はここで原寸へ移行しておく
   repositionForCropChange(layer, oldPx, newPx);
-  layer.crop=null; layer.eraseMask=null; layer.dirty=true; rebuildFurniture(layer);
+  layer.crop=null; layer.dirty=true; rebuildFurniture(layer);
 }
 
 /* Dynamic import with multi-CDN fallback. A single CDN (e.g. jsdelivr) returning 503
@@ -1808,16 +1832,18 @@ function furnitureHit(layer, px, py){
 }
 /* 手動背景消し: ステージ座標を家具画像のピクセルに逆変換し、円ブラシで eraseMask を塗る（restore=trueで復元） */
 function eraseFurnitureAt(layer, px, py, restore){
+  if(layer.dirty||!layer.proc) rebuildFurniture(layer); // natW/natH を crop と一致させてから座標を使う
   const W=layer.natW, Hh=layer.natH, hw=W/2, hh=Hh/2;
   const loc=furnitureOuterInv(layer,px,py);
   const Hinv=computeHomography(effectiveCorners(layer), [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]); if(!Hinv) return;
   const den=Hinv[6]*loc[0]+Hinv[7]*loc[1]+1; if(Math.abs(den)<1e-6) return;
   const u=(Hinv[0]*loc[0]+Hinv[1]*loc[1]+Hinv[2])/den, v=(Hinv[3]*loc[0]+Hinv[4]*loc[1]+Hinv[5])/den;
   const cx=u+hw, cy=v+hh, r=Math.max(1, (+$('fEraseSize').value)/2/(layer.scale||1));
-  if(!layer.eraseMask || layer.eraseMask.length!==W*Hh) layer.eraseMask=new Uint8Array(W*Hh);
-  const m=layer.eraseMask, val=restore?0:1, r2=r*r;
+  // マスクは原寸空間で持つので、crop 局所の (x,y) を +cr.x/+cr.y して書き込む
+  const fs=furniFullSize(layer), cr=cropRectPx(layer, fs.w, fs.h);
+  const m=ensureEraseMask(layer, fs.w, fs.h, cr), val=restore?0:1, r2=r*r;
   const x0=Math.max(0,Math.floor(cx-r)), x1=Math.min(W-1,Math.ceil(cx+r)), y0=Math.max(0,Math.floor(cy-r)), y1=Math.min(Hh-1,Math.ceil(cy+r));
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const ddx=x-cx,ddy=y-cy; if(ddx*ddx+ddy*ddy<=r2) m[y*W+x]=val; }
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const ddx=x-cx,ddy=y-cy; if(ddx*ddx+ddy*ddy<=r2) m[(cr.y+y)*fs.w+(cr.x+x)]=val; }
   layer.dirty=true; rebuildFurniture(layer); render();
 }
 /* 「範囲外を消す」: ステージ上に頂点で描いた多角形の外側にあたる画素を eraseMask で透明化する。
@@ -1828,21 +1854,23 @@ function eraseFurnitureAt(layer, px, py, restore){
    順変換して内外を判定する。 */
 function keepPolyApply(layer, pts){
   if(!pts || pts.length<3) return false;
+  if(layer.dirty||!layer.proc) rebuildFurniture(layer); // natW/natH を crop と一致させてから座標を使う
   const W=layer.natW, Hh=layer.natH, hw=W/2, hh=Hh/2;
   const Hf=computeHomography([[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]], effectiveCorners(layer)); // 画素→局所台形
   if(!Hf) return false;
   const keep=new Uint8Array(State.W*State.H); fillPolygonToMask(keep, pts); // ステージ上の「残す」領域
   let any=false; for(let i=0;i<keep.length;i++){ if(keep[i]){ any=true; break; } }
   if(!any) return false; // 面積ゼロ（一直線など）は無視
-  if(!layer.eraseMask || layer.eraseMask.length!==W*Hh) layer.eraseMask=new Uint8Array(W*Hh);
-  const m=layer.eraseMask, SW=State.W, SH=State.H;
+  // マスクは原寸空間で持つので、crop 局所の (ix,iy) を +cr.x/+cr.y して書き込む
+  const fs=furniFullSize(layer), cr=cropRectPx(layer, fs.w, fs.h);
+  const m=ensureEraseMask(layer, fs.w, fs.h, cr), SW=State.W, SH=State.H;
   // furnitureOuter（局所台形→ステージ）を画素ループのためにインライン展開
   const sgn=layer.flip?-1:1, sc=layer.scale, rad=layer.rot*Math.PI/180, cs=Math.cos(rad), sn=Math.sin(rad), ox=layer.x, oy=layer.y;
   for(let iy=0;iy<Hh;iy++){ for(let ix=0;ix<W;ix++){
     const u=ix-hw, v=iy-hh, den=Hf[6]*u+Hf[7]*v+1; if(Math.abs(den)<1e-9) continue;
     const lx=(Hf[0]*u+Hf[1]*v+Hf[2])/den, ly=(Hf[3]*u+Hf[4]*v+Hf[5])/den;
     const px=lx*sc*sgn, py=ly*sc, sx=(ox+px*cs-py*sn)|0, sy=(oy+px*sn+py*cs)|0;
-    if(sx<0||sy<0||sx>=SW||sy>=SH || !keep[sy*SW+sx]) m[iy*W+ix]=1; // 多角形の外（画面外含む）→消す
+    if(sx<0||sy<0||sx>=SW||sy>=SH || !keep[sy*SW+sx]) m[(cr.y+iy)*fs.w+(cr.x+ix)]=1; // 多角形の外（画面外含む）→消す
   }}
   layer.dirty=true; rebuildFurniture(layer); return true;
 }
