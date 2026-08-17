@@ -945,6 +945,9 @@
               </div>
               <p class="hint" id="fEyedropHint" style="display:none;margin:8px 0 0">スポイトON: 画像をクリックすると周りの色を採取し、この家具に適用します。もう一度押すと解除。</p>
               <div class="slider"><label>強さ</label><input type="range" id="fStrength" min="0" max="100" value="80"><span class="val" id="fStrengthV">80%</span></div>
+              <!-- 面側の「明るさ」と同じ仕組み。置き換えた色の明度を全体的に上げ下げする
+                   （元画像の陰影の振れ幅は保ったまま、平均の明るさだけをずらす）。 -->
+              <div class="slider"><label>明るさ</label><input type="range" id="fLight" min="-40" max="40" value="0"><span class="val" id="fLightV">0</span></div>
             </div>
             </div>
           </div>
@@ -1617,7 +1620,8 @@ function rebuildFurniture(layer){
     const col = layer.recolor? rgb2hsl(...hex2rgb(layer.color)) : null;
     for(let i=0;i<n;i++){ const al=d[i*4+3]; if(al<=10) continue; const p=i*4; const lp=lpOf(d[p],d[p+1],d[p+2]);
       if(layer.material){ const shadeF=clamp(lp/Math.max(avgL,0.05),0.3,1.7); const R=matBuf[p]*shadeF,G=matBuf[p+1]*shadeF,B=matBuf[p+2]*shadeF; const s=layer.matStrength; d[p]=d[p]*(1-s)+R*s; d[p+1]=d[p+1]*(1-s)+G*s; d[p+2]=d[p+2]*(1-s)+B*s; }
-      else { const nl=clamp(col[2]+(lp-avgL),0,1); const rgb=hsl2rgb(col[0],col[1],nl); const s=layer.strength; d[p]=d[p]*(1-s)+rgb[0]*s; d[p+1]=d[p+1]*(1-s)+rgb[1]*s; d[p+2]=d[p+2]*(1-s)+rgb[2]*s; }
+      // 明度＝選んだ色の明度 ＋ 元画素の明暗（陰影を残す） ＋ 明るさ補正（面側の lightShift と同じ）
+      else { const nl=clamp(col[2]+(lp-avgL)+(layer.lightShift||0),0,1); const rgb=hsl2rgb(col[0],col[1],nl); const s=layer.strength; d[p]=d[p]*(1-s)+rgb[0]*s; d[p+1]=d[p+1]*(1-s)+rgb[1]*s; d[p+2]=d[p+2]*(1-s)+rgb[2]*s; }
     }
   }
   wx.putImageData(img,0,0); // cut + recolor を原寸に書き戻す
@@ -2500,7 +2504,7 @@ function captureState(){
     } : {
       type:'furniture', id:l.id, name:l.name, srcCanvas:l.srcCanvas, aiCutCanvas:l.aiCutCanvas,
       x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners?l.corners.map(p=>p.slice()):null, flip:l.flip, opacity:l.opacity,
-      bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
+      bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength, lightShift:l.lightShift||0,
       material:l.material, matStrength:l.matStrength, visible:l.visible, natW:l.natW, natH:l.natH, category:l.category,
       eraseMask:l.eraseMask?l.eraseMask.slice():null, crop:l.crop?Object.assign({},l.crop):null
     })
@@ -2517,7 +2521,7 @@ function restoreState(s){
     } : {
       id:d.id, type:'furniture', name:d.name, srcCanvas:d.srcCanvas, aiCutCanvas:d.aiCutCanvas,
       x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners?d.corners.map(p=>p.slice()):null, flip:d.flip, opacity:d.opacity,
-      bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
+      bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength, lightShift:d.lightShift||0,
       material:d.material, matStrength:d.matStrength, visible:d.visible, dirty:true, proc:null,
       natW:d.natW, natH:d.natH, category:d.category||null, eraseMask:d.eraseMask?d.eraseMask.slice():null,
       crop:d.crop?Object.assign({},d.crop):null
@@ -2959,7 +2963,7 @@ function addFurnitureLayer(srcCanvas, name, px, py, meta){
     srcCanvas, x:(px!=null?px:State.W/2), y:(py!=null?py:State.H/2), scale:1, rot:0, yaw:0, corners:null, flip:false, opacity:1, category:meta.category||null,
     source:meta.source||'upload', itemCode:meta.itemCode||'', productUrl:meta.productUrl||meta.link||'', affiliateUrl:meta.affiliateUrl||'', shop:meta.shop||'',
     bgRemove:false, bgTol:30, aiCutCanvas:meta.cutCanvas?copyCanvas(meta.cutCanvas):null, // 事前切り抜き済みなら透過で配置（解除ボタンで元に戻せる）
-    recolor:false, color:'#7d8aa0', strength:0.8,
+    recolor:false, color:'#7d8aa0', strength:0.8, lightShift:0,
     material:null, matStrength:0.8, visible:true, dirty:true, proc:null, natW:srcCanvas.width, natH:srcCanvas.height, crop:null };
   // fit initial size so it's ~40% of room width
   layer.scale = clamp((State.W*0.4)/layer.natW, 0.08, 2);
@@ -4164,7 +4168,7 @@ function syncFurnitureUI(f){ { const nm=$('fInspName'); if(nm) nm.textContent='�
   { const tl=$('fTrimLabel'); if(tl) tl.textContent = f.crop? '余白を元に戻す' : '余白を切り詰める（透明部分）'; }
   setSlider('fScale',Math.round(f.scale*100),'%'); setSlider('fRot',Math.round(f.rot),'°'); setSlider('fYaw',Math.round(f.yaw||0),'°');
   $('fKeystone').checked=!!f.corners; $('fKeystoneBox').style.display=f.corners?'block':'none'; $('fYaw').disabled=!!f.corners;
-  $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%'); updateFMatConfig();
+  $('fRecolor').checked=f.recolor; $('fRecolorBox').style.display=f.recolor?'block':'none'; $('fColor').value=f.color; $('fHex').textContent=f.color.toUpperCase(); setSlider('fStrength',Math.round(f.strength*100),'%'); setSlider('fLight',Math.round((f.lightShift||0)*100)); markChips('fColorChips',f.color); markMats('fMatGrid',f.material); setSlider('fMatStrength',Math.round(f.matStrength*100),'%'); updateFMatConfig();
 }
 function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val; const v=$(id+'V'); if(v) v.textContent= (suffix? val+suffix : val); }
 
@@ -4337,7 +4341,7 @@ function buildProjectObject(opts){ opts=opts||{}; const forCloud=!!opts.forCloud
       const stripImg = forCloud && isShopSource(src);
       const f={ type:'furniture', id:l.id, name:l.name,
         x:l.x, y:l.y, scale:l.scale, rot:l.rot, yaw:l.yaw, corners:l.corners, flip:l.flip, opacity:l.opacity,
-        bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength,
+        bgRemove:l.bgRemove, bgTol:l.bgTol, recolor:l.recolor, color:l.color, strength:l.strength, lightShift:l.lightShift||0,
         material:l.material, matStrength:l.matStrength, visible:l.visible, category:l.category,
         eraseMask:l.eraseMask?bytesToB64(l.eraseMask):null, crop:l.crop||null,
         source:src, itemCode:l.itemCode||'', productUrl:l.productUrl||'', affiliateUrl:l.affiliateUrl||'', shop:l.shop||'' };
@@ -4399,7 +4403,7 @@ async function loadProject(obj, opts){
         const aiCut=d.aiCut? await loadDataURL(d.aiCut):null;
         layers.push({ id:d.id, type:'furniture', name:d.name, srcCanvas:src, aiCutCanvas:aiCut,
           x:d.x, y:d.y, scale:d.scale, rot:d.rot, yaw:d.yaw||0, corners:d.corners||null, flip:d.flip, opacity:d.opacity,
-          bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength,
+          bgRemove:d.bgRemove, bgTol:d.bgTol, recolor:d.recolor, color:d.color, strength:d.strength, lightShift:d.lightShift||0,
           material:d.material, matStrength:d.matStrength, visible:d.visible, category:d.category||null,
           source:d.source||'upload', itemCode:d.itemCode||'', productUrl:d.productUrl||'', affiliateUrl:d.affiliateUrl||'', shop:d.shop||'',
           needsRehydrate:!hasImg, dirty:true, proc:null, natW:src.width, natH:src.height,
@@ -4829,7 +4833,7 @@ on($('fKeystoneReset'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.corn
 on($('fFlip'),'click',()=>{ const f=selectedFurniture(); if(!f) return; pushHistory(); f.flip=!f.flip; render(); });
 /* 家具のプロパティ一式をスナップショット（画像は不変なので srcCanvas 参照を保持）。コピペ/複製で共用。 */
 function snapshotFurniture(f){ return { src:f.srcCanvas, aiCut:f.aiCutCanvas||null, name:f.name, x:f.x, y:f.y, srcId:f.id,
-  props:{ bgRemove:f.bgRemove, bgTol:f.bgTol, recolor:f.recolor, color:f.color, strength:f.strength, material:f.material, matStrength:f.matStrength,
+  props:{ bgRemove:f.bgRemove, bgTol:f.bgTol, recolor:f.recolor, color:f.color, strength:f.strength, lightShift:f.lightShift||0, material:f.material, matStrength:f.matStrength,
     scale:f.scale, rot:f.rot, yaw:f.yaw, corners:f.corners?f.corners.map(p=>[p[0],p[1]]):null, flip:f.flip, opacity:f.opacity, category:f.category,
     eraseMask:f.eraseMask?f.eraseMask.slice():null, crop:f.crop?Object.assign({},f.crop):null } }; }
 /* スナップショットから新レイヤーとして配置（+dx,+dy ずらし）。返り値=新家具。 */
@@ -4873,6 +4877,7 @@ on($('fKeepRegion'),'click',()=>{ const f=selectedFurniture(); if(!f){ toast('�
 on($('fEraseSize'),'input',()=>{ $('fEraseSizeV').textContent=$('fEraseSize').value; renderOverlay(); });
 on($('fEraseResetBtn'),'click',()=>{ const f=selectedFurniture(); if(!f||!f.eraseMask) return; pushHistory(); f.eraseMask=null; f.dirty=true; rebuildFurniture(f); render(); toast('手動消しをリセットしました'); });
 on($('fStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fStrength'); f.strength=+e.target.value/100; $('fStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
+on($('fLight'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fLight'); f.lightShift=+e.target.value/100; $('fLightV').textContent=e.target.value; f.dirty=true; rebuildFurniture(f); render(); });
 buildMats('fMatGrid', pickFurnMat, false);
 on($('fMatStrength'),'input',e=>{ const f=selectedFurniture(); if(!f) return; pushHistory('fMatStrength'); f.matStrength=+e.target.value/100; $('fMatStrengthV').textContent=e.target.value+'%'; f.dirty=true; rebuildFurniture(f); render(); });
 on($('fDeleteTop'),'click',()=>{ const f=selectedFurniture(); if(f) deleteLayer(f.id); });
