@@ -245,6 +245,14 @@
   .chip{aspect-ratio:1; padding:0; border-radius:3px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -3px 4px rgba(0,0,0,.04)}
   .chip.on{outline:2px solid var(--accent); outline-offset:1px; z-index:1}
   .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:8px; text-shadow:0 1px 2px rgba(0,0,0,.5)}
+  /* 「透明（色を変えない）」は色見本の中では**最下段に幅いっぱいの帯**にする。
+     チップが12pxしかないので、市松模様＋斜線を12px角に詰めても何のマークか読めない。
+     帯にして文字を入れれば、小さいままでも意味が分かるし押しやすい。 */
+  .chips .chip.alpha{grid-column:1/-1; aspect-ratio:auto; height:20px; margin-top:3px; border-radius:5px;
+    display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:700;
+    color:var(--ink); text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;
+    background-image:linear-gradient(45deg,#c4c4c4 25%,transparent 25%,transparent 75%,#c4c4c4 75%),linear-gradient(45deg,#c4c4c4 25%,#fff 25%,#fff 75%,#c4c4c4 75%);
+    background-size:8px 8px,8px 8px; background-position:0 0,4px 4px}
   /* transparent ("素通し") swatch — checkerboard + red slash so it clearly reads as "none/see-through" */
   .chip.alpha, .swatch.alpha{ background-color:#fff;
     background-image:linear-gradient(135deg,transparent 46%,#e2574c 46%,#e2574c 54%,transparent 54%),linear-gradient(45deg,#c4c4c4 25%,transparent 25%,transparent 75%,#c4c4c4 75%),linear-gradient(45deg,#c4c4c4 25%,#fff 25%,#fff 75%,#c4c4c4 75%);
@@ -4226,7 +4234,9 @@ function pushPaletteRamp([name,h0,s0,l0,h1,s1,l1]){
 // 1行＝くすみ10 + ビビッド10 になるように、系統を交互に積む（グリッドは20列）
 for(let i=0;i<PALETTE_FAMILIES.length;i++){ pushPaletteRamp(PALETTE_FAMILIES[i]); pushPaletteRamp(PALETTE_VIVID[i]); }
 function buildChips(hostId, onPick, includeTransparent){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach((hex,i)=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; c.title=PALETTE_TIPS[i]; on(c,'click',()=>onPick(hex)); host.appendChild(c); });
-  if(includeTransparent){ const c=document.createElement('button'); c.className='chip alpha'; c.dataset.hex='transparent'; c.title='透明（色を変えず、元の写真のまま）'; on(c,'click',()=>onPick('transparent')); host.appendChild(c); } }
+  if(includeTransparent){ const c=document.createElement('button'); c.className='chip alpha'; c.dataset.hex='transparent';
+    c.textContent='透明（色を変えない）'; // 12px角では市松模様だけでは意味が伝わらないので文字を入れる
+    c.title='透明（色を変えず、元の写真のまま）'; on(c,'click',()=>onPick('transparent')); host.appendChild(c); } }
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
 function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
   const mkBtn=(m)=>{ const b=document.createElement('button'); b.className='mat'; b.dataset.key=m.key;
