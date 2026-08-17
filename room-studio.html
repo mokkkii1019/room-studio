@@ -237,10 +237,12 @@
   .erase-scope input[type=range]{accent-color:var(--warn)}
 
   /* color swatches (paint chips) */
-  .chips{display:grid; grid-template-columns:repeat(6,1fr); gap:7px}
-  .chip{aspect-ratio:1; border-radius:7px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -10px 14px rgba(0,0,0,.04)}
-  .chip.on{outline:2px solid var(--accent); outline-offset:2px}
-  .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:12px; text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  /* 10列＝1行が1系統（明→暗の10段）。色数を増やしたぶんチップは小さくしてあるので、
+     54色だったころ（6列・36px）よりパレット全体は短い。 */
+  .chips{display:grid; grid-template-columns:repeat(10,1fr); gap:3px}
+  .chip{aspect-ratio:1; border-radius:4px; border:1px solid rgba(0,0,0,.12); cursor:pointer; position:relative; box-shadow:inset 0 -5px 7px rgba(0,0,0,.04)}
+  .chip.on{outline:2px solid var(--accent); outline-offset:1px; z-index:1}
+  .chip.on::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:10px; text-shadow:0 1px 2px rgba(0,0,0,.45)}
   /* transparent ("素通し") swatch — checkerboard + red slash so it clearly reads as "none/see-through" */
   .chip.alpha, .swatch.alpha{ background-color:#fff;
     background-image:linear-gradient(135deg,transparent 46%,#e2574c 46%,#e2574c 54%,transparent 54%),linear-gradient(45deg,#c4c4c4 25%,transparent 25%,transparent 75%,#c4c4c4 75%),linear-gradient(45deg,#c4c4c4 25%,#fff 25%,#fff 75%,#c4c4c4 75%);
@@ -4104,18 +4106,43 @@ function setSlider(id,val,suffix){ const el=$(id); if(!el) return; el.value=val;
 /* =========================================================================
    Build swatch & material UIs
    ========================================================================= */
-const PALETTE=[
-  '#FFFFFF','#F4F1EA','#EAE3D5','#DED3BE','#D2C4A8','#C2B393', // 白〜ベージュ
-  '#CFCABF','#B9B3A6','#9E9788','#7C766B','#57534C','#2E2B27', // グレージュ〜チャコール
-  '#DDE0D6','#BCC6B2','#93A78C','#6E8670','#4E6552','#36433A', // セージ〜深緑
-  '#CFD8DD','#9FB4C0','#6A8593','#3C5366','#233140','#A8674A', // 青〜ネイビー＋テラコッタ
-  '#EAD9C3','#D8BE9C','#C19A6B','#A87A4E','#8A5A38','#5E3A22', // 暖色ブラウン〜タン
-  '#E4B499','#D18E6A','#B96A43','#9C4E2E','#7C3B22','#5A2A18', // テラコッタ〜ラスト
-  '#F0E1DC','#E3C9C4','#CBA6A2','#B08A88','#8E6E6E','#6B5155', // ダスティピンク〜モーヴ
-  '#E9D8A6','#D9C078','#C2A24C','#9C8340','#7A6A34','#565027', // オーカー〜マスタード〜オリーブ
-  '#D6E2DF','#A9C6C2','#74A19C','#4E7C78','#345B58','#22403E', // ティール〜ダックエッグ
+/* 色見本（「塗る — 表面」と「置く — 家具／色を置き換える」で共通）。
+   **1行＝1系統を、明るい端から暗い端へ10段でたどる（16系統＝160色）。** 「木の色をもう少し
+   濃く」のような選び直しが横移動だけで済み、系統を変えたいときは縦に動く。
+   系統ごとに HSL の両端だけ決めて等分している（160色を手打ちすると段の飛びや
+   ほぼ同色の重複が混ざり、かえって選びにくくなる）。
+   彩度は明るい端をやや低くしてある。淡い色をそのままの彩度で明るくすると、
+   インテリアに使えない蛍光っぽい色になるため。 */
+const PALETTE_STEPS=10;
+const PALETTE_FAMILIES=[
+  // [系統名, 明るい端 h(度),s,l, 暗い端 h(度),s,l]
+  ['グレー',              0,0.00,1.00,    0,0.00,0.09],
+  ['グレージュ',         34,0.06,0.95,   28,0.10,0.17],
+  ['アイボリー〜ブラウン', 38,0.18,0.95,   30,0.30,0.14],
+  ['ウッド（オーク〜ウォルナット）',28,0.28,0.88, 22,0.45,0.18],
+  ['サンド〜キャメル',    36,0.34,0.91,   30,0.50,0.24],
+  ['テラコッタ',         18,0.38,0.89,   12,0.58,0.20],
+  ['コーラル〜レンガ',     8,0.40,0.90,    4,0.55,0.21],
+  ['レッド〜ボルドー',   358,0.38,0.92,  350,0.55,0.19],
+  ['ピンク〜モーヴ',     345,0.28,0.94,  330,0.28,0.21],
+  ['パープル〜プラム',   288,0.22,0.94,  295,0.32,0.20],
+  ['ブルー〜ネイビー',   216,0.30,0.93,  226,0.50,0.18],
+  ['スレートブルー',     205,0.14,0.93,  210,0.24,0.19],
+  ['ティール〜ダックエッグ',176,0.22,0.92,182,0.42,0.16],
+  ['セージ〜フォレスト',  110,0.16,0.92,  140,0.38,0.15],
+  ['オリーブ〜カーキ',     62,0.22,0.90,   70,0.36,0.17],
+  ['イエロー〜マスタード', 48,0.45,0.93,   42,0.62,0.22],
 ];
-function buildChips(hostId, onPick, includeTransparent){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach(hex=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; on(c,'click',()=>onPick(hex)); host.appendChild(c); });
+const PALETTE=[], PALETTE_TIPS=[]; // TIPS はチップの tooltip（系統名と段数が分かるように）
+for(const [name,h0,s0,l0,h1,s1,l1] of PALETTE_FAMILIES){
+  for(let i=0;i<PALETTE_STEPS;i++){
+    const t=i/(PALETTE_STEPS-1), mix=(a,b)=>a+(b-a)*t;
+    const [r,g,b]=hsl2rgb((((mix(h0,h1)%360)+360)%360)/360, mix(s0,s1), mix(l0,l1));
+    const hex=rgbToHex(Math.round(r),Math.round(g),Math.round(b));
+    PALETTE.push(hex); PALETTE_TIPS.push(name+'  '+(i+1)+'/'+PALETTE_STEPS+'  '+hex.toUpperCase());
+  }
+}
+function buildChips(hostId, onPick, includeTransparent){ const host=$(hostId); host.innerHTML=''; PALETTE.forEach((hex,i)=>{ const c=document.createElement('button'); c.className='chip'; c.style.background=hex; c.dataset.hex=hex; c.title=PALETTE_TIPS[i]; on(c,'click',()=>onPick(hex)); host.appendChild(c); });
   if(includeTransparent){ const c=document.createElement('button'); c.className='chip alpha'; c.dataset.hex='transparent'; c.title='透明（色を変えず、元の写真のまま）'; on(c,'click',()=>onPick('transparent')); host.appendChild(c); } }
 function markChips(hostId,hex){ document.querySelectorAll('#'+hostId+' .chip').forEach(c=>c.classList.toggle('on', c.dataset.hex.toLowerCase()===hex.toLowerCase())); }
 function buildMats(hostId, onPick, includeUpload){ const host=$(hostId); host.innerHTML='';
