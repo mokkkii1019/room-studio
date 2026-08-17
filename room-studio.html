@@ -4560,6 +4560,9 @@ on(document,'keydown',e=>{
     if(e.key==='Backspace'){ e.preventDefault(); keepPolyRemoveLast(); return; }
     if(e.key==='Escape'){ e.preventDefault(); keepPolyReset(); return; }
   }
+  // Escape で選択を解除（入力欄にフォーカス中は除く）。**上の作図中ブロックより後に置くこと** —
+  // 多角形を描いている途中は、そちらの取り消しを先に処理させる（あちらは return する）。
+  if(e.key==='Escape' && !typing && State.selectedId!==null){ e.preventDefault(); deselectAll(); return; }
   // Delete/Backspace で選択中の家具を削除（入力欄にフォーカス中は除く）
   if((e.key==='Delete'||e.key==='Backspace') && !typing){ const f=selectedFurniture(); if(f){ e.preventDefault(); deleteLayer(f.id); toast('家具を削除しました'); return; } }
   if(!(e.ctrlKey||e.metaKey)) return; const k=e.key.toLowerCase();
