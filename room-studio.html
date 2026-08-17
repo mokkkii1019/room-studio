@@ -2695,8 +2695,9 @@ function renderOverlay(){
     if(State.surfTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
   if(State.mode==='erase'){ octx.drawImage(erasePreviewCanvas,0,0);
     if(State.eraseTool==='sam'){ octx.drawImage(samPreviewCanvas,0,0); drawSamPoints(); } }
-  // selected furniture handles
-  if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.proc){ drawFurnitureHandles(f); }
+  // selected furniture handles — 非表示の家具にはハンドルを描かない（作品の読み込みは
+  // State.selectedId を直接復元するので、非表示のまま選択された状態で始まることがある）
+  if(State.mode==='furniture'){ const f=selectedFurniture(); if(f && f.visible && f.proc){ drawFurnitureHandles(f); }
     if(State.furniKeep && State.keepPoly.points.length) drawKeepPolyInProgress();
     if(State.furniEyedrop && lastMouse){ drawEyedropLoupe(lastMouse); }
     if(State.furniErase && lastMouse){ const r=+$('fEraseSize').value/2; octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(181,73,58,.95)'; octx.lineWidth=1.5; octx.stroke(); octx.beginPath(); octx.arc(lastMouse.x,lastMouse.y,r,0,7); octx.strokeStyle='rgba(255,255,255,.6)'; octx.lineWidth=.75; octx.stroke(); } }
@@ -2850,7 +2851,7 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
   if(State.mode==='surface'){
     const a0=activeSurface();
     // 遠近の四隅ドラッグは選択ツール未選択でも最優先で判定（掴んだつもりが選択解除される問題を回避）
-    if(a0 && a0.perspective && a0.quad){ for(let i=0;i<4;i++){ const dx=p.x-a0.quad[i][0], dy=p.y-a0.quad[i][1]; if(dx*dx+dy*dy<=16*16){ pushHistory('quad'+a0.id+'_'+i); drag={type:'quad',idx:i,layer:a0}; return; } } }
+    if(a0 && a0.visible && a0.perspective && a0.quad){ for(let i=0;i<4;i++){ const dx=p.x-a0.quad[i][0], dy=p.y-a0.quad[i][1]; if(dx*dx+dy*dy<=16*16){ pushHistory('quad'+a0.id+'_'+i); drag={type:'quad',idx:i,layer:a0}; return; } } }
     // 選択ツール未選択（既定）→ クリックでカーソル下のアイテムを選んで編集状態にする
     if(!State.surfTool){
       for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ selectLayer(l.id); return; } }
@@ -2880,8 +2881,10 @@ on(overlay,'pointerdown',e=>{ if(!State.W) return; overlay.setPointerCapture(e.p
       if(e.altKey||e.ctrlKey||e.button===2){ keepPolyRemoveLast(); return; }
       const pts=State.keepPoly.points; if(pts.length>=3){ const dx=p.x-pts[0].x, dy=p.y-pts[0].y; if(dx*dx+dy*dy<=12*12){ keepPolyClose(); return; } }
       keepPolyAddPoint(p); return; }
-    if(f && f.corners && f._cornersStage){ for(let i=0;i<4;i++){ const h=f._cornersStage[i]; const dx=p.x-h[0], dy=p.y-h[1]; if(dx*dx+dy*dy<=16*16){ pushHistory('kcorner'+f.id+'_'+i); drag={type:'kcorner',idx:i,layer:f}; return; } } }
-    if(f && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
+    // ハンドルは非表示の家具では掴めない（描いていないハンドルの当たり判定だけが残るのを防ぐ。
+    // _cornersStage / _scaleHandle は drawFurnitureHandles が入れる値なので、描かないと古いまま残る）
+    if(f && f.visible && f.corners && f._cornersStage){ for(let i=0;i<4;i++){ const h=f._cornersStage[i]; const dx=p.x-h[0], dy=p.y-h[1]; if(dx*dx+dy*dy<=16*16){ pushHistory('kcorner'+f.id+'_'+i); drag={type:'kcorner',idx:i,layer:f}; return; } } }
+    if(f && f.visible && f._scaleHandle){ const dx=p.x-f._scaleHandle[0], dy=p.y-f._scaleHandle[1]; if(dx*dx+dy*dy<12*12){ const d0=Math.hypot(f._scaleHandle[0]-f.x,f._scaleHandle[1]-f.y); pushHistory('fscale'+f.id); drag={type:'scale',startScale:f.scale,startDist:d0||1}; return; } }
     // pick topmost furniture hit; if none, select the topmost surface under the cursor (edit any layer by clicking it)
     let pick=null; for(let i=State.layers.length-1;i>=0;i--){ const l=State.layers[i]; if(l.type==='furniture'&&l.visible&&l.proc&&furnitureHit(l,p.x,p.y)){ pick=l; break; } }
     if(pick){ selectLayer(pick.id); pushHistory('fmove'+pick.id); drag={type:'move',offx:p.x-pick.x,offy:p.y-pick.y,layer:pick}; }
@@ -4080,7 +4083,11 @@ function renderLayers(){ const host=$('layerList'); host.innerHTML=''; $('layerC
     const dn=document.createElement('button'); dn.className='ic'; dn.title='背面へ'; dn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12l7 7 7-7"/></svg>'; on(dn,'click',ev=>{ev.stopPropagation(); moveLayer(l.id,-1);});
     const del=document.createElement('button'); del.className='ic del'; del.title='削除'; del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>'; on(del,'click',ev=>{ev.stopPropagation(); deleteLayer(l.id);});
     row.appendChild(eye); row.appendChild(up); row.appendChild(dn); row.appendChild(del);
-    on(row,'click',()=>selectLayer(l.id));
+    // 非表示のレイヤーは行クリックでも選択させない。選べてしまうと、見えない家具に選択枠と
+    // ハンドルだけが描かれ、そのまま掴んで動かせてしまう（キャンバス側のクリックは元から
+    // l.visible を見ているので、抜け道はこの行クリックだけだった）。
+    on(row,'click',()=>{ if(!l.visible){ toast('非表示のレイヤーは選択できません。目のアイコンで表示に戻してください'); return; }
+      selectLayer(l.id); });
     host.appendChild(row);
   }
 }
