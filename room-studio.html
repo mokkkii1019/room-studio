@@ -293,8 +293,23 @@
     .furni-item{transition:transform .12s ease, box-shadow .12s ease}
     .furni-item:hover{transform:scale(2); z-index:6; box-shadow:0 12px 28px rgba(0,0,0,.3)}
     .furni-item.nozoom:hover{transform:none; box-shadow:none}   /* ドラッグ中は等倍に戻す */
-    /* 拡大中に「＋ 配置」の青ベタが画像を覆うと拡大の意味が無いので、サムネ下端の帯にする */
-    .furni-item:hover .add{top:42px; height:16px; font-size:8px; background:rgba(59,111,224,.72)}
+    /* ★2倍にするのは画像だけ。画像に重なるUI（詳細・⤓・✕・＋配置・切り抜き中のスピナー）は
+       カードごと2倍になると画像を覆う面積まで4倍になるので、scale(.5) で打ち消して見た目を
+       等倍に保つ。親の scale(2) と合成されて等倍で描かれるため、文字はぼやけない。
+       transform-origin は各自が貼り付いている角に置く（中央基準だと打ち消したぶん位置が
+       内側へずれて、画像の真ん中に寄っていく）。
+       ドラッグ中（.nozoom）はカードが等倍に戻るので、打ち消しも掛けない＝ :not(.nozoom)。 */
+    .furni-item:hover:not(.nozoom) .buy{transform:scale(.5); transform-origin:top left}
+    .furni-item:hover:not(.nozoom) .del{transform:scale(.5); transform-origin:top right}
+    .furni-item:hover:not(.nozoom) .save{transform:scale(.5); transform-origin:top right; right:15px} /* ✕ との間隔も等倍に */
+    /* スピナーだけは transform を回転アニメーションに使われていて打ち消せない（アニメーションが
+       transform の指定に勝つ）。なので箱ごと半分にする。border-box なので border も 1px にすれば、
+       2倍で 13px・border 2px＝元どおりの見た目になる。 */
+    .furni-item:hover:not(.nozoom) .cut-spin{width:6.5px; height:6.5px; border-width:1px; top:10.5px; left:1.5px}
+    /* 「＋ 配置」の青ベタはサムネ下端の帯にし、厚みも等倍（16px）に戻す。
+       左右を -50% に広げて局所幅を2倍にしてから半分に描くので、帯は画像の幅いっぱいに出る。 */
+    .furni-item:hover:not(.nozoom) .add{top:42px; height:16px; left:-50%; right:-50%;
+      background:rgba(59,111,224,.72); transform:scale(.5); transform-origin:bottom center}
     /* 収集元バッジ（楽天市場 等）は上の帯と同じ高さに居るので、拡大中は引っ込める。
        店名は真下の価格行（¥12,800・店名）に出ているし、画像を隠さないほうが優先。 */
     .furni-item:hover .src-badge{display:none}
