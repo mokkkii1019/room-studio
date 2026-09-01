@@ -64,6 +64,16 @@ OPERATOR_NAME = os.environ.get("OPERATOR_NAME", "Room Studio 運営者（個人�
 OPERATOR_CONTACT = os.environ.get("OPERATOR_CONTACT", "").strip()
 OPERATOR_ADDRESS = os.environ.get("OPERATOR_ADDRESS", "").strip()
 
+# ---- 連絡先メールアドレス（指示035）------------------------------------------
+# CONTACT_EMAIL に入れたアドレスを /about と /tokushoho の「連絡先」に表示する。
+# **実アドレスはコードに書かない**（既定は空＝行ごと非表示。レイアウトは崩れない）。
+#
+# OPERATOR_CONTACT との関係:
+#   CONTACT_EMAIL   … メールアドレス専用。スパム対策の描き方（_mail_html）で出す。
+#   OPERATOR_CONTACT… 自由記述の連絡先（フォームURL・住所併記など）。従来どおり素のテキスト。
+#   両方あれば CONTACT_EMAIL を優先。片方だけでも動く（後方互換）。
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()
+
 # ---- canonical base URL (overridable via env for custom-domain migration) -----
 # The app HTML ships with canonical/OGP/JSON-LD pointing at the legacy vercel.app
 # domain (see _DEFAULT_BASE). Setting SITE_BASE_URL (e.g. https://roomstudio.jp)
@@ -212,6 +222,52 @@ def log_track(event):
         pass
 
 
+# ---- 連絡先メールの描き方（スパム対策・指示035）-------------------------------
+# 収穫ボット対策の要点は「HTMLのソースに `名前@ドメイン` と `mailto:` という文字列を
+# そのまま置かない」こと。素朴な正規表現で刈っていくクローラは、これだけで空振りする。
+#
+#   1. 表示テキストは1文字ずつ数値文字参照にする（&#114;&#111;... ）。ブラウザは普通に
+#      「roomstudiojp@gmail.com」と描画し、選択・コピーもできるが、ソースに素の
+#      アドレス文字列は現れない。
+#   2. mailto: の href は **サーバーでは出さない**。data-u / data-d に分けて持たせ、
+#      _MAIL_JS が読み込み後に組み立てる（'mail'+'to:' と分割して連結）。
+#   3. JSが無効でも、アドレスは文字として読める・コピーできる（リンクにならないだけ）。
+#
+# 完全な防御ではない（実体参照を解釈するクローラなら復元できる）。それでも
+# 「クリックできる・コピーできる」という利用者側の使い勝手を一切落とさずに、
+# 多数派の素朴な収穫を外せるので、この落とし所にした。画像化やフォーム設置は、
+# 前者は copy/paste もスクリーンリーダーも殺し、後者は送信基盤（メール送信・スパム
+# 対策）を新たに抱えることになるので、今の規模では割に合わない。
+_MAIL_RE = re.compile(r"^[^@\s<>&\"']{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}$")
+
+
+class _RawHTML(str):
+    """legal_html でエスケープせずそのまま埋め込む値（信頼できるHTML断片のみ）。"""
+
+
+def _entities(text):
+    """1文字ずつ数値文字参照に変換する（素の文字列をソースに残さないため）。"""
+    return "".join("&#%d;" % ord(ch) for ch in text)
+
+
+def _mail_html(addr):
+    """メールアドレスをスパム対策込みのHTML断片にする。不正な値なら空文字。"""
+    addr = (addr or "").strip()
+    if not _MAIL_RE.match(addr):
+        return ""
+    user, _, domain = addr.partition("@")
+    return ('<a class="mail" data-u="%s" data-d="%s">%s</a>'
+            % (_entities(user), _entities(domain), _entities(addr)))
+
+
+# href をあとから組み立てる。`.mail` が無いページでは何もしない。
+_MAIL_JS = ("<script>document.querySelectorAll('a.mail').forEach(function(a){"
+            "a.href='mail'+'to:'+a.dataset.u+'@'+a.dataset.d;});</script>")
+
+# 表示に使う連絡先。CONTACT_EMAIL があればそれ（スパム対策の描き方）、無ければ
+# 従来どおり OPERATOR_CONTACT の素のテキスト。どちらも無ければ空＝行ごと出ない。
+_CONTACT = _RawHTML(_mail_html(CONTACT_EMAIL)) if _mail_html(CONTACT_EMAIL) else OPERATOR_CONTACT
+
 _PR_LINE = ("本サイトはアフィリエイト広告（PR）を含みます。商品情報は各ECサイトの提供に基づき、"
             "価格・在庫等は変動します。商品情報提供：楽天ウェブサービス。")
 
@@ -219,7 +275,7 @@ _PAGES = {
     "about": ("運営者情報", [
         ("サイト名", SITE_NAME),
         ("運営者", OPERATOR_NAME),
-        ("連絡先", OPERATOR_CONTACT),
+        ("連絡先", _CONTACT),
         ("収益に関する表記", "本サイトはアフィリエイト広告（PR）による収益で運営しています。"),
         ("商品情報のクレジット", "商品情報提供：楽天ウェブサービス。"),
     ]),
@@ -235,7 +291,7 @@ _PAGES = {
     "tokushoho": ("特定商取引法に基づく表記", [
         ("販売事業者", OPERATOR_NAME),
         ("所在地", OPERATOR_ADDRESS),
-        ("連絡先", OPERATOR_CONTACT),
+        ("連絡先", _CONTACT),
         ("備考", "本表記は有料サービス（課金）導入時に必要事項を記載するための枠です。"
                 "現時点では課金機能は提供していません。"),
     ]),
@@ -247,7 +303,10 @@ def legal_html(kind):
     title, rows = _PAGES.get(kind, _PAGES["about"])
     esc = _html.escape
     body = "\n".join(
-        f'<section><h2>{esc(k)}</h2><p>{esc(v)}</p></section>' for k, v in rows if (v or "").strip())
+        f'<section><h2>{esc(k)}</h2><p>{v if isinstance(v, _RawHTML) else esc(v)}</p></section>'
+        for k, v in rows if (v or "").strip())
+    # メールを載せるページにだけ href 組み立てのスクリプトを足す（他のページには入れない）
+    mail_js = _MAIL_JS if any(isinstance(v, _RawHTML) for _, v in rows) else ""
     return f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)}｜{esc(SITE_NAME)}</title>
@@ -258,13 +317,14 @@ def legal_html(kind):
   h1{{font-size:20px;margin:0 0 6px}} .pr{{font-size:12px;color:#7C776E;margin:0 0 24px}}
   section{{border-top:1px solid rgba(0,0,0,.1);padding:16px 0}}
   h2{{font-size:13.5px;margin:0 0 4px}} p{{margin:0;font-size:13px;color:#3f3b36;white-space:pre-wrap}}
+  a.mail{{color:#3B6FE0;text-decoration:underline;word-break:break-all;cursor:pointer}}
   nav{{margin-top:28px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap}}
 </style></head><body><div class="wrap">
 <h1>{esc(title)}</h1>
 <p class="pr">{esc(_PR_LINE)}</p>
 {body}
 <nav><a href="/">← アプリに戻る</a><a href="/about">運営者情報</a><a href="/privacy">プライバシーポリシー</a><a href="/tokushoho">特商法表記</a></nav>
-</div></body></html>"""
+</div>{mail_js}</body></html>"""
 
 
 # =============================================================================

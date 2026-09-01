@@ -237,7 +237,7 @@ api/
 ### 5.5 配信・解析
 - HTML は `Cache-Control: no-cache, must-revalidate` で**常に最新**を配信（モバイルの古いキャッシュ表示を防止）。画像アセットは `max-age=86400`。
 - **GA4**: `GA4_ID` 環境変数を設定すると、サーバーが配信時に HTML へ測定IDを注入（`inject_ga4`）し gtag.js を読み込む。**未設定が既定 = 解析オフ**。オプトアウト（`rs_notrack`）を尊重。
-- **法務ページ**: `/about`（運営者情報）・`/privacy`（プライバシーポリシー）・`/tokushoho`（特商法表記）を静的生成。運営者名・連絡先・住所は環境変数（`OPERATOR_NAME`/`OPERATOR_CONTACT`/`OPERATOR_ADDRESS`）で差し替え可。全ページに「アフィリエイト広告（PR）を含む」旨と「商品情報提供：楽天ウェブサービス」のクレジットを表示。
+- **法務ページ**: `/about`（運営者情報）・`/privacy`（プライバシーポリシー）・`/tokushoho`（特商法表記）を静的生成。運営者名・連絡先・住所は環境変数（`OPERATOR_NAME`/`OPERATOR_CONTACT`/`OPERATOR_ADDRESS`）で差し替え可。連絡先メールは `CONTACT_EMAIL` で与えると `/about` と `/tokushoho` に表示される（未設定なら行ごと非表示。スパム対策として表示は数値文字参照、`mailto:` の href はクライアント側で組み立てるため、HTMLのソースに素のアドレスも `mailto:` も現れない）。全ページに「アフィリエイト広告（PR）を含む」旨と「商品情報提供：楽天ウェブサービス」のクレジットを表示。
 - **sitemap.xml / robots.txt は未確認（存在しない）。** SPA的な単一ページ構成のため個別URLのインデックス最適化は未実装。
 
 ---
