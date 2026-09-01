@@ -2,6 +2,38 @@
 
 ---
 
+## ⏸ 中断中の作業（2026-09-01）— 連絡先メールの本番反映が「運営待ち」
+
+**指示035 の実装は完了・push 済み（`1071bba`）。残りは Vercel の環境変数だけ。**
+
+| やること | 誰が | 状態 |
+|---|---|---|
+| `CONTACT_EMAIL` の実装（/about・/tokushoho に表示・スパム対策） | 実装 | **完了** |
+| Vercel の環境変数に `CONTACT_EMAIL=roomstudiojp@gmail.com` を追加 → 再デプロイ | **運営** | **未** |
+| 本番（roomstudio.jp）で表示を実測して報告 | 実装 | 運営の設定待ち |
+
+**運営の手順（3分）**
+
+1. Vercel → プロジェクト `room-studio` → Settings → Environment Variables
+2. `CONTACT_EMAIL` / 値 `roomstudiojp@gmail.com` / **Production**（＋必要なら Preview）
+3. Deployments → 最新を **Redeploy**（環境変数は再デプロイしないと反映されない）
+
+> 実装側には Vercel の認証情報が無い（CLI未インストール・プロジェクト未リンク・トークン無し）。
+> 指示034 の `GA4_INTERNAL_TRAFFIC=1` のときと同じ制約。
+
+**設定後の確認コマンド**（素のアドレスが出ないのが正常。スパム対策で数値文字参照にしてある）
+
+```bash
+curl -s https://roomstudio.jp/about     | grep -o '<a class="mail"[^>]*>' | head -1
+curl -s https://roomstudio.jp/tokushoho | grep -o '<a class="mail"[^>]*>' | head -1
+#  → data-u="&#114;&#111;..." data-d="&#103;..." が出れば反映済み
+#  → 何も出なければ環境変数が未設定か、再デプロイがまだ
+```
+
+**未設定のままでも壊れない**（連絡先の行ごと出ないだけ＝これまでと同じ表示）。
+
+---
+
 ## ✅ 完了（2026-08-17）— 家具の「色を変える」に「明るさ」を追加
 
 **指摘:** 「色を変えるのメニューの中から明るさを調節するバーが消えました」
