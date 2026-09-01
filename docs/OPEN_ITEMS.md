@@ -8,7 +8,8 @@
 
 | やること | 誰が | 状態 |
 |---|---|---|
-| `CONTACT_EMAIL` の実装（/about・/tokushoho に表示・スパム対策） | 実装 | **完了** |
+| `CONTACT_EMAIL` の実装（法務3ページに表示・スパム対策） | 実装 | **完了**（指示035） |
+| `/privacy` の問い合わせ先も同じ値に揃える | 実装 | **完了**（指示036） |
 | Vercel の環境変数に `CONTACT_EMAIL=roomstudiojp@gmail.com` を追加 → 再デプロイ | **運営** | **未** |
 | 本番（roomstudio.jp）で表示を実測して報告 | 実装 | 運営の設定待ち |
 
@@ -24,9 +25,10 @@
 **設定後の確認コマンド**（素のアドレスが出ないのが正常。スパム対策で数値文字参照にしてある）
 
 ```bash
-curl -s https://roomstudio.jp/about     | grep -o '<a class="mail"[^>]*>' | head -1
-curl -s https://roomstudio.jp/tokushoho | grep -o '<a class="mail"[^>]*>' | head -1
-#  → data-u="&#114;&#111;..." data-d="&#103;..." が出れば反映済み
+for p in about privacy tokushoho; do
+  echo -n "/$p "; curl -s "https://roomstudio.jp/$p" | grep -o '<a class="mail"[^>]*>' | head -1
+done
+#  → 3ページとも data-u="&#114;&#111;..." data-d="&#103;..." が出れば反映済み
 #  → 何も出なければ環境変数が未設定か、再デプロイがまだ
 ```
 
@@ -708,6 +710,7 @@ on(eye,'click',ev=>{ ev.stopPropagation(); l.visible=!l.visible;
 | **A2** | **並び替えを `on` にするか** | `log` で運用中。判断基準は `docs/COLLECT_RANKING_REPORT.md` §9（コンソールの `best` が −1.5 より高いか）。**評価は上位3枚で行う**（同 §12） | **優先度: 中**。実データを一度見れば決まる |
 | **A3** | **案E: COOP/COEP でスレッド化** | 指示024 で保留。待ち時間 7.3秒 → 2〜3秒の見込み。外部リソース（GA4・Fonts・CDN）は全部 CORP 付きで通ることを実測済み | **優先度: 保留**。「固まらない7.3秒」が体感で許容できるかを先に判断する、という運営の整理どおり |
 | **A4** | **案H: `willReadFrequently` を付ける** | コンソール警告の直接の原因。実測では 0.01ms/回で体感に効かない（ただし `--disable-gpu` 環境の測定なので過小評価） | **優先度: 低**。コスト極小なので、何かのついでに |
+| **A5** | **HEAD リクエストが 405 を返す** | 指示036 で記録。`curl -I https://roomstudio.jp/about` → **405**（`GET` は 200 `text/html` で正常）。`@app.get` で登録したルートが HEAD を受けておらず、**法務ページ・LP・アプリ本体すべて同じ**。実害は今のところ観測していないが、**外形監視サービスやクローラには HEAD を使うものがある** — 使われた場合「落ちている」と誤判定されうる | **優先度: 低**。対応するなら (a) 各ルートを `methods=["GET","HEAD"]` にする、(b) HEAD を GET にフォールバックさせるミドルウェアを1つ足す、の二択。**ボディを返さない点に注意**（Content-Length の整合） |
 
 ## B. 画像の品質（収集の中身）
 

@@ -64,8 +64,9 @@ OPERATOR_NAME = os.environ.get("OPERATOR_NAME", "Room Studio 運営者（個人�
 OPERATOR_CONTACT = os.environ.get("OPERATOR_CONTACT", "").strip()
 OPERATOR_ADDRESS = os.environ.get("OPERATOR_ADDRESS", "").strip()
 
-# ---- 連絡先メールアドレス（指示035）------------------------------------------
-# CONTACT_EMAIL に入れたアドレスを /about と /tokushoho の「連絡先」に表示する。
+# ---- 連絡先メールアドレス（指示035・036）--------------------------------------
+# CONTACT_EMAIL に入れたアドレスを /about・/privacy・/tokushoho の問い合わせ先に表示する。
+# 3ページで同じ値を出す（指示036）。片方だけ空になると利用者から見て不自然なため。
 # **実アドレスはコードに書かない**（既定は空＝行ごと非表示。レイアウトは崩れない）。
 #
 # OPERATOR_CONTACT との関係:
@@ -266,6 +267,7 @@ _MAIL_JS = ("<script>document.querySelectorAll('a.mail').forEach(function(a){"
 
 # 表示に使う連絡先。CONTACT_EMAIL があればそれ（スパム対策の描き方）、無ければ
 # 従来どおり OPERATOR_CONTACT の素のテキスト。どちらも無ければ空＝行ごと出ない。
+# 法務3ページ（/about・/privacy・/tokushoho）はすべてこの1つの値を参照する。
 _CONTACT = _RawHTML(_mail_html(CONTACT_EMAIL)) if _mail_html(CONTACT_EMAIL) else OPERATOR_CONTACT
 
 _PR_LINE = ("本サイトはアフィリエイト広告（PR）を含みます。商品情報は各ECサイトの提供に基づき、"
@@ -286,7 +288,7 @@ _PAGES = {
                         "個人を特定しない統計目的で使用します。"),
         ("アフィリエイト", "購入リンクはアフィリエイト広告（PR）を含みます。遷移先サイトでの取り扱いは各サイトの"
                           "ポリシーに従います。"),
-        ("お問い合わせ", OPERATOR_CONTACT),
+        ("お問い合わせ", _CONTACT),
     ]),
     "tokushoho": ("特定商取引法に基づく表記", [
         ("販売事業者", OPERATOR_NAME),
